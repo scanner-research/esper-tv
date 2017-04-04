@@ -11,7 +11,10 @@ services:
       - "80:80"
 
   django:
-    build: .
+    build:
+      context: .
+      args:
+        https_proxy: "${https_proxy}"
     volumes:
       - .:/usr/src/app
     expose:
