@@ -35,16 +35,12 @@ class Video(models.Model):
     height = models.IntegerField()
 
 
-class Frame(models.Model):
-    video = models.ForeignKey(Video)
-    number = models.IntegerField()
-
-
 class Person(models.Model):
     name = models.CharField(max_length=256)
 
 
 class Face(models.Model):
-    frame = models.ForeignKey(Frame)
-    person = models.ForeignKey(Person)
+    video = models.ForeignKey(Video)
+    frame = models.IntegerField()
+    person = models.ForeignKey(Person, null=True)
     bbox = ProtoField(proto.BoundingBox)

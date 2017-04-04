@@ -1,0 +1,19 @@
+version: '2'
+
+services:
+  nginx:
+    build: ./nginx
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - django
+    ports:
+      - "80:80"
+
+  django:
+    build: .
+    volumes:
+      - .:/usr/src/app
+    expose:
+      - "8000"
+    privileged: true

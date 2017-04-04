@@ -1,6 +1,9 @@
 # Esper
 
 ```
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8888
+cd django && python manage.py migrate && cd ..
+docker-compose build
+docker-compose up -d
 ```
+
+Then visit `http://yourserver.com`.

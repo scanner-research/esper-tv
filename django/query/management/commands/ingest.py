@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from query.models import Video
+from scannerpy import Database
 import subprocess
 
 def get_dimensions(path):
@@ -36,6 +37,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
+
+        with Database() as db:
+            db.ingest_videos([(p, p) for p in paths], force=True)
 
         for path in paths:
             video = Video()
