@@ -10,9 +10,12 @@ First, install Docker, docker-compose, Postgres, and npm. For Ubuntu:
 If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set as well.
 
 ```
-pip install -r requirements.txt
-cd django && python manage.py migrate && cd ..
 docker-compose build
+pip install -r requirements.txt
+cd django
+npm install
+./node_modules/.bin/webpack --config webpack.config.js
+python manage.py migrate
 ```
 
 ## Running Esper
@@ -26,4 +29,10 @@ Then visit `http://yourserver.com`.
 To stop the server:
 ```
 docker-compose down
+```
+
+## Development
+While editing the SASS or JSX files, use the Webpack watcher:
+```
+./node_modules/.bin/webpack --config webpack.config.js --watch
 ```
