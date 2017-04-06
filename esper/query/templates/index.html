@@ -1,8 +1,6 @@
 {% extends "base.html" %}
+{% load render_bundle from webpack_loader %}
 
 {% block content %}
-Hello, world
-
-{% static "query/example.jpg" %}
-
+{% render_bundle 'app' %}
 {% endblock %}

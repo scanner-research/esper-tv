@@ -10,4 +10,3 @@ ADD requirements.txt .
 RUN pip install -r requirements.txt
 WORKDIR /usr/src/app
 CMD ["gunicorn", "--log-file=-", "-c", "gunicorn_conf.py", "--chdir", "esper", "esper.wsgi:application", "--reload"]
-# VOLUME /home/alexhall/www/film_grammar/static

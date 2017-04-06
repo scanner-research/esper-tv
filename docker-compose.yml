@@ -5,6 +5,7 @@ services:
     build: ./nginx
     volumes:
       - .:/usr/src/app
+      - /:/fs
     depends_on:
       - django
     ports:

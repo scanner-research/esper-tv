@@ -1,0 +1,30 @@
+{
+  "name": "esper",
+  "description": "Video search engine and interface",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scanner-research/esper.git"
+  },
+  "author": "Will Crichton",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/scanner-research/esper/issues"
+  },
+  "homepage": "https://github.com/scanner-research/esper#readme",
+  "dependencies": {
+    "bootstrap": "3.3.7"
+  },
+  "devDependencies": {
+    "babel": "^6.23.0",
+    "babel-loader": "^6.4.1",
+    "css-loader": "^0.28.0",
+    "extract-text-webpack-plugin": "^2.1.0",
+    "node-sass": "^4.5.2",
+    "react": "^15.4.2",
+    "sass-loader": "^6.0.3",
+    "url-loader": "^0.5.8",
+    "webpack": "^2.3.3",
+    "webpack-bundle-tracker": "^0.2.0"
+  }
+}
