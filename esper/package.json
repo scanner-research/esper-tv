@@ -13,7 +13,9 @@
   },
   "homepage": "https://github.com/scanner-research/esper#readme",
   "dependencies": {
-    "bootstrap": "3.3.7"
+    "axios": "^0.16.0",
+    "bootstrap": "3.3.7",
+    "request": "^2.81.0"
   },
   "devDependencies": {
     "babel": "^6.23.0",

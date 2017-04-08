@@ -1,3 +1,28 @@
 body {
     background: #fafafa;
 }
+
+.video {
+    width: 300px;
+    float: left;
+    margin: 10px;
+
+    > div {
+        position: relative;
+    }
+
+    canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: calc(100% - 40px);
+        z-index: 2;
+    }
+
+    video {
+        width: 100%;
+        position: relative;
+        z-index: 1;
+    }
+}

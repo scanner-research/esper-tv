@@ -34,7 +34,7 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.staticfiles',
+    'rest_framework',
     'webpack_loader',
     'query.apps.QueryConfig',
     'django.contrib.admin',
@@ -125,14 +125,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.10/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = 'static'
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'assets'),
-    os.path.join(BASE_DIR, 'node_modules'),
-]
+STATIC_URL = 'static/'
 
 WEBPACK_LOADER = {
     'DEFAULT': {
