@@ -1,7 +1,10 @@
 from django.core.management.base import BaseCommand, CommandError
 from query.models import Video
 from scannerpy import Database
+from scannerpy.stdlib.montage import make_montage
 import subprocess
+import cv2
+
 
 def get_dimensions(path):
     cmd = 'ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 "{}"'
@@ -28,6 +31,21 @@ def get_num_frames(path):
     return int(subprocess.check_output(cmd.format(path), shell=True))
 
 
+def make_thumbnail(video):
+    indices = [int(n * video.num_frames) for n in [0.1, 0.35, 0.60, 0.85]]
+    vid = cv2.VideoCapture(video.path)
+    frames = []
+    for i in range(indices[-1]+1):
+        _, frame = vid.read()
+        if i in indices:
+            frames.append(frame)
+    img = make_montage(
+        len(frames), iter(frames),
+        frame_width=150,
+        frames_per_row=2)
+    subprocess.check_call(['mkdir', '-p', 'assets/thumbnails'])
+    cv2.imwrite('assets/thumbnails/{}.jpg'.format(video.id), img)
+
 class Command(BaseCommand):
     help = 'Ingest videos'
 
@@ -38,8 +56,8 @@ class Command(BaseCommand):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
 
-        with Database() as db:
-            db.ingest_videos([(p, p) for p in paths], force=True)
+        # with Database() as db:
+        #     db.ingest_videos([(p, p) for p in paths], force=True)
 
         for path in paths:
             video = Video()
@@ -50,3 +68,4 @@ class Command(BaseCommand):
             video.width = width
             video.height = height
             video.save()
+            make_thumbnail(video)

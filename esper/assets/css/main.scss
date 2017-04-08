@@ -11,6 +11,10 @@ body {
         position: relative;
     }
 
+    > img {
+        cursor: pointer;
+    }
+
     canvas {
         position: absolute;
         top: 0;

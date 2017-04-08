@@ -1,4 +1,5 @@
 node_modules
 static
 assets/bundles
+assets/thumbnails
 webpack-stats.json

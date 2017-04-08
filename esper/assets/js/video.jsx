@@ -4,7 +4,7 @@ import axios from 'axios';
 export default class Video extends React.Component {
   constructor(props) {
     super(props);
-    this.state = {bboxes: []};
+    this.state = {bboxes: [], show_video: false};
     axios.get('/faces', {
       params: {
         id: this.props.id
@@ -20,6 +20,7 @@ export default class Video extends React.Component {
     this._draw();
   }
 
+  // TODO(wcrichto): bboxes can get off w/ video when skipping around a bunch?
   _draw() {
     if (this._video !== undefined) {
       let frame = Math.round(this._video.currentTime * 24);
@@ -41,20 +42,27 @@ export default class Video extends React.Component {
     requestAnimationFrame(this._draw.bind(this));
   }
 
+  _onClickThumbnail() {
+    this.setState({show_video: true});
+  }
+
   render() {
     let parts = this.props.path.split('/');
     let basename = parts[parts.length - 1];
     return (
       <div className='video'>
         <div>{basename}</div>
-        {this.state.bboxes.length == 0 ?
-         (<div>Loading...</div>) :
-         (<div>
-           <canvas ref={(n) => { this._canvas = n; }}></canvas>
-           <video controls ref={(n) => { this._video = n; }}>
-             <source src={"/fs" + this.props.path} />
-           </video>
-         </div>)}
+        {!this.state.show_video
+        ? (<img src={"/static/thumbnails/" + this.props.id + ".jpg"}
+                onClick={this._onClickThumbnail.bind(this)} />)
+         : (this.state.bboxes.length == 0
+          ? (<div>Loading...</div>)
+          : (<div>
+            <canvas ref={(n) => { this._canvas = n; }}></canvas>
+            <video controls ref={(n) => { this._video = n; }}>
+              <source src={"/fs" + this.props.path} />
+            </video>
+          </div>))}
       </div>
     );
   }
