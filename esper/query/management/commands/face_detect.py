@@ -11,7 +11,7 @@ class Command(BaseCommand):
         parser.add_argument('path')
 
     def _detect(self, db, path):
-        descriptor = NetDescriptor.from_file(db, '/home/wcrichto/scanner/nets/caffe_facenet.toml')
+        descriptor = NetDescriptor.from_file(db, '/h/wcrichto/scanner/nets/caffe_facenet.toml')
         facenet_args = db.protobufs.FacenetArgs()
         facenet_args.threshold = 0.5
         caffe_args = facenet_args.caffe_args
@@ -37,7 +37,7 @@ class Command(BaseCommand):
         for scale in [0.125, 0.25, 0.5, 1.0]:
             print('Scale {}...'.format(scale))
             facenet_args.scale = scale
-            tasks = sampler.strided([(path, '{}_faces_{}'.format(path, scale))], 24,
+            tasks = sampler.all([(path, '{}_faces_{}'.format(path, scale))],
                                     item_size=50)
             [output] = db.run(tasks, facenet_output, force=True, work_item_size=5)
             output = db.table('{}_faces_{}'.format(path, scale))
@@ -77,6 +77,6 @@ class Command(BaseCommand):
                     for bbox in frame_faces:
                         f = Face()
                         f.video = video
-                        f.frame = i * 24
+                        f.frame = i
                         f.bbox = bbox
                         f.save()

@@ -1,22 +1,43 @@
 import React from 'react';
+import axios from 'axios';
 
 export default class Video extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {bboxes: []};
+    axios.get('/faces', {
+      params: {
+        id: this.props.id
+      }
+    }).then(((response) => {
+      this.setState({
+        bboxes: response.data.faces
+      });
+    }).bind(this));
+  }
+
   componentDidMount() {
     this._draw();
   }
 
   _draw() {
-    let frame = Math.round(this._video.currentTime * 24);
-    let ctx = this._canvas.getContext('2d');
-    let rects = [];
-    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-    rects.forEach((rect) => {
-      ctx.beginPath();
-      ctx.lineWidth = '3';
-      ctx.strokeStyle = 'red';
-      ctx.rect(x, y, w, h);
-      ctx.stroke();
-    });
+    if (this._video !== undefined) {
+      let frame = Math.round(this._video.currentTime * 24);
+      let ctx = this._canvas.getContext('2d');
+      ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+      this.state.bboxes[frame].forEach((bbox) => {
+        let x = bbox[0];
+        let y = bbox[1];
+        let w = bbox[2] - x;
+        let h = bbox[3] - y;
+        let scale = this._canvas.width / this.props.width;;
+        ctx.beginPath();
+        ctx.lineWidth = '3';
+        ctx.strokeStyle = 'red';
+        ctx.rect(x * scale, y * scale, w * scale, h * scale);
+        ctx.stroke();
+      });
+    }
     requestAnimationFrame(this._draw.bind(this));
   }
 
@@ -26,12 +47,14 @@ export default class Video extends React.Component {
     return (
       <div className='video'>
         <div>{basename}</div>
-        <div>
-          <canvas ref={(n) => { this._canvas = n; }}></canvas>
-          <video controls ref={(n) => { this._video = n; }}>
-            <source src={"/fs" + this.props.path} />
-          </video>
-        </div>
+        {this.state.bboxes.length == 0 ?
+         (<div>Loading...</div>) :
+         (<div>
+           <canvas ref={(n) => { this._canvas = n; }}></canvas>
+           <video controls ref={(n) => { this._video = n; }}>
+             <source src={"/fs" + this.props.path} />
+           </video>
+         </div>)}
       </div>
     );
   }

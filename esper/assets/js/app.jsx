@@ -6,9 +6,6 @@ export default class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {videos: []};
-  }
-
-  componentDidMount() {
     axios.get('/videos')
          .then(((response) => {
            let videos = response.data.videos;
