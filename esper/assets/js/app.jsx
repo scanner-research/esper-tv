@@ -9,14 +9,14 @@ export default class App extends React.Component {
     axios.get('/videos')
          .then(((response) => {
            let videos = response.data.videos;
-           this.setState({videos: [videos[0]]});
+           this.setState({videos: videos});
          }).bind(this));
   }
 
   render() {
     return (
       <div>
-        <h1>Hello, world</h1>
+        <h1>Esper</h1>
         {this.state.videos.map((vid, index) => {
            return <Video key={index} {...vid} />;
         })}

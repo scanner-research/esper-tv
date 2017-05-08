@@ -5,15 +5,6 @@ export default class Video extends React.Component {
   constructor(props) {
     super(props);
     this.state = {bboxes: [], show_video: false};
-    axios.get('/faces', {
-      params: {
-        id: this.props.id
-      }
-    }).then(((response) => {
-      this.setState({
-        bboxes: response.data.faces
-      });
-    }).bind(this));
   }
 
   componentDidMount() {
@@ -23,7 +14,7 @@ export default class Video extends React.Component {
   // TODO(wcrichto): bboxes can get off w/ video when skipping around a bunch?
   _draw() {
     if (this._video !== undefined) {
-      let frame = Math.round(this._video.currentTime * 24);
+      let frame = Math.round(this._video.currentTime * this.props.fps);
       let ctx = this._canvas.getContext('2d');
       ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
       this.state.bboxes[frame].forEach((bbox) => {
@@ -44,6 +35,15 @@ export default class Video extends React.Component {
 
   _onClickThumbnail() {
     this.setState({show_video: true});
+    axios.get('/faces', {
+      params: {
+        id: this.props.id
+      }
+    }).then(((response) => {
+      this.setState({
+        bboxes: response.data.faces
+      });
+    }).bind(this));
   }
 
   render() {

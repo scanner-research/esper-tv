@@ -34,7 +34,6 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
-    'rest_framework',
     'webpack_loader',
     'query.apps.QueryConfig',
     'django.contrib.admin',
