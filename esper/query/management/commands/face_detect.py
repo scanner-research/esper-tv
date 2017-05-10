@@ -25,7 +25,7 @@ class Command(BaseCommand):
 
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
-                db, c, lambda t: t.range(0, 100), 'tmp_faces', max_width = 960)
+                db, c, lambda t: t.range(0, 100), 'tmp_faces')
 
             for path, video_faces in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()

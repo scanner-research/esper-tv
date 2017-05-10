@@ -12,7 +12,7 @@ If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy
 ```
 docker-compose build
 pip install -r requirements.txt
-cd django
+cd esper
 npm install
 ./node_modules/.bin/webpack --config webpack.config.js
 python manage.py migrate
