@@ -3,7 +3,7 @@
 ## Setup
 First, install Docker, docker-compose, Postgres, and npm. For Ubuntu:
 * Docker: [instructions](https://docs.docker.com/engine/installation/linux/ubuntu/#prerequisites)
-* docker-compose: [instructions](https://github.com/docker/compose/releases/tag/1.11.2)
+* docker-compose: `pip install docker-compose`
 * Postgres: `sudo apt-get install postgresql libpq-dev`
 * npm: `sudo apt-get install npm`
 
