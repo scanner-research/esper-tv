@@ -2,6 +2,7 @@ var path = require("path");
 var webpack = require('webpack');
 var BundleTracker = require('webpack-bundle-tracker');
 var ExtractTextPlugin = require('extract-text-webpack-plugin');
+var path = require('path');
 
 module.exports = {
   context: __dirname,
@@ -57,14 +58,20 @@ module.exports = {
       use: [{
         loader: 'babel-loader',
         options: {
-          presets: ['react']
+          plugins: ['transform-decorators-legacy'],
+          presets: ['stage-0', 'react']
         }
       }]
     }]
   },
 
+  // TODO: generic way to resolve aliases?
   resolve: {
     modules: ['node_modules', 'assets'],
+    alias: {
+      'views': path.resolve('assets/js/views'),
+      'models': path.resolve('assets/js/models')
+    },
     extensions: ['.js', '.jsx', '.scss', '.css']
   }
 };

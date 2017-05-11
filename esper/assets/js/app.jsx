@@ -1,7 +1,7 @@
 import React from 'react';
-import Video from './video.jsx';
-import Home from './home.jsx';
 import {BrowserRouter as Router, Route} from 'react-router-dom';
+import Video from './views/video.jsx';
+import Home from './views/home.jsx';
 
 const render_component = (Component) => (
   ({ match }) => (<Component {...match.params} />)
