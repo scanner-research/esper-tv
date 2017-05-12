@@ -1,2 +1,4 @@
 *.sqlite3
 *.pyc
+nvidia-docker-compose.yml
+esper/deps

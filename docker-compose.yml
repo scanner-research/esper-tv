@@ -4,20 +4,19 @@ services:
   nginx:
     build: ./nginx
     volumes:
-      - .:/usr/src/app
-      - /:/fs
+      - ./esper:/usr/src/app
+      - /:/fs # TODO(wcrichto): security vuln
     depends_on:
-      - django
+      - esper
     ports:
       - "80:80"
 
-  django:
+  esper:
     build:
-      context: .
+      context: ./esper
       args:
         https_proxy: "${https_proxy}"
     volumes:
-      - .:/usr/src/app
+      - ./esper:/usr/src/app
     expose:
       - "8000"
-    privileged: true
