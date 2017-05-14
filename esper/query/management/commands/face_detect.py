@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from query.models import Video, Face
 from scannerpy import Database, DeviceType, Job
 from scannerpy.stdlib import parsers, pipelines

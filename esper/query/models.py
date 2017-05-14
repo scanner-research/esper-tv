@@ -35,12 +35,15 @@ class Video(models.Model):
     height = models.IntegerField()
 
 
-class Person(models.Model):
+class Identity(models.Model):
     name = models.CharField(max_length=256)
+    classifier = models.BinaryField()
+    cohesion = models.FloatField()
 
 
 class Face(models.Model):
     video = models.ForeignKey(Video)
     frame = models.IntegerField()
-    person = models.ForeignKey(Person, null=True)
+    identity = models.ForeignKey(Identity, null=True)
     bbox = ProtoField(proto.BoundingBox)
+    features = models.BinaryField()

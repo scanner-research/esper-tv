@@ -54,10 +54,12 @@ class Command(BaseCommand):
             paths = set([s.strip() for s in f.readlines()])
 
         with Database() as db:
+            # Ingest videos into Scanner
             _, failed = db.ingest_videos([(p, p) for p in paths], force=True)
             for path, _ in failed:
                 paths.remove(path)
 
+            # Save ingested videos into SQL database
             for path in paths:
                 print path
                 video = Video()

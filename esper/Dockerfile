@@ -1,20 +1,23 @@
 FROM scannerresearch/scanner:gpu
-ARG https_proxy ""
+ARG https_proxy
 ENV DJANGO_CONFIGURATION Docker
 ENV https_proxy=$https_proxy
 ENV http_proxy=$https_proxy
 ENV TERM=xterm
 
+# Need sudo so Torch can install
+RUN apt-get update && apt-get install -y sudo
+
 # Torch
+# Have to run this in bash for the torch bashrc settings to get propagated
 RUN git clone https://github.com/torch/distro.git /opt/torch --recursive && \
     cd /opt/torch && bash install-deps && ./install.sh -b && \
-    source ~/.bashrc &&
+    . /opt/torch/install/bin/torch-activate && \
     for NAME in torch dpnn nn optim optnet csvigo cutorch cunn fblualib torchx tds; \
         do luarocks install $NAME; \
     done
 
-RUN apt-get update && \
-    apt-get install -y postgresql libpq-dev cron python-tk emacs24 sudo
+RUN apt-get install -y postgresql libpq-dev cron python-tk emacs24 sudo sqlite3
 
 ADD requirements.txt .
 RUN pip install -r requirements.txt

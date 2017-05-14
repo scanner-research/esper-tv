@@ -16,6 +16,12 @@ cd esper
 npm install
 ./node_modules/.bin/webpack --config webpack.config.js
 python manage.py migrate
+mkdir deps
+cd deps
+git clone https://github.com/scanner-research/face_recognizer
+git clone https://github.com/cmusatyalab/openface
+cd openface
+./models/get-models.sh
 ```
 
 ## Running Esper
@@ -30,6 +36,12 @@ To stop the server:
 ```
 docker-compose down
 ```
+
+To get a shell in the server's container:
+```
+docker-compose exec esper bash
+```
+
 
 ## Development
 While editing the SASS or JSX files, use the Webpack watcher:

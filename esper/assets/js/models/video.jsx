@@ -1,22 +1,58 @@
 import axios from 'axios';
-import {observable} from 'mobx';
+import {observable, ObservableMap} from 'mobx';
 
 export class Video {
-  @observable faces = []
+  @observable loadedMeta = false;
+  @observable loadedFaces = false;
+
+  faces = [];
+  ids = {};
 
   constructor(props) {
-    for (var k in props) {
-      this[k] = props[k];
+    if (typeof props != "object") {
+      this.id = props;
+      axios
+        .get(`/api/videos/${props}`)
+        .then(((response) => {
+          let video = response.data.videos[0];
+          this._setProps(video);
+        }).bind(this));
+    } else {
+      this._setProps(props);
     }
   }
 
+  _setProps(props) {
+    this.id = props.id;
+    for (var k in props) {
+      this[k] = props[k];
+    }
+    this.loadedMeta = true;
+  }
+
   loadFaces() {
-    axios
-      .get('/api/faces/' + this.id)
-      .then(((response) => {
-        this.faces = response.data.faces;
-        console.log(this.faces);
-      }).bind(this));
+    console.log('Loading');
+    if (!this.loadedFaces) {
+      axios
+        .get('/api/faces/' + this.id)
+        .then(((response) => {
+          this.faces = response.data.faces;
+          for (var frame in this.faces) {
+            this.faces[frame].forEach(((face, i) => {
+              let id = face.identity;
+              if (id == null) {
+                return;
+              }
+              if (!(id in this.ids)) {
+                this.ids[id] = [];
+              }
+              this.ids[id].push([frame, i]);
+            }).bind(this));
+          }
+          this.loadedFaces = true;
+          console.log('Loaded');
+        }).bind(this));
+    }
   }
 };
 

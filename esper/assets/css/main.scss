@@ -1,8 +1,8 @@
 body {
-    background: #fafafa;
+    background: #fefefe;
 }
 
-.video {
+.video-summary {
     width: 300px;
     float: left;
     margin: 10px;
@@ -28,5 +28,21 @@ body {
         width: 100%;
         position: relative;
         z-index: 1;
+    }
+}
+
+.video {
+    .cluster {
+        border: 2px solid black;
+        margin-bottom: 10px;
+        padding: 5px;
+
+        h3 {
+            margin: 0;
+        }
+
+        img {
+            height: 40px;
+        }
     }
 }

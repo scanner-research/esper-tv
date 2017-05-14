@@ -4,6 +4,9 @@ from django.forms.models import model_to_dict
 from models import *
 from timeit import default_timer as now
 import sys
+from google.protobuf.json_format import MessageToJson
+import json
+from collections import defaultdict
 
 def index(request):
     return render(request, 'index.html')
@@ -16,10 +19,11 @@ def faces(request, video_id):
     if video_id is None:
         return JsonResponse({}) # TODO
     video = Video.objects.filter(id=video_id).get()
-    bboxes = [[] for _ in range(video.num_frames)]
-    faces = Face.objects.filter(video=video)
+    bboxes = defaultdict(list)
+    faces = Face.objects.filter(video=video).all()
     for face in faces:
-        bbox = [int(face.bbox.x1), int(face.bbox.y1),
-                int(face.bbox.x2), int(face.bbox.y2)]
-        bboxes[face.frame].append(bbox);
+        bbox = json.loads(MessageToJson(face.bbox))
+        face_json = model_to_dict(face)
+        face_json['bbox'] = bbox
+        bboxes[face.frame].append(face_json);
     return JsonResponse({'faces': bboxes})

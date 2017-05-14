@@ -1,5 +1,5 @@
 import React from 'react';
-import {BrowserRouter as Router, Route} from 'react-router-dom';
+import {BrowserRouter as Router, Route, Link} from 'react-router-dom';
 import Video from './views/video.jsx';
 import Home from './views/home.jsx';
 
@@ -12,7 +12,7 @@ export default class App extends React.Component {
     return (
       <Router>
         <div>
-          <h1>Esper</h1>
+          <h1><Link to="/">Esper</Link></h1>
           <Route exact path="/" component={render_component(Home)} />
           <Route path="/video/:id" component={render_component(Video)} />
         </div>

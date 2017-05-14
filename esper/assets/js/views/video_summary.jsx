@@ -21,11 +21,11 @@ export default class VideoSummary extends React.Component {
       let frame = Math.round(this._video.currentTime * this.video.fps);
       let ctx = this._canvas.getContext('2d');
       ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-      this.video.faces[frame].forEach((bbox) => {
-        let x = bbox[0];
-        let y = bbox[1];
-        let w = bbox[2] - x;
-        let h = bbox[3] - y;
+      this.video.faces[frame].forEach((face) => {
+        let x = face.bbox.x1;
+        let y = face.bbox.y1;
+        let w = face.bbox.x2 - x;
+        let h = face.bbox.y2 - y;
         let scale = this._canvas.width / this.video.width;
         ctx.beginPath();
         ctx.lineWidth = '3';
@@ -47,12 +47,12 @@ export default class VideoSummary extends React.Component {
     let parts = video.path.split('/');
     let basename = parts[parts.length - 1];
     return (
-      <div className='video'>
+      <div className='video-summary'>
         <div><Link to={'/video/' + video.id}>{basename}</Link></div>
         {!this.state.show_video
         ? (<img src={"/static/thumbnails/" + video.id + ".jpg"}
                 onClick={this._onClickThumbnail.bind(this)} />)
-         : (this.video.faces.length == 0
+         : (this.video.loadedFaces == 0
           ? (<div>Loading...</div>)
           : (<div>
             <canvas ref={(n) => { this._canvas = n; }}></canvas>
