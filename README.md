@@ -6,9 +6,9 @@ First, [install Docker](https://docs.docker.com/engine/installation/#supported-p
 If you have a GPU and are running on Linux:
 * [Install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start)
 * `pip install nvidia-docker-compose`
-* Any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.
+* For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.
 
-Otherwise: `pip install docker-compose`
+If you do not have a GPU or are not running Linux: `pip install docker-compose`
 
 If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
 
