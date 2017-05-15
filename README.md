@@ -4,47 +4,27 @@
 First, install Docker, docker-compose, Postgres, and npm. For Ubuntu:
 * Docker: [instructions](https://docs.docker.com/engine/installation/linux/ubuntu/#prerequisites)
 * docker-compose: `pip install docker-compose`
-* Postgres: `sudo apt-get install postgresql libpq-dev`
-* npm: `sudo apt-get install npm`
 
 If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set as well.
 
-```
+```bash
 docker-compose build
-pip install -r requirements.txt
-cd esper
-npm install
-./node_modules/.bin/webpack --config webpack.config.js
-python manage.py migrate
-mkdir deps
-cd deps
-git clone https://github.com/scanner-research/face_recognizer
-git clone https://github.com/cmusatyalab/openface
-cd openface
-./models/get-models.sh
-```
-
-## Running Esper
-To start the server:
-```
 docker-compose up -d
+docker-compose exec esper ./setup.sh
 ```
 
 Then visit `http://yourserver.com`.
 
-To stop the server:
-```
-docker-compose down
-```
+To add videos to the database, add them somewhere in the `esper` directory (the directory containing `manage.py`) and create a file `paths` that contains a newline-separated list of relative paths to your videos. Open a shell in the Docker container by running `docker-compose exec esper bash` and then run:
 
-To get a shell in the server's container:
+```bash
+python manage.py ingest paths
+python manage.py face_detect paths
+python manage.py face_cluster paths
 ```
-docker-compose exec esper bash
-```
-
 
 ## Development
 While editing the SASS or JSX files, use the Webpack watcher:
-```
+```bash
 ./node_modules/.bin/webpack --config webpack.config.js --watch
 ```

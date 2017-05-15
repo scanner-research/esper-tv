@@ -27,18 +27,21 @@ export default class VideoSummary extends React.Component {
       let frame = Math.round(this._video.currentTime * this.video.fps);
       let ctx = this._canvas.getContext('2d');
       ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-      this.video.faces[frame].forEach((face) => {
-        let x = face.bbox.x1;
-        let y = face.bbox.y1;
-        let w = face.bbox.x2 - x;
-        let h = face.bbox.y2 - y;
-        let scale = this._canvas.width / this.video.width;
-        ctx.beginPath();
-        ctx.lineWidth = '3';
-        ctx.strokeStyle = 'red';
-        ctx.rect(x * scale, y * scale, w * scale, h * scale);
-        ctx.stroke();
-      });
+
+      if (frame in this.video.faces) {
+        this.video.faces[frame].forEach((face) => {
+          let x = face.bbox.x1;
+          let y = face.bbox.y1;
+          let w = face.bbox.x2 - x;
+          let h = face.bbox.y2 - y;
+          let scale = this._canvas.width / this.video.width;
+          ctx.beginPath();
+          ctx.lineWidth = '3';
+          ctx.strokeStyle = 'red';
+          ctx.rect(x * scale, y * scale, w * scale, h * scale);
+          ctx.stroke();
+        });
+      }
     }
     requestAnimationFrame(this._draw.bind(this));
   }
@@ -65,7 +68,7 @@ export default class VideoSummary extends React.Component {
           : (<div>
             <canvas ref={(n) => { this._canvas = n; }}></canvas>
             <video controls ref={(n) => { this._video = n; }}>
-              <source src={"/fs" + video.path} />
+              <source src={"/fs/usr/src/app/" + video.path} />
             </video>
           </div>))}
       </div>

@@ -5,7 +5,7 @@ export class Video {
   @observable loadedMeta = false;
   @observable loadedFaces = false;
 
-  faces = [];
+  faces = {};
   ids = {};
 
   constructor(props) {

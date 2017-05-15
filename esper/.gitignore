@@ -2,6 +2,7 @@ node_modules
 static
 deps
 pickle
+nets
 cluster_images
 assets/bundles
 assets/thumbnails

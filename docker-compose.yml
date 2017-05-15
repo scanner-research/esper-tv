@@ -5,7 +5,6 @@ services:
     build: ./nginx
     volumes:
       - ./esper:/usr/src/app
-      - /:/fs # TODO(wcrichto): security vuln
     depends_on:
       - esper
     ports:
