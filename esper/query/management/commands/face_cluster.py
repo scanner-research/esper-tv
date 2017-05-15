@@ -28,7 +28,7 @@ class Command(BaseCommand):
         face_db = FaceDB(
             open_face_model_dir = '/usr/src/app/deps/openface/models',
             db_name = 'ignore',
-            num_clusters = 10,
+            num_clusters = 20,
             cluster_algs = ['ignore'],
             verbose = False)
 

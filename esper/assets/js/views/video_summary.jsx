@@ -2,6 +2,12 @@ import React from 'react';
 import axios from 'axios';
 import {Link} from 'react-router-dom';
 import {observer} from 'mobx-react';
+import {observable} from 'mobx';
+/*
+ * export class VideoPlayer {
+ *   @observable
+ * };
+ * */
 
 @observer
 export default class VideoSummary extends React.Component {
@@ -48,7 +54,9 @@ export default class VideoSummary extends React.Component {
     let basename = parts[parts.length - 1];
     return (
       <div className='video-summary'>
-        <div><Link to={'/video/' + video.id}>{basename}</Link></div>
+        {this.props.show_meta
+        ? <div><Link to={'/video/' + video.id}>{basename}</Link></div>
+        : <div />}
         {!this.state.show_video
         ? (<img src={"/static/thumbnails/" + video.id + ".jpg"}
                 onClick={this._onClickThumbnail.bind(this)} />)

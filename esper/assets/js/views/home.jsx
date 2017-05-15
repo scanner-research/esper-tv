@@ -13,9 +13,9 @@ export default class Home extends React.Component {
   render() {
     return (
       <div>
-        {this.videos.videos.map((vid, index) => {
-           return <VideoSummary key={index} store={vid} />;
-         })}
+        {this.videos.videos.map((vid, index) =>
+          <VideoSummary key={index} store={vid} show_meta={true} />
+         )}
       </div>
     );
   }

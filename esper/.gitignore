@@ -1,5 +1,9 @@
 node_modules
 static
+deps
+pickle
+cluster_images
 assets/bundles
 assets/thumbnails
+assets/audio
 webpack-stats.json

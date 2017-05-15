@@ -1,5 +1,5 @@
 import axios from 'axios';
-import {observable, ObservableMap} from 'mobx';
+import {observable} from 'mobx';
 
 export class Video {
   @observable loadedMeta = false;
@@ -31,7 +31,6 @@ export class Video {
   }
 
   loadFaces() {
-    console.log('Loading');
     if (!this.loadedFaces) {
       axios
         .get('/api/faces/' + this.id)
@@ -50,7 +49,6 @@ export class Video {
             }).bind(this));
           }
           this.loadedFaces = true;
-          console.log('Loaded');
         }).bind(this));
     }
   }

@@ -27,7 +27,7 @@ class VideoView extends React.Component {
       <div className="video">
         <div className="row">
           <div className="pull-left">
-            <VideoSummary store={video} />
+            <VideoSummary store={video} show_meta={false} />
           </div>
           <div className="pull-right">
             <h2>Metadata</h2>
@@ -39,6 +39,17 @@ class VideoView extends React.Component {
               </tbody>
             </table>
           </div>
+        </div>
+        <div className="cluster">
+          <h3>All faces</h3>
+          {video.loadedFaces
+           ? _.map(video.faces, (faces, i) =>
+             <div className="frame" key={i}>
+               {faces.map((face, j) =>
+                 <img key={j} src={`/static/thumbnails/${face.video}_${face.id}.jpg`} />)}
+             </div>
+           )
+           : <div />}
         </div>
         <div className="clusters">
           {video.loadedFaces

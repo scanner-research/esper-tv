@@ -1,6 +1,3 @@
 *.sqlite3
 *.pyc
 nvidia-docker-compose.yml
-esper/deps
-esper/pickle
-esper/cluster_images

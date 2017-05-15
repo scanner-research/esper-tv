@@ -43,6 +43,13 @@ def make_thumbnail(video, db):
     cv2.imwrite('assets/thumbnails/{}.jpg'.format(video.id),
                 cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
+
+def extract_audio(video):
+    subprocess.check_call(['mkdir', '-p', 'assets/audio'])
+    cmd = 'ffmpeg -y -i "{}" -c:a copy "assets/audio/{}.aac"'.format(video.path, video.id)
+    subprocess.check_call(cmd, shell=True)
+
+
 class Command(BaseCommand):
     help = 'Ingest videos'
 
@@ -71,3 +78,4 @@ class Command(BaseCommand):
                 video.height = height
                 video.save()
                 make_thumbnail(video, db)
+                extract_audio(video)
