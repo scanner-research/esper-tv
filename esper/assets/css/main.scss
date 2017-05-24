@@ -32,29 +32,49 @@ body {
 }
 
 .video {
-    h2 {
-        margin: 0 0 10px 0;
+    .video-meta {
+        h2 {
+            margin: 0 0 10px 0;
+        }
     }
 
-    .frame {
-        float: left;
-        border: 2px solid red;
-        margin-right: 2px;
-        margin-bottom: 2px;
-    }
+    .video-faces {
+        max-height: 500px;
+        overflow-y: scroll;
 
-    .cluster {
-        border: 2px solid black;
-        margin-bottom: 10px;
-        padding: 5px;
-        overflow: auto;
-
-        h3 {
-            margin: 0;
+        .frame {
+            float: left;
+            border: 2px solid red;
+            margin-right: 2px;
+            margin-bottom: 2px;
         }
 
-        img {
-            height: 40px;
+        .cluster {
+            border: 2px solid black;
+            margin-bottom: 10px;
+            padding: 5px;
+            overflow: auto;
+
+            h3 {
+                margin: 0;
+            }
+
+            img {
+                height: 40px;
+                box-sizing: border-box;
+            }
+        }
+
+        .cluster.editing {
+            border-color: grey;
+
+            img:hover {
+                border: 2px solid red;
+            }
+
+            img.selected {
+                border-top: 5px solid red;
+            }
         }
     }
 }
