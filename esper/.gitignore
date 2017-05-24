@@ -3,6 +3,7 @@ static
 deps
 pickle
 nets
+scanner_db
 cluster_images
 assets/bundles
 assets/thumbnails

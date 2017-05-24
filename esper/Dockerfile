@@ -23,6 +23,8 @@ RUN apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 npm n
 ADD requirements.txt .
 RUN pip install -r requirements.txt
 
+ADD .scanner.toml /root/.scanner.toml
+
 ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:$PYTHONPATH
 ENV GLOG_minloglevel=1
 
