@@ -2,29 +2,40 @@ import React from 'react';
 import axios from 'axios';
 import {Link} from 'react-router-dom';
 import {observer} from 'mobx-react';
-import {observable} from 'mobx';
-/*
- * export class VideoPlayer {
- *   @observable
- * };
- * */
+import {observable, autorun} from 'mobx';
 
 @observer
 export default class VideoSummary extends React.Component {
   constructor(props) {
     super(props);
     this.video = props.store;
+    this._unmounted = false;
     this.state = {show_video: false};
+    this._lastUpdatedFrame = 0;
   }
 
   componentDidMount() {
     this._draw();
   }
 
+  componentWillUnmount() {
+    this._unmounted = true;
+  }
+
+  componentWillReceiveProps(props) {
+    if (this._video !== undefined && props.frame != this._lastUpdatedFrame) {
+      this._video.currentTime = props.frame / this.video.fps;
+      this._lastUpdatedFrame = props.frame;
+    }
+  }
+
   // TODO(wcrichto): bboxes can get off w/ video when skipping around a bunch?
   _draw() {
+    if (this._unmounted) { return; }
     if (this._video !== undefined) {
       let frame = Math.round(this._video.currentTime * this.video.fps);
+      this._canvas.width = this._video.clientWidth;
+      this._canvas.height = this._video.clientHeight - 30;
       let ctx = this._canvas.getContext('2d');
       ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
 

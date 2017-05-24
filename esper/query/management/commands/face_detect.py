@@ -24,20 +24,21 @@ class Command(BaseCommand):
                 if len(Face.objects.filter(video=video)) > 0: continue
                 filtered.append(path)
 
+            stride = 24
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
-                db, c, lambda t: t.strided(24), 'tmp_faces')
+                db, c, lambda t: t.strided(stride), 'tmp_faces')
 
             for path, video_faces_table in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()
                 table = db.table(path)
-                frames = table.load(['frame'], rows=range(0, table.num_rows(), 24))
+                frames = table.load(['frame'], rows=range(0, table.num_rows(), stride))
                 video_faces = video_faces_table.load(['bboxes'], parsers.bboxes)
                 for (i, frame_faces), (_, frame) in zip(video_faces, frames):
                     for bbox in frame_faces:
                         f = Face()
                         f.video = video
-                        f.frame = i
+                        f.frame = i * stride
                         f.bbox = bbox
                         f.save()
 
