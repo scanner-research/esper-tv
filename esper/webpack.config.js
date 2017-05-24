@@ -11,7 +11,6 @@ module.exports = {
 
   entry: {
     app: './assets/js/index',
-    vendor: ['react', 'react-dom']
   },
 
   output: {
@@ -21,11 +20,6 @@ module.exports = {
 
   plugins: [
     new BundleTracker({filename: './webpack-stats.json'}),
-    new webpack.optimize.CommonsChunkPlugin({
-      names: ['vendor'],
-      filename: 'vendor.js',
-      minChunks: Infinity
-    }),
     new ExtractTextPlugin({
       filename: "[name].[contenthash].css",
       disable: process.env.NODE_ENV === "development"

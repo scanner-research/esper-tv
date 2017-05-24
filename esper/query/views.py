@@ -12,10 +12,17 @@ def index(request):
     return render(request, 'index.html')
 
 def videos(request):
-    return JsonResponse({'videos': [model_to_dict(v) for v in Video.objects.all()]})
+    id = request.GET.get('id', None)
+    if id is None:
+        videos = Video.objects.all()
+    else:
+        videos = [Video.objects.filter(id=id).get()]
+    return JsonResponse({'videos': [model_to_dict(v) for v in videos]})
 
-def faces(request, video_id):
+
+def faces(request):
     t = now()
+    video_id = request.GET.get('video_id', None)
     if video_id is None:
         return JsonResponse({}) # TODO
     video = Video.objects.filter(id=video_id).get()

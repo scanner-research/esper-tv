@@ -4,12 +4,18 @@ import VideoSummary from 'views/video_summary.jsx';
 import {observer} from 'mobx-react';
 import mobx from 'mobx';
 import _ from 'lodash';
+import {Button, Collapse} from 'react-bootstrap';
 
 @observer
 class VideoView extends React.Component {
+  constructor(...args) {
+    super(...args);
+    this.state = {showAllFaces: false};
+  }
 
   render() {
     let video = this.props.store;
+
     if (!video.loadedMeta) {
       return <div>Loading video...</div>;
     }
@@ -41,15 +47,21 @@ class VideoView extends React.Component {
           </div>
         </div>
         <div className="cluster">
-          <h3>All faces</h3>
-          {video.loadedFaces
-           ? _.map(video.faces, (faces, i) =>
-             <div className="frame" key={i}>
-               {faces.map((face, j) =>
-                 <img key={j} src={`/static/thumbnails/${face.video}_${face.id}.jpg`} />)}
-             </div>
-           )
-           : <div />}
+          <h3>All faces
+            &nbsp; <Button onClick={() => this.setState({showAllFaces: !this.state.showAllFaces})}>+</Button>
+          </h3>
+          <Collapse in={this.state.showAllFaces}>
+            <div>
+              {video.loadedFaces
+               ? _.map(video.faces, (faces, i) =>
+                 <div className="frame" key={i}>
+                   {faces.map((face, j) =>
+                     <img key={j} src={`/static/thumbnails/${face.video}_${face.id}.jpg`} />)}
+                 </div>
+               )
+               : <div />}
+            </div>
+          </Collapse>
         </div>
         <div className="clusters">
           {video.loadedFaces

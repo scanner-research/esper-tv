@@ -12,7 +12,7 @@ export class Video {
     if (typeof props != "object") {
       this.id = props;
       axios
-        .get(`/api/videos/${props}`)
+        .get('/api/videos/', {params: {'id': this.id}})
         .then(((response) => {
           let video = response.data.videos[0];
           this._setProps(video);
@@ -33,7 +33,7 @@ export class Video {
   loadFaces() {
     if (!this.loadedFaces) {
       axios
-        .get('/api/faces/' + this.id)
+        .get('/api/faces/', {params: {'video_id': this.id}})
         .then(((response) => {
           this.faces = response.data.faces;
           for (var frame in this.faces) {
