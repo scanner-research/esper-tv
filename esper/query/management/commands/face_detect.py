@@ -33,6 +33,7 @@ class Command(BaseCommand):
                 video = Video.objects.filter(path=path).get()
                 table = db.table(path)
                 frames = table.load(['frame'], rows=range(0, table.num_rows(), stride))
+
                 video_faces = video_faces_table.load(['bboxes'], parsers.bboxes)
                 for (i, frame_faces), (_, frame) in zip(video_faces, frames):
                     for bbox in frame_faces:

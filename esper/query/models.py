@@ -34,16 +34,15 @@ class Video(models.Model):
     width = models.IntegerField()
     height = models.IntegerField()
 
-
 class Identity(models.Model):
     name = models.CharField(max_length=256)
     classifier = models.BinaryField()
     cohesion = models.FloatField()
-
 
 class Face(models.Model):
     video = models.ForeignKey(Video)
     frame = models.IntegerField()
     identity = models.ForeignKey(Identity, null=True)
     bbox = ProtoField(proto.BoundingBox)
-    features = models.BinaryField()
+    # So we can use json.dumps to store a list.
+    features = models.TextField()
