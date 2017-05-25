@@ -30,7 +30,6 @@ class Command(BaseCommand):
             open_face_model_dir = '/usr/src/app/deps/openface/models',
             db_name = 'ignore',
             num_clusters = 10,
-            cluster_algs = ['ignore'],
             verbose = False,
             merge_threshold=0.90)
 
@@ -50,8 +49,9 @@ class Command(BaseCommand):
         for id in identities:
             faces = Face.objects.filter(identity=id)
             for face in faces:
-                face.features = json.loads(face.features)
-            assert len(faces[0].features) == 128, 'test'
+                face.features = np.array(json.loads(face.features))
+            faces = list(faces)
+            assert len(faces[0].features) == 128, 'should be 128'
             clusters[id.name] = FaceCluster(
                     id.name, faces, svm = id.classifier, merge_threshold=0.90)
 
