@@ -24,7 +24,7 @@ class Command(BaseCommand):
                 if len(Face.objects.filter(video=video)) > 0: continue
                 filtered.append(path)
 
-            stride = 24
+            stride = 12
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
                 db, c, lambda t: t.strided(stride), 'tmp_faces')
