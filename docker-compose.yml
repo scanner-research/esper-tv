@@ -3,6 +3,7 @@ version: '2'
 services:
   nginx:
     build: ./nginx
+    image: scannerresearch/esper-nginx
     volumes:
       - ./esper:/usr/src/app
     depends_on:
@@ -15,6 +16,7 @@ services:
       context: ./esper
       args:
         https_proxy: "${https_proxy}"
+    image: scannerresearch/esper
     volumes:
       - ./esper:/usr/src/app
     expose:
