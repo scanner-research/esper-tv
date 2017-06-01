@@ -16,6 +16,11 @@ tar -xf lfw.tgz
 rm lfw.tgz
 popd
 
+# Get rude_carnie gender recognition
+git clone https://github.com/Parimarjan/rude-carnie.git
+# tmp solution
+cp -r /tmp/inception_gender_checkpoint ./rude-carnie/
+
 # Get face recognition network
 git clone https://github.com/cmusatyalab/openface
 pushd openface
