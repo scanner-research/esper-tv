@@ -19,7 +19,6 @@ def videos(request):
         videos = [Video.objects.filter(id=id).get()]
     return JsonResponse({'videos': [model_to_dict(v) for v in videos]})
 
-
 def faces(request):
     t = now()
     video_id = request.GET.get('video_id', None)
@@ -34,3 +33,9 @@ def faces(request):
         face_json['bbox'] = bbox
         bboxes[face.frame].append(face_json);
     return JsonResponse({'faces': bboxes})
+
+def identities(request):  
+    # FIXME: Should we be sending faces for each identity too?
+    # FIXME: How do I see output of this when calling from js?
+    identities = Identity.objects.all() 
+    return JsonResponse({'ids': [model_to_dict(id) for id in identities]})
