@@ -3,3 +3,4 @@ django==1.10
 gunicorn==19.6.0
 django-webpack-loader
 numpy
+tensorflow

@@ -17,7 +17,8 @@ RUN git clone https://github.com/torch/distro.git /opt/torch --recursive && \
         do luarocks install $NAME; \
     done
 
-RUN apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 npm nodejs && \
+RUN apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 \
+    npm nodejs vim && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 ADD requirements.txt .
@@ -25,7 +26,7 @@ RUN pip install -r requirements.txt
 
 ADD .scanner.toml /root/.scanner.toml
 
-ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:$PYTHONPATH
+ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:$PYTHONPATH
 ENV GLOG_minloglevel=1
 
 WORKDIR /usr/src/app

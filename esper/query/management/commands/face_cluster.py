@@ -18,10 +18,7 @@ def load_imgs(img_directory):
 
 # FIXME: Exit gracefully if same images being sent to clustering algorithm a
 # second time...
-# FIXME: After updating the faces at the end, the same set of faces are not
-# recognized by video anymore. So if you run it again even after cleaning up
-# Identity (in a debugging scenario) - then the faces won't be recognized, so
-# will have to essentially delete db etc and run it again.
+
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
 
@@ -36,14 +33,11 @@ class Command(BaseCommand):
             open_face_model_dir = '/usr/src/app/deps/openface/models',
             num_clusters = 10,
             merge_threshold=0.90,
-            same_frame_penalty = True,
+            same_frame_penalty = False,
             verbose = False)
 
         negative_imgs = load_imgs('./deps/face_recognizer/data/lfw')
-        random.seed(1234)
-        negative_imgs = random.sample(negative_imgs, 750)
         face_db.add_negative_features(negative_imgs)
-        # TODO: test this when past clusters are present.
 
         # All the past clusters in the db.
         identities = Identity.objects.all()
@@ -52,28 +46,29 @@ class Command(BaseCommand):
 
         # FIXME: This seems technically wrong as FaceCluster expects faces of
         # faceDB.Face objects. It sort of works so far because the Django Face
-        # Object is essentially identical, but could be a pain in the future. 
+        # Object is essentially identical, but could be a pain in the future.
         # Maybe pickle_load / dump them as well?
         for id in identities:
             faces = list(Face.objects.filter(identity=id))
+            if len(faces) == 0:
+                break
             for face in faces:
                 face.features = np.array(json.loads(face.features))
             assert len(faces[0].features) == 128, 'should be 128'
             old_clusters[id.name] = FaceCluster(
                     id.name, faces, svm = id.classifier, merge_threshold=0.90)
 
+
         for path in paths:
+            if path == '':
+                return
             video = Video.objects.filter(path=path).get()
-            # FIXME: After we update the face objects at the end with features
-            # etc. this step fails to find faces if we cleanup identities and
-            # run it again.
             faces = Face.objects.filter(video=video).all()
+            print("len of faces for path {}, is {}".format(path, len(faces)))
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 50]
-            print("len of faces for {} is {}".format(path, len(faces)))
             imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                     for f in faces]
             frames = [f.frame for f in faces]
-            print("num frames = ", len(frames))
             assert len(imgs) == len(frames), 'should be same len'
 
             (ids, added_clusters, fdb_faces), indices = \
