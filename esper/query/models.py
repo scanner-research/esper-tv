@@ -42,7 +42,7 @@ class Identity(models.Model):
 class Face(models.Model):
     video = models.ForeignKey(Video)
     frame = models.IntegerField()
-    identity = models.ForeignKey(Identity, null=True)
+    identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)
     bbox = ProtoField(proto.BoundingBox)
     # So we can use json.dumps to store a list.
     features = models.TextField()
