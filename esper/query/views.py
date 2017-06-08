@@ -30,6 +30,7 @@ def faces(request):
     for face in faces:
         bbox = json.loads(MessageToJson(face.bbox))
         face_json = model_to_dict(face)
+        del face_json['features']
         face_json['bbox'] = bbox
         bboxes[face.frame].append(face_json);
     return JsonResponse({'faces': bboxes})

@@ -18,7 +18,7 @@ RUN git clone https://github.com/torch/distro.git /opt/torch --recursive && \
     done
 
 RUN apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 \
-    npm nodejs vim && \
+    npm nodejs vim mysql-client libmysqlclient-dev && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 ADD requirements.txt .

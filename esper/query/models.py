@@ -34,6 +34,9 @@ class Video(models.Model):
     width = models.IntegerField()
     height = models.IntegerField()
 
+    def audio_path(self):
+        return 'assets/audio/{}.aac'.format(self.id)
+
 class Identity(models.Model):
     name = models.CharField(max_length=256)
     classifier = models.BinaryField()
