@@ -4,9 +4,9 @@ Esper is a tool for exploratory analysis of large video collections.
 
 * [Setup](https://github.com/scanner-research/esper#setup)
   * [Using a proxy](https://github.com/scanner-research/esper#using-a-proxy)
+  * [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database)
 * [Processing videos](https://github.com/scanner-research/esper#processing-videos)
 * [Development](https://github.com/scanner-research/esper#development)
-* [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database)
 
 ## Setup
 First, [install Docker](https://docs.docker.com/engine/installation/#supported-platforms).
@@ -40,8 +40,20 @@ ssh -L 8080:127.0.0.1:80 <your_server>
 
 Then go to [http://localhost:8080](http://localhost:8080) in your browser.
 
-See "Accessing the cloud database" for setting up the Google Cloud proxy. Make sure to modify your database settings in `esper/esper/settings.py` to change the host to `127.0.0.1`.
+See below for setting up the Google Cloud proxy. Make sure to modify your database settings in `esper/esper/settings.py` to change the host to `127.0.0.1`.
 
+### Accessing the cloud database
+To access the Google Cloud SQL database (e.g. for Tableau), first install the [Google Cloud SDK](https://cloud.google.com/sdk/downloads). Then run:
+
+```
+gcloud auth login
+gcloud set project id visualdb-1046
+gcloud auth application-default login
+```
+
+This sets up your machine for accessing any of the Google Cloud services. To set up the proxy to Google Cloud SQL, follow steps 2 and 4 here: [https://cloud.google.com/sql/docs/mysql/connect-admin-proxy](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy)
+
+Then connect to the database with host `127.0.0.1`. Ask Will about getting a SQL username.
 
 ## Processing videos
 
@@ -68,16 +80,3 @@ cd esper
 ./dump-db.sh > cloud_db.sql
 sqlite3 db.sqlite3 < cloud_db.sql
 ```
-
-## Accessing the cloud database
-To access the Google Cloud SQL database (e.g. for Tableau), first install the [Google Cloud SDK](https://cloud.google.com/sdk/downloads). Then run:
-
-```
-gcloud auth login
-gcloud set project id visualdb-1046
-gcloud auth application-default login
-```
-
-This sets up your machine for accessing any of the Google Cloud services. To set up the proxy to Google Cloud SQL, follow steps 2 and 4 here: [https://cloud.google.com/sql/docs/mysql/connect-admin-proxy](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy)
-
-Then connect to the database with host `127.0.0.1`. Ask Will about getting a SQL username.
