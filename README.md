@@ -31,22 +31,6 @@ dc exec esper ./setup.sh
 Then visit `http://yourserver.com`.
 
 
-### Using a proxy
-
-If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
-
-Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `dc up -d`.
-
-You can then use an SSH tunnel to access the webserver from your local machine:
-```
-ssh -L 8080:127.0.0.1:80 <your_server>
-```
-
-Then go to [http://localhost:8080](http://localhost:8080) in your browser.
-
-See [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database) for setting up the Google Cloud proxy. Make sure to modify your database settings in `esper/esper/settings.py` to change the cloud DB host to `127.0.0.1`.
-
-
 ### Accessing the local database
 The default Esper build comes with a local MySQL database, saved to `mysql-db` inside the Esper repository. It is exposed on the default port (3306) and comes with a root user whose password is what you specified in `MYSQL_PASSWORD`. Connect to the database with:
 ```
@@ -74,15 +58,30 @@ Then connect to the database with:
 mysql -h 127.0.0.1 -u <your SQL username> esper
 ```
 
+
 ### Using the cloud database
 
 By default, a development instance will use a local database. You can change to use the cloud database by modifying the `esper` environment settings in `docker-compose.yml` and re-running `dc down && dc up -d`.
 
 You can also dump the cloud database into your local database by running from inside the `esper` container:
-
 ```
 ./load-cloud-db.sh
 ```
+
+
+### Using a proxy
+
+If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
+
+Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `dc up -d`.
+
+You can then use an SSH tunnel to access the webserver from your local machine:
+```
+ssh -L 8080:127.0.0.1:80 <your_server>
+```
+
+Then go to [http://localhost:8080](http://localhost:8080) in your browser.
+
 
 ## Processing videos
 
@@ -95,7 +94,7 @@ python manage.py face_cluster paths
 
 
 ## Using Tableau
-Follow the instructions in [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database) to get the cloud proxy running. Then download the Esper workbook with:
+Follow the instructions in [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database) to get the cloud proxy running on your laptop. Then download the Esper workbook with:
 
 ```
 gsutil cp gs://esper/Esper.twb .
