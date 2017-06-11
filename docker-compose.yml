@@ -19,5 +19,17 @@ services:
     image: scannerresearch/esper
     volumes:
       - ./esper:/usr/src/app
+    depends_on:
+      - db
     expose:
       - "8000"
+
+  db:
+    image: mysql
+    environment:
+      - MYSQL_DATABASE=esper
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+    expose:
+      - "3306"
+    volumes:
+      - ./mysql-db:/var/lib/mysql

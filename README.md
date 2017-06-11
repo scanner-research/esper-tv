@@ -73,10 +73,8 @@ While editing the SASS or JSX files, use the Webpack watcher:
 
 By default, a development instance will use a local database. You can change to use the cloud database by modifying `DJANGO_DB_TYPE` and `DJANGO_DB_USER` in `esper/Dockerfile` and re-running `dc build`.
 
-You can also dump the cloud database into your local instance by running:
+You can also dump the cloud database into your local instance by running from inside the Esper container:
 
 ```
-cd esper
-./dump-db.sh > cloud_db.sql
-sqlite3 db.sqlite3 < cloud_db.sql
+./load-cloud-db.sh
 ```

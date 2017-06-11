@@ -1,3 +1,4 @@
 *.sqlite3
 *.pyc
 nvidia-docker-compose.yml
+mysql-db
