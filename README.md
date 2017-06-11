@@ -1,5 +1,13 @@
 # Esper
 
+Esper is a tool for exploratory analysis of large video collections.
+
+* [Setup](https://github.com/scanner-research/esper#setup)
+  * [Using a proxy](https://github.com/scanner-research/esper#using-a-proxy)
+* [Processing videos](https://github.com/scanner-research/esper#processing-videos)
+* [Development](https://github.com/scanner-research/esper#development)
+* [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database)
+
 ## Setup
 First, [install Docker](https://docs.docker.com/engine/installation/#supported-platforms).
 
