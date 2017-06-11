@@ -7,7 +7,7 @@ read -p "This will delete everything in your local database. Are you sure? [y/N]
 case "$choice" in
     y|Y )
         echo "Resetting database with cloud data"
-        MYSQL="mysql -h db -u root ${DB_NAME}"
+        MYSQL="mysql -h db -u root -p${DJANGO_DB_PASSWORD} ${DB_NAME}"
         echo "drop database ${DB_NAME}; create database ${DB_NAME};" | ${MYSQL}
         mysqldump --set-gtid-purged=off -h ${CLOUD_HOST} -u will ${DB_NAME} | ${MYSQL};;
     * )

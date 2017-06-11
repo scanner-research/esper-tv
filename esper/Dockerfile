@@ -28,9 +28,6 @@ ADD .scanner.toml /root/.scanner.toml
 
 ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:$PYTHONPATH
 ENV GLOG_minloglevel=1
-ENV DJANGO_DB_TYPE=local # change this to "cloud" to use Google Cloud SQL
-ENV DJANGO_DB_HOST=104.197.78.40 # not used for local DB
-ENV DJANGO_DB_USER=will # change this to your username
 
 WORKDIR /usr/src/app
 CMD ["gunicorn", "--log-file=-", "-c", "gunicorn_conf.py", "esper.wsgi:application", "--reload"]

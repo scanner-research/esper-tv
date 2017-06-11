@@ -23,13 +23,20 @@ services:
       - db
     expose:
       - "8000"
+    environment:
+      - DJANGO_DB_PASSWORD=${MYSQL_PASSWORD}
+      - DJANGO_DB_TYPE=local
+      - DJANGO_DB_HOST=104.197.78.40
+      - DJANGO_DB_USER=will
 
   db:
     image: mysql
     environment:
       - MYSQL_DATABASE=esper
-      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
     expose:
       - "3306"
     volumes:
       - ./mysql-db:/var/lib/mysql
+    ports:
+      - "3306:3306"

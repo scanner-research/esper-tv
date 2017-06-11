@@ -96,6 +96,7 @@ else:
             'NAME': 'esper',
             'USER': 'root',
             'HOST': 'db',
+            'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD')
         },
     }
 
