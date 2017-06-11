@@ -16,6 +16,7 @@ class Command(BaseCommand):
             paths = [s.strip() for s in f.readlines()]
 
         with Database() as db:
+            # Only run the detector over videos we haven't yet processed
             filtered = []
             for path in paths:
                 video = Video.objects.filter(path=path)
@@ -24,11 +25,13 @@ class Command(BaseCommand):
                 if len(Face.objects.filter(video=video)) > 0: continue
                 filtered.append(path)
 
+            # Run the detector via Scanner
             stride = 12
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
                 db, c, lambda t: t.strided(stride), 'tmp_faces')
 
+            # Save the results to the database
             for path, video_faces_table in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()
                 table = db.table(path)
