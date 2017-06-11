@@ -6,10 +6,10 @@ Esper is a tool for exploratory analysis of large video collections.
   * [Using a proxy](https://github.com/scanner-research/esper#using-a-proxy)
   * [Accessing the local database](https://github.com/scanner-research/esper#accessing-the-local-database)
   * [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database)
+  * [Using the cloud database](https://github.com/scanner-research/esper#using-the-cloud-database)
 * [Processing videos](https://github.com/scanner-research/esper#processing-videos)
 * [Using Tableau](https://github.com/scanner-research/esper#using-tableau)
 * [Development](https://github.com/scanner-research/esper#development)
-
 
 ## Setup
 First, [install Docker](https://docs.docker.com/engine/installation/#supported-platforms).
@@ -35,7 +35,7 @@ Then visit `http://yourserver.com`.
 
 If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
 
-Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `ndc up -d`.
+Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `dc up -d`.
 
 You can then use an SSH tunnel to access the webserver from your local machine:
 ```
@@ -52,6 +52,8 @@ The default Esper build comes with a local MySQL database, saved to `mysql-db` i
 ```
 mysql -h <your server> -u root -p${MYSQL_PASSWORD} esper
 ```
+
+_Note: that the root password will be set for good after the first time you run `dc up -d`, so you need to either reset the database or run the `ALTER PASSWORD` SQL command to change the root password again._
 
 
 ### Accessing the cloud database
@@ -72,6 +74,15 @@ Then connect to the database with:
 mysql -h 127.0.0.1 -u <your SQL username> esper
 ```
 
+### Using the cloud database
+
+By default, a development instance will use a local database. You can change to use the cloud database by modifying the `esper` environment settings in `docker-compose.yml` and re-running `dc down && dc up -d`.
+
+You can also dump the cloud database into your local database by running from inside the `esper` container:
+
+```
+./load-cloud-db.sh
+```
 
 ## Processing videos
 
@@ -104,15 +115,10 @@ To use your own MySQL database:
 
 
 ## Development
+
 While editing the SASS or JSX files, use the Webpack watcher:
 ```
 ./node_modules/.bin/webpack --config webpack.config.js --watch
 ```
 
-By default, a development instance will use a local database. You can change to use the cloud database by modifying `DJANGO_DB_TYPE` and `DJANGO_DB_USER` in `esper/Dockerfile` and re-running `dc build`.
-
-You can also dump the cloud database into your local instance by running from inside the Esper container:
-
-```
-./load-cloud-db.sh
-```
+This will automatically rebuild all the frontend files into `assets/bundles` when you change a relevant file.

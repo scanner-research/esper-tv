@@ -80,25 +80,18 @@ WSGI_APPLICATION = 'esper.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/1.10/ref/settings/#databases
 
-if os.environ.get('DJANGO_DB_TYPE') == 'cloud':
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'esper',
-            'USER': os.environ.get('DJANGO_DB_USER'),
-            'HOST': os.environ.get('DJANGO_DB_HOST')
-        }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'esper',
+        'USER': os.environ.get('DJANGO_DB_USER'),
+        'HOST': os.environ.get('DJANGO_DB_HOST'),
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'esper',
-            'USER': 'root',
-            'HOST': 'db',
-            'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD')
-        },
-    }
+}
+
+password = os.environ.get('DJANGO_DB_PASSWORD')
+if password is not None:
+    DATABASES['default']['PASSWORD'] = password
 
 
 # Password validation
