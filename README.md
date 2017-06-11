@@ -3,10 +3,9 @@
 Esper is a tool for exploratory analysis of large video collections.
 
 * [Setup](https://github.com/scanner-research/esper#setup)
-  * [Using a proxy](https://github.com/scanner-research/esper#using-a-proxy)
   * [Accessing the local database](https://github.com/scanner-research/esper#accessing-the-local-database)
-  * [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database)
   * [Using the cloud database](https://github.com/scanner-research/esper#using-the-cloud-database)
+  * [Using a proxy](https://github.com/scanner-research/esper#using-a-proxy)
 * [Processing videos](https://github.com/scanner-research/esper#processing-videos)
 * [Using Tableau](https://github.com/scanner-research/esper#using-tableau)
 * [Development](https://github.com/scanner-research/esper#development)
