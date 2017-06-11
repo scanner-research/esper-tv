@@ -100,14 +100,14 @@ Follow the instructions in [Accessing the cloud database](https://github.com/sca
 gsutil cp gs://esper/Esper.twb .
 ```
 
-Then inside Tableau, do *File -> Open* and open the `Esper.twb` file. Replace the prompted user name with your own SQL user and click *Sign in*.
+Then inside Tableau, do **File -> Open** and open the `Esper.twb` file. Replace the prompted user name with your own SQL user and click **Sign in**.
 
 To use your own MySQL database:
-1. Click *Data Source* in the bottom left.
-2. Click the dropdown arrow in box labeled *127.0.0.1* in the top left underneath *Connections*.
-3. Select *Edit connection...*.
+1. Click **Data Source** in the bottom left.
+2. Click the dropdown arrow in box labeled **127.0.0.1** in the top left underneath **Connections**.
+3. Select **Edit connection...**.
 4. Change the server to wherever your local instance is located.
 5. Change the username to `root`.
 6. Change the password to the value of your `$MYSQL_PASSWORD`.
-7. Click *Sign in*.
-8. Click *Update now* in the middle-bottom box.
+7. Click **Sign in**.
+8. Click **Update now** in the middle-bottom box.
