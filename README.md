@@ -24,7 +24,7 @@ If you do not have a GPU or are not running Linux: `pip install docker-compose`
 export MYSQL_PASSWORD=<pick a password, save it to your shell .rc>
 alias dc=docker-compose
 dc build
-dc up -d
+dc up -d nginx
 dc exec esper ./setup.sh
 ```
 
@@ -37,43 +37,33 @@ The default Esper build comes with a local MySQL database, saved to `mysql-db` i
 mysql -h <your server> -u root -p${MYSQL_PASSWORD} esper
 ```
 
-_Note: that the root password will be set for good after the first time you run `dc up -d`, so you need to either reset the database or run the `ALTER PASSWORD` SQL command to change the root password again._
-
-
-### Accessing the cloud database
-To access the Google Cloud SQL database, ask Will about getting permissions on the Esper project in Google Cloud. Then, install the [Google Cloud SDK](https://cloud.google.com/sdk/downloads). After that, run:
-```
-gcloud auth login
-gcloud config set project visualdb-1046
-gcloud auth application-default login
-```
-
-This sets up your machine for accessing any of the Google Cloud services. Then, download the [Google Cloud proxy tool](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy#install) and run:
-```
-./cloud_sql_proxy -instances=visualdb-1046:us-central1:esper=tcp:3306
-```
-
-Then connect to the database with:
-```
-mysql -h 127.0.0.1 -u <your SQL username> esper
-```
+_Note: that the root password will be set for good after the first time you run `dc up -d nginx`, so you need to either reset the database or run the `ALTER PASSWORD` SQL command to change the root password again._
 
 
 ### Using the cloud database
 
-By default, a development instance will use a local database. You can change to use the cloud database by modifying the `esper` environment settings in `docker-compose.yml` and re-running `dc down && dc up -d`.
+To use the Google Cloud SQL database, first [install git-crypt](https://github.com/AGWA/git-crypt/blob/master/INSTALL.md). Get the secret `esper.key` from Will and inside the repository run:
 
-You can also dump the cloud database into your local database by running from inside the `esper` container:
+```
+git-crypt unlock /path/to/esper.key
+```
+
+Then in `docker-compose.yml` under the `esper` service, uncomment `db-cloud` under `depends_on`. Re-run `dc down && dc up -d nginx`.
+
+If you want to continue using your local MySQL database but just pull all the data from the cloud, then go into the `esper` container and run:
 ```
 ./load-cloud-db.sh
 ```
+
+If you want to use the cloud database as the actual backend for your Django server, then
+go to `docker-compose.yml` and modify the appropriate `environment` settings. Re-run `dc down && dc up -d nginx`.
 
 
 ### Using a proxy
 
 If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
 
-Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `dc up -d`.
+Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `dc up -d nginx`.
 
 You can then use an SSH tunnel to access the webserver from your local machine:
 ```
@@ -94,13 +84,26 @@ python manage.py face_cluster paths
 
 
 ## Using Tableau
-Follow the instructions in [Accessing the cloud database](https://github.com/scanner-research/esper#accessing-the-cloud-database) to get the cloud proxy running on your laptop. Then download the Esper workbook with:
+
+Ask Will about getting permissions on the Esper project in Google Cloud. Then, install the [Google Cloud SDK](https://cloud.google.com/sdk/downloads). After that, run:
+```
+gcloud auth login
+gcloud config set project visualdb-1046
+gcloud auth application-default login
+```
+
+This sets up your machine for accessing any of the Google Cloud services. Then, download the [Google Cloud proxy tool](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy#install) and run:
+```
+./cloud_sql_proxy -instances=visualdb-1046:us-central1:esper=tcp:3306
+```
+
+Then download the Esper workbook with:
 
 ```
 gsutil cp gs://esper/Esper.twb .
 ```
 
-Then inside Tableau, do **File -> Open** and open the `Esper.twb` file. Replace the prompted user name with your own SQL user and click **Sign in**.
+Open up Tableau ([download](https://www.tableau.com/academic/students#form)), do **File -> Open** and open the `Esper.twb` file. Replace the prompted user name with your own SQL user and click **Sign in**.
 
 To use your own MySQL database:
 1. Click **Data Source** in the bottom left.
