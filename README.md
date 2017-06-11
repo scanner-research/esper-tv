@@ -10,8 +10,6 @@ If you have a GPU and are running on Linux:
 
 If you do not have a GPU or are not running Linux: `pip install docker-compose`
 
-If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
-
 ```
 alias dc=docker-compose
 dc build
@@ -20,6 +18,24 @@ dc exec esper ./setup.sh
 ```
 
 Then visit `http://yourserver.com`.
+
+### Using a proxy
+
+If you're behind a proxy (e.g. the CMU PDL cluster), configure the [Docker proxy](https://docs.docker.com/engine/admin/systemd/#http-proxy). Make sure `https_proxy` is set in your environment as well.
+
+Use `docker-compose` for any network operations like pulling or pushing (`nvidia-docker-compose` doesn't properly use a proxy yet). Make sure `http_proxy` is NOT set when you do `ndc up -d`.
+
+You can then use an SSH tunnel to access the webserver from your local machine:
+```
+ssh -L 8080:127.0.0.1:80 <your_server>
+```
+
+Then go to [http://localhost:8080](http://localhost:8080) in your browser.
+
+To use the Google Cloud SQL database, follow these directions to establish a proxy to Google's servers: [https://cloud.google.com/sql/docs/mysql/connect-admin-proxy](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy)
+
+Then change your database settings in `esper/esper/settings.py` to change the host to `127.0.0.1`.
+
 
 ## Processing videos
 
