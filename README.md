@@ -24,7 +24,7 @@ export MYSQL_PASSWORD=<pick a password, save it to your shell .rc>
 alias dc=docker-compose
 dc build
 dc up -d nginx
-dc exec esper ./setup.sh
+dc exec esper ./scripts/setup.sh
 ```
 
 Then visit `http://yourserver.com`.
@@ -51,7 +51,7 @@ Then in `docker-compose.yml` under the `esper` service, uncomment `db-cloud` und
 
 If you want to continue using your local MySQL database but just pull all the data from the cloud, then go into the `esper` container and run:
 ```
-./load-cloud-db.sh
+./scripts/load-cloud-db.sh
 ```
 
 If you want to use the cloud database as the actual backend for your Django server, then
@@ -119,7 +119,7 @@ To use your own MySQL database:
 
 While editing the SASS or JSX files, use the Webpack watcher:
 ```
-./node_modules/.bin/webpack --config webpack.config.js --watch
+./scripts/build-frontend.sh
 ```
 
 This will automatically rebuild all the frontend files into `assets/bundles` when you change a relevant file.
