@@ -29,22 +29,21 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
-        
-        model_dir = '/usr/src/app/deps/rude-carnie/inception_gender_checkpoint'
-        rc = RudeCarnie(model_dir=model_dir)
 
-        for path in paths:
+        model_dir = '/usr/src/app/deps/rude-carnie/inception_gender_checkpoint'
+        for i, path in enumerate(paths):
             confident = 0
             if path == '':
-                return 
+                return
+
+            rc = RudeCarnie(model_dir=model_dir)
             video = Video.objects.filter(path=path).get()
             faces = Face.objects.filter(video=video).all()
-            print("len of faces for path {}, is {}".format(path, len(faces))) 
+            print("len of faces for path {}, is {}".format(path, len(faces)))
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 50]
             imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                     for f in faces]
- 
-            best = rc.get_gender(imgs)
+            best = rc.get_gender(imgs, single_look=True)
             for comb in zip(imgs, best):
                 print('{} : {}'.format(comb[0], comb[1]))
 
@@ -53,12 +52,13 @@ class Command(BaseCommand):
                 if best[i] is None:
                     # couldn't get gender output for some reason
                     continue
-                if best[i][1] < 0.70:
+                if best[i][1] < 0.90:
                     # gender detector not confident.
                     face.gender = 'U'
                 else:
                     face.gender = best[i][0]
                     confident += 1
+
                 face.save()
 
             print('confident = {}, not confident = {}'.format(confident,

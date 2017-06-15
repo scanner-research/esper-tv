@@ -44,9 +44,10 @@ body {
 
         .frame {
             float: left;
-            border: 2px solid red;
+            border: 2px solid black;
             margin-right: 2px;
             margin-bottom: 2px;
+            padding: 2px;
         }
 
         .cluster {
@@ -62,6 +63,20 @@ body {
             img {
                 height: 40px;
                 box-sizing: border-box;
+                border-width: 2px;
+                border-style: solid;
+
+                &.gender-0, &.gender-U {
+                    border-color: grey;
+                }
+
+                &.gender-M {
+                    border-color: #00c7ff;
+                }
+
+                &.gender-F {
+                    border-color: #ff0084;
+                }
             }
         }
 

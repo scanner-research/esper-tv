@@ -69,7 +69,7 @@ class VideoView extends React.Component {
         }
       }
       return <img key={j} src={`/static/thumbnails/${face.video}_${face.id}.jpg`} onClick={onClick}
-                  className={selected ? 'selected' : ''} style={color} />;
+                  className={selected ? 'selected' : '' + ' gender-' + face.gender} style={color} />;
     };
 
     return (

@@ -47,5 +47,5 @@ class Face(models.Model):
     frame = models.IntegerField()
     identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)
     bbox = ProtoField(proto.BoundingBox)
-    # So we can use json.dumps to store a list.
-    features = models.TextField()
+    features = models.TextField() # So we can use json.dumps to store a list.
+    gender = models.CharField(max_length=2, default='0')   # M, F or U.

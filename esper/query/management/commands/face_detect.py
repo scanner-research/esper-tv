@@ -16,7 +16,6 @@ class Command(BaseCommand):
             paths = [s.strip() for s in f.readlines()]
 
         with Database() as db:
-            # Only run the detector over videos we haven't yet processed
             filtered = []
             for path in paths:
                 video = Video.objects.filter(path=path)
@@ -25,13 +24,11 @@ class Command(BaseCommand):
                 if len(Face.objects.filter(video=video)) > 0: continue
                 filtered.append(path)
 
-            # Run the detector via Scanner
-            stride = 12
+            stride = 24
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
                 db, c, lambda t: t.strided(stride), 'tmp_faces')
 
-            # Save the results to the database
             for path, video_faces_table in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()
                 table = db.table(path)
@@ -45,8 +42,10 @@ class Command(BaseCommand):
                         f.frame = i * stride
                         f.bbox = bbox
                         f.save()
-
                         thumbnail_path = 'assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                         thumbnail = frame[0][int(bbox.y1):int(bbox.y2),
                                              int(bbox.x1):int(bbox.x2)]
+
+                        # Run gender detection here as well?
+
                         cv2.imwrite(thumbnail_path, cv2.cvtColor(thumbnail, cv2.COLOR_RGB2BGR))

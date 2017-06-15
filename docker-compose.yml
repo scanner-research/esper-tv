@@ -23,7 +23,7 @@ services:
       - db-local
       ## Uncomment the line below to use the Cloud proxy.
       # - db-cloud
-    expose:
+    ports:
       - "8000"
     environment:
       ## Local DB settings
@@ -32,7 +32,7 @@ services:
       - DJANGO_DB_USER=root
 
       ## Cloud DB settings. Uncomment these and comment the above to use Cloud SQL.
-      # - DJANG_DB_HOST=db-cloud
+      # - DJANGO_DB_HOST=db-cloud
       # - DJANGO_DB_USER=will
 
   db-local:
