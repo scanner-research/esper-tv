@@ -31,6 +31,10 @@ body {
     }
 }
 
+.bounding-boxes {
+    position: relative;
+}
+
 .video {
     .video-meta {
         h2 {
@@ -79,17 +83,15 @@ body {
                 }
             }
         }
+    }
 
-        .cluster.editing {
-            border-color: grey;
+    .video-labeler {
+        .bounding-boxes {
+            float: left;
+        }
 
-            img:hover {
-                border: 2px solid red;
-            }
-
-            img.selected {
-                border-top: 5px solid red;
-            }
+        img {
+            height: 60px;
         }
     }
 }

@@ -50,6 +50,12 @@ def extract_audio(video):
     subprocess.check_call(cmd, shell=True)
 
 
+def extract_frames(video):
+    cmd = 'ffmpeg -y -i "{}" assets/thumbnails/{}_frame_%06d.jpg' \
+          .format(video.path, video.id)
+    subprocess.check_call(cmd, shell=True)
+
+
 class Command(BaseCommand):
     help = 'Ingest videos'
 
@@ -79,3 +85,4 @@ class Command(BaseCommand):
                 video.save()
                 make_thumbnail(video, db)
                 extract_audio(video)
+                extract_frames(video)
