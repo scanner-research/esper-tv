@@ -55,7 +55,7 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             faces = Face.objects.filter(video=video).all()
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 30]
+            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 50]
             frames = [f.frame for f in faces]
 
             print len(faces)
@@ -85,5 +85,5 @@ class Command(BaseCommand):
                 feed_dict = {images_placeholder:whitened_batch, phase_train_placeholder:False}
                 embs = sess.run(embeddings, feed_dict=feed_dict)
                 for i in range(len(face_indexes)):
-                    faces[face_indexes[i]].feature = json.dumps(embs[i].tolist())
+                    faces[face_indexes[i]].features = json.dumps(embs[i].tolist())
                     faces[face_indexes[i]].save()

@@ -1,9 +1,8 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Identity
+from query.models import Video, Face, Track 
 import random
 import json
 import tensorflow as tf
-import facenet
 import cv2
 import os
 import numpy as np
@@ -52,6 +51,10 @@ class Command(BaseCommand):
 
             # [first_frame, last_frame, all_features, avg_feature, sum_feature]
             recent_features = []
+            faces_len = len(faces)
+            in_seq = 0
+            short_seq = 0
+            low_confidence = 0
             
             old_frame_id = 0
             #index in the face array NOT the face id
@@ -63,7 +66,8 @@ class Command(BaseCommand):
                 curr_face_id = curr_face.id
                 curr_frame_id = curr_face.frame
                 confidence = curr_face.bbox.score;
-                if confidence < .9:
+                if confidence < .98:
+                    low_confidence += 1
                     continue
 
                 if old_frame_id != curr_frame_id:
@@ -80,27 +84,56 @@ class Command(BaseCommand):
                             for item in complete_set:
                                 seq_len = len(item[2])
                                 if (seq_len < min_feat_threshold):
+                                    short_seq += len(item[2])
                                     continue
-                                identity = Identity.objects.create(cohesion=0.0)
-                                identity.save()
+                                first_frame = Face.objects.filter(id=item[2][0]).get().frame
+                                last_frame = Face.objects.filter(id=item[2][-1]).get().frame
+                                track = Track.objects.create(video=video, first_frame=first_frame, last_frame=last_frame)
+                                track.save()
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.filter(id=seq_face_id).get()
-                                    seq_face.identity_id = identity.id;
+                                    seq_face.track = track;
+                                    in_seq += 1 
                                     seq_face.save()
 
 
                     old_frame_id = curr_frame_id
                 best_match = -1
-                best_distance = 4.0
+                best_distance = 10000.0
                 for i in range(len(recent_features)):
                     curr_dist = dist(curr_feature, recent_features[i][3])
                     if curr_dist < best_distance:
                         best_distance = curr_dist
                         best_match = i
+                #if best_match >= 0:
+                #    print best_match, best_distance
                 if best_match == -1 or best_distance > threshold:
                     recent_features.append([curr_frame_id, curr_frame_id, [curr_face_id], curr_feature, curr_feature])
                 else:
-                    recent_features[best_match][1] = curr_face_id;
+                    recent_features[best_match][1] = curr_frame_id;
                     recent_features[best_match][2].append(curr_face_id)
                     recent_features[best_match][4] = np.add(recent_features[best_match][4], curr_feature)
                     recent_features[best_match][3] = np.divide(recent_features[best_match][4], len(recent_features[best_match][2]))
+
+            for item in complete_set:
+                seq_len = len(item[2])
+                if (seq_len < min_feat_threshold):
+                    short_seq += len(item[2])
+                    continue
+                track = Track.objects.create(video=video, first_frame=item[2][0].frame, last_frame=item[2][-1].frame)
+                track.save()
+                for seq_face_id in item[2]:
+                    seq_face = Face.objects.filter(id=seq_face_id).get()
+                    seq_face.track_id = track.id;
+                    in_seq += 1 
+                    seq_face.save()
+            print 'total faces: ', faces_len
+            print 'in output seq: ', in_seq
+            print 'dropped in short seq: ', short_seq
+            print 'low confidence', low_confidence
+            recent_features_sum = 0
+            for feat in recent_features:
+                recent_features_sum += len(feat[2])
+            print 'left in recent_features', recent_features_sum
+            print 'accounted for: ', (recent_features_sum + low_confidence + short_seq + in_seq)
+
