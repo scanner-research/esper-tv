@@ -1,11 +1,12 @@
 import React from 'react';
-import {Video} from 'models/video.jsx';
-import VideoSummary from 'views/video_summary.jsx';
 import {observer} from 'mobx-react';
 import mobx from 'mobx';
 import _ from 'lodash';
 import {Button, Collapse} from 'react-bootstrap';
 import leftPad from 'left-pad';
+
+import {Video} from 'models/video.jsx';
+import VideoSummary from 'views/video_summary.jsx';
 import BoundingBoxView from 'views/bbox.js';
 
 @observer
@@ -99,10 +100,18 @@ class VideoView extends React.Component {
       <div className='video-labeler'>
         {_.range(0, video.num_frames, 24).map((n) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
-           let faces = (n in video.faces)
-                     ? video.faces[n].map((face) => face.bbox)
-                     : [];
-           return <BoundingBoxView key={n}  bboxes={faces} path={path} />;
+           let boxes = [];
+           let colors = [];
+           if (n in video.faces) {
+             let faces = video.faces[n];
+             boxes = faces.map((face) => face.bbox);
+             colors = faces.map((face) => `gender-${face.gender}`);
+           }
+
+           return <BoundingBoxView
+                      key={n} bboxes={boxes} path={path}
+                      colors={colors}
+                      width={video.width} height={video.height} />;
          })}
       </div>
     );

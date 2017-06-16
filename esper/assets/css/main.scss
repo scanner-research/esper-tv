@@ -31,8 +31,31 @@ body {
     }
 }
 
+.gender-0, .gender-U {
+    border-color: #23b722;
+}
+
+.gender-M {
+    border-color: #00c7ff;
+}
+
+.gender-F {
+    border-color: #ff0084;
+}
+
 .bounding-boxes {
     position: relative;
+
+    .bounding-box {
+        position: absolute;
+        border-width: 2px;
+        border-style: solid;
+        cursor: pointer;
+
+        &:active {
+            cursor: none;
+        }
+    }
 }
 
 .video {
@@ -69,18 +92,6 @@ body {
                 box-sizing: border-box;
                 border-width: 2px;
                 border-style: solid;
-
-                &.gender-0, &.gender-U {
-                    border-color: grey;
-                }
-
-                &.gender-M {
-                    border-color: #00c7ff;
-                }
-
-                &.gender-F {
-                    border-color: #ff0084;
-                }
             }
         }
     }
@@ -91,7 +102,8 @@ body {
         }
 
         img {
-            height: 60px;
+            height: 80px;
+            user-select: none;
         }
     }
 }
