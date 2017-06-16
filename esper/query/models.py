@@ -42,10 +42,18 @@ class Identity(models.Model):
     classifier = models.BinaryField()
     cohesion = models.FloatField()
 
+class Track(models.Model):
+    video = models.ForeignKey(Video)
+    first_frame = models.IntegerField()
+    last_frame = models.IntegerField()
+    is_male = models.NullBooleanField()
+
 class Face(models.Model):
     video = models.ForeignKey(Video)
     frame = models.IntegerField()
     identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)
+    track = models.ForeignKey(Track, null=True, on_delete=models.SET_NULL)
     bbox = ProtoField(proto.BoundingBox)
     features = models.TextField() # So we can use json.dumps to store a list.
     gender = models.CharField(max_length=2, default='0')   # M, F or U.
+
