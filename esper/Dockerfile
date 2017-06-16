@@ -26,7 +26,7 @@ RUN pip install -r requirements.txt
 
 ADD .scanner.toml /root/.scanner.toml
 
-ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:$PYTHONPATH
+ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:/usr/src/app/deps/facenet/src:$PYTHONPATH
 ENV GLOG_minloglevel=1
 
 WORKDIR /usr/src/app

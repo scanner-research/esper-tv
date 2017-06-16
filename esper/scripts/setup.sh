@@ -18,8 +18,15 @@ popd
 
 # Get rude_carnie gender recognition
 git clone https://github.com/Parimarjan/rude-carnie.git
-# tmp solution
+# tmp solution (this is not downloaded anywhere)
 cp -r /tmp/inception_gender_checkpoint ./rude-carnie/
+
+# Get facenet
+git clone https://github.com/davidsandberg/facenet.git
+pushd facenet
+mkdir models
+#model should be downloaded and placed here manually (has to be downloaded from google drive)
+popd
 
 # Get face recognition network
 git clone https://github.com/cmusatyalab/openface
