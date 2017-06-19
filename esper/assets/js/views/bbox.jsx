@@ -1,5 +1,6 @@
 import React from 'react';
 import {observer} from 'mobx-react';
+import {observable, autorun} from 'mobx';
 
 let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
@@ -11,13 +12,20 @@ let boundingRect = (div) => {
   };
 };
 
-class Box {
-  constructor(x1, y1, x2, y2, cls) {
+export class Box {
+  @observable x
+  @observable y
+  @observable w
+  @observable h
+  @observable cls
+
+  constructor(x1, y1, x2, y2, cls, track) {
     this.x = x1;
     this.y = y1;
     this.w = x2 - x1;
     this.h = y2 - y1;
     this.cls = cls;
+    this.track = track;
   }
 
   rescale(scale) {
@@ -28,6 +36,7 @@ class Box {
   }
 }
 
+@observer
 class BoxView extends React.Component {
   constructor(props) {
     super(props);
@@ -40,7 +49,6 @@ class BoxView extends React.Component {
     this._mouseX = -1;
     this._mouseY = -1;
   }
-
 
   _onMouseDown(e) {
     let rect = boundingRect(this._div);
@@ -62,7 +70,6 @@ class BoxView extends React.Component {
     let box = this.state.box;
     box.x = this._mouseX - this.state.clickX;
     box.y = this._mouseY - this.state.clickY;
-    this.setState({box: box});
   }
 
   _onMouseUp(e) {
@@ -83,7 +90,7 @@ class BoxView extends React.Component {
           cls = 'gender-M';
         }
         box.cls = cls;
-        this.setState({box: box});
+        this.props.onChange();
       }
 
       e.preventDefault();
@@ -121,12 +128,11 @@ class BoxView extends React.Component {
 
     return <div className={`bounding-box ${box.cls}`}
                 style={style}
-                ref={(n) => {this._div = n}} />;
+                ref={(n) => {this._div = n}}>{box.track}</div>;
   }
 }
 
-@observer
-export default class BoundingBoxView extends React.Component {
+export class BoundingBoxView extends React.Component {
   state = {
     width: -1,
     height: -1,
@@ -134,7 +140,6 @@ export default class BoundingBoxView extends React.Component {
     startY: -1,
     curX: -1,
     curY: -1,
-    bboxes: [],
     mouseIn: false,
     fullwidth: false,
   }
@@ -142,13 +147,9 @@ export default class BoundingBoxView extends React.Component {
   componentWillReceiveProps(props) {
     let img_height = this.state.height;
     let scale = img_height / this.props.height;
-    for (var i = 0; i < props.bboxes.length; ++i) {
-      let bbox = props.bboxes[i];
-      this.state.bboxes.push(
-        new Box(bbox.x1 * scale, bbox.y1 * scale,
-                bbox.x2 * scale, bbox.y2 * scale, props.colors[i]));
-
-    }
+    props.bboxes.forEach((bbox) => {
+      bbox.rescale(scale);
+    });
   }
 
   _onMouseDown(e) {
@@ -177,10 +178,10 @@ export default class BoundingBoxView extends React.Component {
   }
 
   _onMouseUp(e) {
-    this.state.bboxes.push(new Box(
+    this.props.bboxes.push(new Box(
       this.state.startX, this.state.startY,
       this.state.curX, this.state.curY,
-      'gender-0'));
+      'gender-0', null));
     this.setState({startX: -1});
   }
 
@@ -189,20 +190,18 @@ export default class BoundingBoxView extends React.Component {
     if (chr == 'F' && this.state.mouseIn) {
       if (this.state.fullwidth) {
         let scale = 1 / this._lastScale;
-        this.state.bboxes.forEach((box) => {
+        this.props.bboxes.forEach((box) => {
           box.rescale(scale);
         });
         this.setState({fullwidth: false});
-        this.forceUpdate();
       } else {
         let containerWidth = 780;
         let scale = containerWidth / this.state.width;
         this._lastScale = scale;
-        this.state.bboxes.forEach((box) => {
+        this.props.bboxes.forEach((box) => {
           box.rescale(scale);
         });
         this.setState({fullwidth: true});
-        this.forceUpdate();
       }
     }
   }
@@ -228,8 +227,12 @@ export default class BoundingBoxView extends React.Component {
   }
 
   _onDelete(i) {
-    this.state.bboxes.splice(i, 1);
-    this.setState({bboxes: this.state.bboxes});
+    this.props.bboxes.splice(i, 1);
+  }
+
+  _onChange(i) {
+    let box = this.props.bboxes[i];
+    this.props.onChange(box);
   }
 
   render() {
@@ -241,9 +244,12 @@ export default class BoundingBoxView extends React.Component {
                                  this.state.startY,
                                  this.state.curX,
                                  this.state.curY,
-                                 'gender-0')} />
+                                 'gender-0', null)} />
          : <div />}
-        {this.state.bboxes.map((box, i) => <BoxView fullwidth={this.state.fullwidth} box={box} key={i} onDelete={() => this._onDelete(i)} />)}
+        {this.props.bboxes.map((box, i) =>
+          <BoxView fullwidth={this.state.fullwidth} box={box} key={i}
+                   onDelete={() => this._onDelete(i)}
+                   onChange={() => this._onChange(i)} />)}
         <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
              style={imgStyle} />
       </div>

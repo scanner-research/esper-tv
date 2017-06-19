@@ -7,7 +7,7 @@ import leftPad from 'left-pad';
 
 import {Video} from 'models/video.jsx';
 import VideoSummary from 'views/video_summary.jsx';
-import BoundingBoxView from 'views/bbox.jsx';
+import {Box, BoundingBoxView} from 'views/bbox.jsx';
 
 @observer
 class VideoView extends React.Component {
@@ -96,22 +96,36 @@ class VideoView extends React.Component {
 
   _renderLabeler() {
     let video = this.props.store;
+    let all_boxes = [];
     return (
       <div className='video-labeler'>
         {_.range(0, video.num_frames, 24).map((n) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
            let boxes = [];
-           let colors = [];
            if (n in video.faces) {
              let faces = video.faces[n];
-             boxes = faces.map((face) => face.bbox);
-             colors = faces.map((face) => `gender-${face.gender}`);
+             boxes = faces.map((face) =>
+               new Box(face.bbox.x1, face.bbox.y1,
+                       face.bbox.x2, face.bbox.y2,
+                       `gender-${face.gender}`,
+                       face.track)
+             );
+             all_boxes = all_boxes.concat(boxes);
            }
+
+           let onChange = (box) => {
+             if (box.track == null) { return; }
+             all_boxes.forEach((other_box) => {
+               if (box.track == other_box.track) {
+                 other_box.cls = box.cls;
+               }
+             });
+           };
 
            return <BoundingBoxView
                       key={n} bboxes={boxes} path={path}
-                      colors={colors}
-                      width={video.width} height={video.height} />;
+                      width={video.width} height={video.height}
+                      onChange={onChange} />;
          })}
       </div>
     );

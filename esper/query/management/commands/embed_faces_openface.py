@@ -4,7 +4,6 @@ from faceDB.open_face_helper import OpenFaceHelper
 import random
 import json
 import tensorflow as tf
-import facenet
 import cv2
 import os
 
@@ -62,6 +61,3 @@ class Command(BaseCommand):
                 curr_face.save()
                 if (face_idx + 1) % 100 == 0:
                     print face_idx
-
-
-                

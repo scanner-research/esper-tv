@@ -25,8 +25,10 @@ class Command(BaseCommand):
                 if len(Face.objects.filter(video=video)) > 0: continue
                 filtered.append(path)
 
+            stride = 24
+
             # Run the detector via Scanner
-            # Choose stride based on framerate (3 frames / second) 
+            # Choose stride based on framerate (3 frames / second)
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
                 db, c, lambda t: t.strided(stride), 'tmp_faces')
@@ -34,7 +36,6 @@ class Command(BaseCommand):
             for path, video_faces_table in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()
                 table = db.table(path)
-                stride = int(math.ceil(video.fps))/3
                 frames = table.load(['frame'], rows=range(0, table.num_rows(), stride))
 
                 video_faces = video_faces_table.load(['bboxes'], parsers.bboxes)

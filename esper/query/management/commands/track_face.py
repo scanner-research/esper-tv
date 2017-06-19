@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Track 
+from query.models import Video, Face, Track
 import random
 import json
 import tensorflow as tf
@@ -55,7 +55,7 @@ class Command(BaseCommand):
             in_seq = 0
             short_seq = 0
             low_confidence = 0
-            
+
             old_frame_id = 0
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
@@ -93,7 +93,7 @@ class Command(BaseCommand):
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.filter(id=seq_face_id).get()
                                     seq_face.track = track;
-                                    in_seq += 1 
+                                    in_seq += 1
                                     seq_face.save()
 
 
@@ -125,7 +125,7 @@ class Command(BaseCommand):
                 for seq_face_id in item[2]:
                     seq_face = Face.objects.filter(id=seq_face_id).get()
                     seq_face.track_id = track.id;
-                    in_seq += 1 
+                    in_seq += 1
                     seq_face.save()
             print 'total faces: ', faces_len
             print 'in output seq: ', in_seq
@@ -136,4 +136,3 @@ class Command(BaseCommand):
                 recent_features_sum += len(feat[2])
             print 'left in recent_features', recent_features_sum
             print 'accounted for: ', (recent_features_sum + low_confidence + short_seq + in_seq)
-
