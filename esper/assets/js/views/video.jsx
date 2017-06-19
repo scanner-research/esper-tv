@@ -7,7 +7,7 @@ import leftPad from 'left-pad';
 
 import {Video} from 'models/video.jsx';
 import VideoSummary from 'views/video_summary.jsx';
-import BoundingBoxView from 'views/bbox.js';
+import BoundingBoxView from 'views/bbox.jsx';
 
 @observer
 class VideoView extends React.Component {

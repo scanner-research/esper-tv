@@ -19,6 +19,13 @@ class Box {
     this.h = y2 - y1;
     this.cls = cls;
   }
+
+  rescale(scale) {
+    this.x *= scale;
+    this.y *= scale;
+    this.w *= scale;
+    this.h *= scale;
+  }
 }
 
 class BoxView extends React.Component {
@@ -46,8 +53,11 @@ class BoxView extends React.Component {
   }
 
   _onMouseMove(e) {
-    this._mouseX = e.pageX - this._ox;
-    this._mouseY = e.pageY - this._oy;
+    let rect = boundingRect(this._div);
+    let ox = rect.left - this.state.box.x;
+    let oy = rect.top - this.state.box.y;
+    this._mouseX = e.pageX - ox;
+    this._mouseY = e.pageY - oy;
     if (!this.state.clicked) { return; }
     let box = this.state.box;
     box.x = this._mouseX - this.state.clickX;
@@ -65,7 +75,7 @@ class BoxView extends React.Component {
     let box = this.state.box;
     let covers =
       box.x <= this._mouseX && this._mouseX <= box.x + box.w &&
-       box.y <= this._mouseY && this._mouseY <= box.y + box.h;
+      box.y <= this._mouseY && this._mouseY <= box.y + box.h;
     if (chr == ' ') {
       if (covers) {
         let cls = 'gender-F';
@@ -89,9 +99,6 @@ class BoxView extends React.Component {
     this._div.addEventListener('mousedown', this._onMouseDown.bind(this));
     this._keyDownListener = this._onKeyDown.bind(this);
     document.addEventListener('keydown', this._keyDownListener);
-    let rect = boundingRect(this._div);
-    this._ox = rect.left - this.state.box.x;
-    this._oy = rect.top - this.state.box.y;
   }
 
   componentWillUnmount() {
@@ -128,12 +135,13 @@ export default class BoundingBoxView extends React.Component {
     curX: -1,
     curY: -1,
     bboxes: [],
+    mouseIn: false,
+    fullwidth: false,
   }
 
   componentWillReceiveProps(props) {
     let img_height = this.state.height;
     let scale = img_height / this.props.height;
-
     for (var i = 0; i < props.bboxes.length; ++i) {
       let bbox = props.bboxes[i];
       this.state.bboxes.push(
@@ -154,6 +162,7 @@ export default class BoundingBoxView extends React.Component {
   }
 
   _onMouseMove(e) {
+    if (!this._div) { return; }
     let rect = boundingRect(this._div);
     this._ox = rect.left;
     this._oy = rect.top;
@@ -175,10 +184,40 @@ export default class BoundingBoxView extends React.Component {
     this.setState({startX: -1});
   }
 
+  _onKeyDown(e) {
+    let chr = String.fromCharCode(e.which);
+    if (chr == 'F' && this.state.mouseIn) {
+      if (this.state.fullwidth) {
+        let scale = 1 / this._lastScale;
+        this.state.bboxes.forEach((box) => {
+          box.rescale(scale);
+        });
+        this.setState({fullwidth: false});
+        this.forceUpdate();
+      } else {
+        let containerWidth = 780;
+        let scale = containerWidth / this.state.width;
+        this._lastScale = scale;
+        this.state.bboxes.forEach((box) => {
+          box.rescale(scale);
+        });
+        this.setState({fullwidth: true});
+        this.forceUpdate();
+      }
+    }
+  }
+
   componentDidMount() {
     this._div.addEventListener('mousedown', this._onMouseDown.bind(this));
     document.addEventListener('mousemove', this._onMouseMove.bind(this));
     this._div.addEventListener('mouseup', this._onMouseUp.bind(this));
+    document.addEventListener('keydown', this._onKeyDown.bind(this));
+    this._div.addEventListener('mouseover', (() => {
+      this.setState({mouseIn: true});
+    }).bind(this));
+    this._div.addEventListener('mouseout', (() => {
+      this.setState({mouseIn: false});
+    }).bind(this));
     let rect = boundingRect(this._div);
     this._ow = rect.width;
     this._oh = rect.height;
@@ -194,6 +233,7 @@ export default class BoundingBoxView extends React.Component {
   }
 
   render() {
+    let imgStyle = this.state.fullwidth ? {width: '780px', height: 'auto'} : {};
     return (
       <div ref={(n) => {this._div = n;}} className='bounding-boxes'>
         {this.state.startX != -1
@@ -203,8 +243,9 @@ export default class BoundingBoxView extends React.Component {
                                  this.state.curY,
                                  'gender-0')} />
          : <div />}
-        {this.state.bboxes.map((box, i) => <BoxView box={box} key={i} onDelete={() => this._onDelete(i)} />)}
-        <img src={this.props.path} draggable={false} />
+        {this.state.bboxes.map((box, i) => <BoxView fullwidth={this.state.fullwidth} box={box} key={i} onDelete={() => this._onDelete(i)} />)}
+        <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
+             style={imgStyle} />
       </div>
     );
   }
