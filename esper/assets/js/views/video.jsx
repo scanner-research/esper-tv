@@ -7,7 +7,7 @@ import leftPad from 'left-pad';
 
 import {Video} from 'models/video.jsx';
 import VideoSummary from 'views/video_summary.jsx';
-import {Box, BoundingBoxView} from 'views/bbox.jsx';
+import {Box, BoundingBoxView, boundingRect} from 'views/bbox.jsx';
 
 @observer
 class VideoView extends React.Component {
@@ -16,7 +16,7 @@ class VideoView extends React.Component {
     this.state = {
       showAllFaces: false,
       frame: 0,
-      labelMode: true
+      labelMode: true,
     };
   }
 
@@ -43,6 +43,11 @@ class VideoView extends React.Component {
         <Button onClick={() => this.setState({labelMode: !this.state.labelMode})}>
           {this.state.labelMode ? 'View mode' : 'Label mode'}
         </Button>
+        {this.state.labelMode
+         ? <div>
+
+         </div>
+        : <div />}
       </div>
     );
   }
@@ -54,7 +59,6 @@ class VideoView extends React.Component {
 
   _renderFaces() {
     let video = this.props.store;
-
     return (
       <div className="video-faces">
         {video.loadedFaces
@@ -97,6 +101,9 @@ class VideoView extends React.Component {
   _renderLabeler() {
     let video = this.props.store;
     let all_boxes = [];
+    let curTrack = null;
+    let lastBox = -1;
+
     return (
       <div className='video-labeler'>
         {_.range(0, video.num_frames, 24).map((n) => {
@@ -122,13 +129,47 @@ class VideoView extends React.Component {
              });
            };
 
+           let onTrack = (box) => {
+             let i = all_boxes.indexOf(box);
+             console.log(`State before: ${i}, ${curTrack}, ${lastBox}`)
+             if (i == lastBox) {
+               console.log('Ending track');
+               curTrack = null
+               lastBox = -1;
+             } else if (curTrack == null) {
+               console.log('Creating track');
+               let track = box.track;
+               if (track == null) {
+                 box.track = 100;
+                 track = box.track;
+               }
+               curTrack = track;
+               lastBox = i;
+             } else {
+               console.log('Adding to track')
+               box.track = curTrack;
+               lastBox = i;
+             }
+           };
+
            return <BoundingBoxView
                       key={n} bboxes={boxes} path={path}
                       width={video.width} height={video.height}
-                      onChange={onChange} />;
+                      onChange={onChange} onTrack={onTrack} />;
          })}
       </div>
     );
+  }
+
+  _updateRightCol() {
+    if (this._rightCol !== undefined) {
+      let r = boundingRect(this._rightCol);
+      this._rightCol.style.maxHeight = `${window.innerHeight - r.top}px`;
+    }
+  }
+
+  componentDidMount() {
+    this._updateRightCol();
   }
 
   render() {
@@ -140,13 +181,15 @@ class VideoView extends React.Component {
       return <div>Loading video...</div>;
     }
 
+    this._updateRightCol();
+
     return (
       <div className="video">
         <div className="row">
           <div className="col-md-4">
             {this._renderVideoSummary()}
           </div>
-          <div className="col-md-8">
+          <div className="col-md-8 right-col" ref={(n) => {this._rightCol = n;}}>
             {this.state.labelMode ? this._renderLabeler() : this._renderFaces()}
           </div>
         </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import {observer} from 'mobx-react';
 import {observable, autorun} from 'mobx';
 
-let boundingRect = (div) => {
+export let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
   return {
     left: r.left + document.body.scrollLeft,
@@ -18,6 +18,7 @@ export class Box {
   @observable w
   @observable h
   @observable cls
+  @observable track
 
   constructor(x1, y1, x2, y2, cls, track) {
     this.x = x1;
@@ -96,6 +97,8 @@ class BoxView extends React.Component {
       e.preventDefault();
     } else if (chr == 'D' && covers) {
       this.props.onDelete();
+    } else if(chr == 'T' && covers) {
+      this.props.onTrack();
     }
   }
 
@@ -111,10 +114,6 @@ class BoxView extends React.Component {
   componentWillUnmount() {
     document.removeEventListener('mousemove', this._mouseMoveListener);
     document.removeEventListener('keydown', this._keyDownListener);
-  }
-
-  componentWillReceiveProps(props) {
-    this.setState(props);
   }
 
   render() {
@@ -134,8 +133,6 @@ class BoxView extends React.Component {
 
 export class BoundingBoxView extends React.Component {
   state = {
-    width: -1,
-    height: -1,
     startX: -1,
     startY: -1,
     curX: -1,
@@ -145,7 +142,8 @@ export class BoundingBoxView extends React.Component {
   }
 
   componentWillReceiveProps(props) {
-    let img_height = this.state.height;
+    let {width, height} = this._getDimensions();
+    let img_height = height;
     let scale = img_height / this.props.height;
     props.bboxes.forEach((bbox) => {
       bbox.rescale(scale);
@@ -187,6 +185,7 @@ export class BoundingBoxView extends React.Component {
 
   _onKeyDown(e) {
     let chr = String.fromCharCode(e.which);
+    let {width, height} = this._getDimensions();
     if (chr == 'F' && this.state.mouseIn) {
       if (this.state.fullwidth) {
         let scale = 1 / this._lastScale;
@@ -196,7 +195,7 @@ export class BoundingBoxView extends React.Component {
         this.setState({fullwidth: false});
       } else {
         let containerWidth = 780;
-        let scale = containerWidth / this.state.width;
+        let scale = containerWidth / width;
         this._lastScale = scale;
         this.props.bboxes.forEach((box) => {
           box.rescale(scale);
@@ -204,6 +203,11 @@ export class BoundingBoxView extends React.Component {
         this.setState({fullwidth: true});
       }
     }
+  }
+
+  _getDimensions() {
+    let rect = boundingRect(this._div);
+    return {width: rect.width, height: rect.height};
   }
 
   componentDidMount() {
@@ -217,13 +221,6 @@ export class BoundingBoxView extends React.Component {
     this._div.addEventListener('mouseout', (() => {
       this.setState({mouseIn: false});
     }).bind(this));
-    let rect = boundingRect(this._div);
-    this._ow = rect.width;
-    this._oh = rect.height;
-    this.setState({
-      width: this._ow,
-      height: this._oh
-    });
   }
 
   _onDelete(i) {
@@ -233,6 +230,11 @@ export class BoundingBoxView extends React.Component {
   _onChange(i) {
     let box = this.props.bboxes[i];
     this.props.onChange(box);
+  }
+
+  _onTrack(i) {
+    let box = this.props.bboxes[i];
+    this.props.onTrack(box);
   }
 
   render() {
@@ -249,7 +251,8 @@ export class BoundingBoxView extends React.Component {
         {this.props.bboxes.map((box, i) =>
           <BoxView fullwidth={this.state.fullwidth} box={box} key={i}
                    onDelete={() => this._onDelete(i)}
-                   onChange={() => this._onChange(i)} />)}
+                   onChange={() => this._onChange(i)}
+                   onTrack={() => this._onTrack(i)} />)}
         <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
              style={imgStyle} />
       </div>

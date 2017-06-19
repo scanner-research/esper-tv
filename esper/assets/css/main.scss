@@ -57,10 +57,18 @@ body {
         &:active {
             cursor: none;
         }
+
+        &:hover {
+            border-width: 3px;
+        }
     }
 }
 
 .video {
+    .right-col {
+        overflow-y: scroll;
+    }
+
     .video-meta {
         h2 {
             margin: 0 0 10px 0;
