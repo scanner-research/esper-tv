@@ -25,8 +25,9 @@ def faces(request):
     if video_id is None:
         return JsonResponse({}) # TODO
     video = Video.objects.filter(id=video_id).get()
+    labelset = video.detected_labelset()
     bboxes = defaultdict(list)
-    faces = Face.objects.filter(video=video).all()
+    faces = Face.objects.filter(labelset=labelset).all()
     for face in faces:
         bbox = json.loads(MessageToJson(face.bbox))
         face_json = model_to_dict(face)

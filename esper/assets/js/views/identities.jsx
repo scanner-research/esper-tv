@@ -1,16 +1,14 @@
 import React from 'react';
-import {IdentityCollection} from 'models/identity.jsx';
-import {IdentitySummary} from 'views/identity_summary.jsx';
 import {observer} from 'mobx-react';
 
-import {Video} from 'models/video.jsx';
-import VideoSummary from 'views/video_summary.jsx';
+import * as models from 'models/mod.jsx';
+import IdentitySummary from './identity_summary.jsx';
 
 @observer
 export default class Identities extends React.Component {
   constructor(props) {
     super(props);
-    this.ids = new IdentityCollection();
+    this.ids = new models.IdentityCollection();
   }
 
   render() {

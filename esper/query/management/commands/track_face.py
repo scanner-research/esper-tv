@@ -45,7 +45,8 @@ class Command(BaseCommand):
                 return
             print path
             video = Video.objects.filter(path=path).get()
-            faces = Face.objects.filter(video=video).exclude(features='').order_by('frame').all()
+            labelset = video.detected_labelset()
+            faces = Face.objects.filter(labelset=labelset).exclude(features='').order_by('frame').all()
 
             fps = video.fps
 
@@ -88,7 +89,7 @@ class Command(BaseCommand):
                                     continue
                                 first_frame = Face.objects.filter(id=item[2][0]).get().frame
                                 last_frame = Face.objects.filter(id=item[2][-1]).get().frame
-                                track = Track.objects.create(video=video, first_frame=first_frame, last_frame=last_frame)
+                                track = Track.objects.create(labelset=labelset, first_frame=first_frame, last_frame=last_frame)
                                 track.save()
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.filter(id=seq_face_id).get()
@@ -120,7 +121,7 @@ class Command(BaseCommand):
                 if (seq_len < min_feat_threshold):
                     short_seq += len(item[2])
                     continue
-                track = Track.objects.create(video=video, first_frame=item[2][0].frame, last_frame=item[2][-1].frame)
+                track = Track.objects.create(labelset=labelset, first_frame=item[2][0].frame, last_frame=item[2][-1].frame)
                 track.save()
                 for seq_face_id in item[2]:
                     seq_face = Face.objects.filter(id=seq_face_id).get()

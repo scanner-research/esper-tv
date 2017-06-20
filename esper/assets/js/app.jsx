@@ -1,9 +1,13 @@
+/*
+ * app.jsx - Central dispatcher for different pages
+ *
+ * The main function of the App is to use the react-router to dispatch URL
+ * requests to the appropriate React View.
+ */
+
 import React from 'react';
 import {BrowserRouter as Router, Route, Link} from 'react-router-dom';
-import Video from './views/video.jsx';
-import Home from './views/home.jsx';
-import Identity from './views/identity.jsx';
-import Identities from './views/identities.jsx';
+import * as views from './views/mod.jsx';
 
 const render_component = (Component) => (
   ({ match }) => (<Component {...match.params} />)
@@ -15,10 +19,10 @@ export default class App extends React.Component {
       <Router>
         <div>
           <h1><Link to="/">Esper</Link></h1>
-          <Route exact path="/" component={render_component(Home)} />
-          <Route path="/video/:id" component={render_component(Video)} />
-          <Route path="/identities/" component={render_component(Identities)} />
-          <Route path="/identity/" component={render_component(Identity)} />
+          <Route exact path="/" component={render_component(views.Home)} />
+          <Route path="/video/:id" component={render_component(views.Video)} />
+          <Route path="/identities/" component={render_component(views.Identities)} />
+          <Route path="/identity/" component={render_component(views.Identity)} />
         </div>
       </Router>
     );

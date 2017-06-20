@@ -5,9 +5,9 @@ import _ from 'lodash';
 import {Button, Collapse} from 'react-bootstrap';
 import leftPad from 'left-pad';
 
-import {Video} from 'models/video.jsx';
-import VideoSummary from 'views/video_summary.jsx';
-import {Box, BoundingBoxView, boundingRect} from 'views/bbox.jsx';
+import * as models from 'models/mod.jsx';
+import VideoSummary from './video_summary.jsx';
+import {Box, BoundingBoxView, boundingRect} from './bbox.jsx';
 
 @observer
 class VideoView extends React.Component {
@@ -17,6 +17,9 @@ class VideoView extends React.Component {
       showAllFaces: false,
       frame: 0,
       labelMode: true,
+      curTrack: null,
+      lastTrackBox: -1,
+      segStart: -1
     };
   }
 
@@ -45,7 +48,17 @@ class VideoView extends React.Component {
         </Button>
         {this.state.labelMode
          ? <div>
-
+           <br />
+           <u>Instructions</u>
+           <ul>
+             <li><b>Click/drag image</b> - make new box</li>
+             <li><b>Click/drag box</b> - move box around</li>
+             <li><b>space bar</b> - change gender</li>
+             <li><b>d</b> - delete box</li>
+             <li><b>t</b> - manage tracks</li>
+             <li><b>a</b> - mark sequence as accepted</li>
+           </ul>
+           <div>Current track: {this.state.curTrack || 'none'}</div>
          </div>
         : <div />}
       </div>
@@ -53,7 +66,7 @@ class VideoView extends React.Component {
   }
 
   _renderFace(face, j) {
-    return <img key={j} src={`/static/thumbnails/${face.video}_${face.id}.jpg`}
+    return <img key={j} src={`/static/thumbnails/${face.labelset}_${face.id}.jpg`}
                 className={`gender-${face.gender}`} />;
   }
 
@@ -101,22 +114,23 @@ class VideoView extends React.Component {
   _renderLabeler() {
     let video = this.props.store;
     let all_boxes = [];
-    let curTrack = null;
-    let lastBox = -1;
 
     return (
       <div className='video-labeler'>
-        {_.range(0, video.num_frames, 24).map((n) => {
+        {_.range(0, video.num_frames, 24).map((n, ni) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
            let boxes = [];
            if (n in video.faces) {
              let faces = video.faces[n];
-             boxes = faces.map((face) =>
-               new Box(face.bbox.x1, face.bbox.y1,
-                       face.bbox.x2, face.bbox.y2,
-                       `gender-${face.gender}`,
-                       face.track)
-             );
+             boxes = faces
+               .filter((face) =>
+                 (face.bbox.x2 - face.bbox.x1) * (face.bbox.y2 - face.bbox.y1) > 2000)
+               .map((face) =>
+                 new Box(face.bbox.x1/video.width, face.bbox.y1/video.height,
+                         face.bbox.x2/video.width, face.bbox.y2/video.height,
+                         `gender-${face.gender}`,
+                         face.track)
+               );
              all_boxes = all_boxes.concat(boxes);
            }
 
@@ -131,31 +145,40 @@ class VideoView extends React.Component {
 
            let onTrack = (box) => {
              let i = all_boxes.indexOf(box);
-             console.log(`State before: ${i}, ${curTrack}, ${lastBox}`)
-             if (i == lastBox) {
+             if (i == this.state.lastTrackBox) {
                console.log('Ending track');
-               curTrack = null
-               lastBox = -1;
-             } else if (curTrack == null) {
+               this.setState({curTrack: null, lastTrackBox: -1});
+             } else if (this.state.curTrack == null) {
                console.log('Creating track');
                let track = box.track;
                if (track == null) {
                  box.track = 100;
                  track = box.track;
                }
-               curTrack = track;
-               lastBox = i;
+               this.setState({curTrack: track, lastTrackBox: i});
              } else {
                console.log('Adding to track')
-               box.track = curTrack;
-               lastBox = i;
+               box.track = this.state.curTrack;
+               this.setState({lastTrackBox: i});
+             }
+           };
+
+           let onAccept = () => {
+             let curSeg = this.state.segStart;
+             if (curSeg == -1) {
+               this.setState({segStart: ni});
+             } else if (curSeg == ni) {
+               this.setState({segStart: -1});
+             } else {
+               console.log('segment');
              }
            };
 
            return <BoundingBoxView
                       key={n} bboxes={boxes} path={path}
+                      selected={this.state.segStart != -1 && ni == this.state.segStart}
                       width={video.width} height={video.height}
-                      onChange={onChange} onTrack={onTrack} />;
+                      onChange={onChange} onTrack={onTrack} onAccept={onAccept} />;
          })}
       </div>
     );
@@ -198,4 +221,4 @@ class VideoView extends React.Component {
   }
 };
 
-export default (props) => <VideoView store={new Video(props.id)} />;
+export default (props) => <VideoView store={new models.Video(props.id)} />;

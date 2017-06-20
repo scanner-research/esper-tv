@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Identity
+from query.models import Video, Face, Identity, LabelSet
 from faceDB.open_face_helper import OpenFaceHelper
 import random
 import json
@@ -46,13 +46,14 @@ class Command(BaseCommand):
                 return
             print path
             video = Video.objects.filter(path=path).get()
-            faces = Face.objects.filter(video=video).all()
+            labelset = video.detected_labelset()
+            faces = Face.objects.filter(labelset=labelset).all()
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 30]
             print len(faces)
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
                 curr_face = faces[face_idx]
-                curr_img_path = './assets/thumbnails/{}_{}.jpg'.format(video.id, curr_face.id)
+                curr_img_path = './assets/thumbnails/{}_{}.jpg'.format(labelset.id, curr_face.id)
                 try:
                     rep = of.get_rep(curr_img_path)
                 except Exception:

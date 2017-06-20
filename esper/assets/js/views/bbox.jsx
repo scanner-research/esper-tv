@@ -24,16 +24,9 @@ export class Box {
     this.x = x1;
     this.y = y1;
     this.w = x2 - x1;
-    this.h = y2 - y1;
+    this.h= y2 - y1;
     this.cls = cls;
     this.track = track;
-  }
-
-  rescale(scale) {
-    this.x *= scale;
-    this.y *= scale;
-    this.w *= scale;
-    this.h *= scale;
   }
 }
 
@@ -63,14 +56,16 @@ class BoxView extends React.Component {
 
   _onMouseMove(e) {
     let rect = boundingRect(this._div);
-    let ox = rect.left - this.state.box.x;
-    let oy = rect.top - this.state.box.y;
+    let box = this.state.box;
+    let {width, height} = this.props;
+    let ox = rect.left - (box.x * width);
+    let oy = rect.top - (box.y * height);
     this._mouseX = e.pageX - ox;
     this._mouseY = e.pageY - oy;
     if (!this.state.clicked) { return; }
-    let box = this.state.box;
-    box.x = this._mouseX - this.state.clickX;
-    box.y = this._mouseY - this.state.clickY;
+    let clamp = (n) => Math.max(Math.min(n, 1), 0);
+    box.x = clamp((this._mouseX - this.state.clickX) / width);
+    box.y = clamp((this._mouseY - this.state.clickY) / height);
   }
 
   _onMouseUp(e) {
@@ -81,9 +76,10 @@ class BoxView extends React.Component {
   _onKeyDown(e) {
     let chr = String.fromCharCode(e.which);
     let box = this.state.box;
+    let {width, height} = this.props;
     let covers =
-      box.x <= this._mouseX && this._mouseX <= box.x + box.w &&
-      box.y <= this._mouseY && this._mouseY <= box.y + box.h;
+      box.x * width <= this._mouseX && this._mouseX <= (box.x + box.w) * width &&
+      box.y * height <= this._mouseY && this._mouseY <= (box.y + box.h) * height;
     if (chr == ' ') {
       if (covers) {
         let cls = 'gender-F';
@@ -119,10 +115,10 @@ class BoxView extends React.Component {
   render() {
     let box = this.state.box;
     let style = {
-      left: box.x,
-      top: box.y,
-      width: box.w,
-      height: box.h
+      left: box.x * this.props.width,
+      top: box.y * this.props.height,
+      width: box.w * this.props.width,
+      height: box.h * this.props.height
     };
 
     return <div className={`bounding-box ${box.cls}`}
@@ -139,15 +135,6 @@ export class BoundingBoxView extends React.Component {
     curY: -1,
     mouseIn: false,
     fullwidth: false,
-  }
-
-  componentWillReceiveProps(props) {
-    let {width, height} = this._getDimensions();
-    let img_height = height;
-    let scale = img_height / this.props.height;
-    props.bboxes.forEach((bbox) => {
-      bbox.rescale(scale);
-    });
   }
 
   _onMouseDown(e) {
@@ -185,29 +172,11 @@ export class BoundingBoxView extends React.Component {
 
   _onKeyDown(e) {
     let chr = String.fromCharCode(e.which);
-    let {width, height} = this._getDimensions();
     if (chr == 'F' && this.state.mouseIn) {
-      if (this.state.fullwidth) {
-        let scale = 1 / this._lastScale;
-        this.props.bboxes.forEach((box) => {
-          box.rescale(scale);
-        });
-        this.setState({fullwidth: false});
-      } else {
-        let containerWidth = 780;
-        let scale = containerWidth / width;
-        this._lastScale = scale;
-        this.props.bboxes.forEach((box) => {
-          box.rescale(scale);
-        });
-        this.setState({fullwidth: true});
-      }
+      this.setState({fullwidth: !this.state.fullwidth});
+    } else if (chr == 'A' && this.state.mouseIn) {
+      this.props.onAccept();
     }
-  }
-
-  _getDimensions() {
-    let rect = boundingRect(this._div);
-    return {width: rect.width, height: rect.height};
   }
 
   componentDidMount() {
@@ -239,8 +208,9 @@ export class BoundingBoxView extends React.Component {
 
   render() {
     let imgStyle = this.state.fullwidth ? {width: '780px', height: 'auto'} : {};
+    let cls = `bounding-boxes ${this.props.selected ? 'selected' : ''}`;
     return (
-      <div ref={(n) => {this._div = n;}} className='bounding-boxes'>
+      <div ref={(n) => {this._div = n;}} className={cls}>
         {this.state.startX != -1
          ? <BoxView box={new Box(this.state.startX,
                                  this.state.startY,
@@ -249,7 +219,9 @@ export class BoundingBoxView extends React.Component {
                                  'gender-0', null)} />
          : <div />}
         {this.props.bboxes.map((box, i) =>
-          <BoxView fullwidth={this.state.fullwidth} box={box} key={i}
+          <BoxView box={box} key={i}
+                   width={this.state.fullwidth ? 780 : (this.props.width * (100 / this.props.height))}
+                   height={this.state.fullwidth ? (this.props.height * (780 / this.props.width)) : 100}
                    onDelete={() => this._onDelete(i)}
                    onChange={() => this._onChange(i)}
                    onTrack={() => this._onTrack(i)} />)}

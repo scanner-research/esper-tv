@@ -4,6 +4,7 @@ from scannerpy import ProtobufGenerator, Config
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)
+MAX_STR_LEN = 256
 
 
 class ProtoField(models.BinaryField):
@@ -28,7 +29,7 @@ class ProtoField(models.BinaryField):
 
 
 class Video(models.Model):
-    path = models.CharField(max_length=256)
+    path = models.CharField(max_length=MAX_STR_LEN)
     num_frames = models.IntegerField()
     fps = models.FloatField()
     width = models.IntegerField()
@@ -37,23 +38,46 @@ class Video(models.Model):
     def audio_path(self):
         return 'assets/audio/{}.aac'.format(self.id)
 
+    def detected_labelset(self):
+        return LabelSet.objects.filter(video=self, name="detected").get()
+
+    def handlabeled_labelset(self):
+        return LabelSet.objects.filter(video=self, name="handlabeled").get()
+
+
+class LabelSet(models.Model):
+    video = models.ForeignKey(Video)
+    name = models.CharField(max_length=MAX_STR_LEN)
+
+
+class Detector(models.Model):
+    name = models.CharField(max_length=MAX_STR_LEN)
+
+
+class DetectorsUsed(models.Model):
+    video = models.ForeignKey(LabelSet)
+    detector = models.ForeignKey(Detector)
+
+
 class Identity(models.Model):
-    name = models.CharField(max_length=256)
+    name = models.CharField(max_length=MAX_STR_LEN)
     classifier = models.BinaryField()
     cohesion = models.FloatField()
+    labelset = models.ForeignKey(LabelSet)
+
 
 class Track(models.Model):
-    video = models.ForeignKey(Video)
     first_frame = models.IntegerField()
     last_frame = models.IntegerField()
     is_male = models.NullBooleanField()
+    labelset = models.ForeignKey(LabelSet)
+
 
 class Face(models.Model):
-    video = models.ForeignKey(Video)
     frame = models.IntegerField()
     identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)
     track = models.ForeignKey(Track, null=True, on_delete=models.SET_NULL)
     bbox = ProtoField(proto.BoundingBox)
     features = models.TextField() # So we can use json.dumps to store a list.
     gender = models.CharField(max_length=2, default='0')   # M, F or U.
-
+    labelset = models.ForeignKey(LabelSet)

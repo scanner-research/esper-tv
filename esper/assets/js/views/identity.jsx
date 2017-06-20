@@ -1,6 +1,4 @@
 import React from 'react';
-//import {Video} from 'models/video.jsx';
-//import VideoSummary from 'views/video_summary.jsx';
 import {observer} from 'mobx-react';
 import mobx from 'mobx';
 import _ from 'lodash';

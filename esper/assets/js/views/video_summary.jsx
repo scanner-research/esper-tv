@@ -5,7 +5,7 @@ import {observer} from 'mobx-react';
 import {observable, autorun} from 'mobx';
 
 @observer
-export default class VideoSummary extends React.Component {
+export default class VideoSummaryView extends React.Component {
   constructor(props) {
     super(props);
     this.video = props.store;
