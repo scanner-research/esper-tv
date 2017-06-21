@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Identity
+from query.models import Video, Face, Identity, LabelSet
 import random
 import json
 import tensorflow as tf
@@ -54,8 +54,9 @@ class Command(BaseCommand):
                 return
             print path
             video = Video.objects.filter(path=path).get()
-            faces = Face.objects.filter(video=video).all()
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 50]
+            labelset = video.detected_labelset()
+            faces = Face.objects.filter(labelset=labelset).all()
+            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 30]
             frames = [f.frame for f in faces]
 
             print len(faces)
@@ -63,8 +64,10 @@ class Command(BaseCommand):
             face_indexes = []
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
-                curr_img = cv2.imread('./assets/thumbnails/{}_{}.jpg'.format(video.id, faces[face_idx].id))
+                print 'in face loop'
+                curr_img = cv2.imread('./assets/thumbnails/{}_{}.jpg'.format(labelset.id, faces[face_idx].id))
                 if curr_img is None:
+                    print 'continuing'
                     continue
                 face_indexes.append(face_idx)
                 curr_img = cv2.resize(curr_img, (out_size, out_size))

@@ -34,6 +34,24 @@ class Command(BaseCommand):
         parser.add_argument('min_feat_threshold')
 
     def handle(self, *args, **options):
+        """
+        Takes embeddings for faces and merges them into 'tracks'
+        based on the distance of the embeddings.
+        It walks through each frame of the video and adds each new
+        face into a set of recently seen faces. The embedding of each
+        face in a track is averaged together ('avg_feature') and the first_frame
+        and last_frame of a track is recorded. If a similar (within 'threshold' 
+        distance of the 'avg_feature' of a track) has not been
+        seen in 'sequence_time' seconds, the track is added to the database. Any 
+        sequence without at least 'min_feat_threshold' embeddings is dropped.
+
+        Args:
+        path : newline seperated file of paths to track faces
+        threshold : L2 distance threshold for determining if a face embedding belongs to a track
+        sequence_time : threshold number of seconds without seeing a similar face to dump the track to the database
+        min_feat_threshold : minimum number of features in a track before dumping to the database
+        """
+
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
         threshold = float(options['threshold'])

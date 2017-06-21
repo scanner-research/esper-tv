@@ -25,7 +25,8 @@ class Command(BaseCommand):
             if path == '':
                 return 
             video = Video.objects.filter(path=path).get()
-            tracks = Track.objects.filter(video=video).all()
+            labelset = video.detected_labelset()
+            tracks = Track.objects.filter(labelset=labelset).all()
 
             for track in tracks:
                 if track.is_male is not None:
@@ -35,7 +36,7 @@ class Command(BaseCommand):
                 print track.id
 
                 print("len of faces for path {}, is {}".format(path, len(faces))) 
-                imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
+                imgs = ['./assets/thumbnails/{}_{}.jpg'.format(labelset.id, f.id)
                         for f in faces]
      
                 best = rc.get_gender(imgs)

@@ -19,7 +19,9 @@ class VideoView extends React.Component {
       labelMode: true,
       curTrack: null,
       lastTrackBox: -1,
-      segStart: -1
+      segStart: -1,
+	  displayed_frames_per_page: 200,
+	  page: 0
     };
   }
 
@@ -113,11 +115,23 @@ class VideoView extends React.Component {
 
   _renderLabeler() {
     let video = this.props.store;
+	let stride = Math.ceil(video.fps)/3;
+	const frames_per_page = this.state.displayed_frames_per_page * stride;
+	const page = this.state.page;
+	let prev_button = '';
+	if (page > 0){
+		prev_button = <Button onClick={() => {this.setState({page : this.state.page-1});}}>Prev Page</Button>
+	}
+	let next_button = '';
+	if (frames_per_page*(page+1) < video.num_frames){
+		next_button = <Button onClick={() => {this.setState({page : this.state.page+1});}}>Next Page</Button>
+	}
+	// TODO: make sure changes do not cross pages
     let all_boxes = [];
 
     return (
       <div className='video-labeler'>
-        {_.range(0, video.num_frames, 24).map((n, ni) => {
+        {_.range(frames_per_page*page, Math.min(frames_per_page*(page+1), video.num_frames), stride).map((n, ni) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
            let boxes = [];
            if (n in video.faces) {
@@ -180,6 +194,8 @@ class VideoView extends React.Component {
                       width={video.width} height={video.height}
                       onChange={onChange} onTrack={onTrack} onAccept={onAccept} />;
          })}
+	{prev_button}
+	{next_button}
       </div>
     );
   }
