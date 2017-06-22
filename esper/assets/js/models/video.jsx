@@ -55,8 +55,9 @@ export class Video {
       return axios
         .get('/api/faces', {params: {'video_id': this.id}})
         .then(((response) => {
-          this.faces = _.mapValues(response.data.faces, (frame) =>
-            frame.map((face) => new Face(face)));
+          this.faces = _.mapValues(response.data.faces, (frames) =>
+            _.mapValues(frames, (frame) =>
+              frame.map((face) => new Face(face))));
           this.loadedFaces = true;
           return true;
         }).bind(this));

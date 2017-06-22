@@ -218,12 +218,9 @@ export class BoundingBoxView extends React.Component {
 
   render() {
     let imgStyle = this.state.fullwidth ? {width: '780px', height: 'auto'} : {};
-    let selectedCls = this.props.selected ? 'selected' : '';
-    let acceptedCls = this.props.accepted ? 'accepted' : '';
-    let cls = `bounding-boxes ${selectedCls} ${acceptedCls}`;
     let {width, height} = this._getDimensions();
     return (
-      <div className={cls}
+      <div className='bounding-boxes'
            onMouseDown={this._onMouseDown}
            onMouseUp={this._onMouseUp}
            onMouseOver={this._onMouseOver}

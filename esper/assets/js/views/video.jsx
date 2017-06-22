@@ -1,15 +1,19 @@
 import React from 'react';
 import mobx from 'mobx';
 import _ from 'lodash';
-import {Button, Collapse, Pagination} from 'react-bootstrap';
 import leftPad from 'left-pad';
 import axios from 'axios';
 import {observer} from 'mobx-react';
-import {Button, Collapse} from 'react-bootstrap';
+import {Button, Collapse, Pagination} from 'react-bootstrap';
 
 import * as models from 'models/mod.jsx';
 import VideoSummary from './video_summary.jsx';
 import {Box, BoundingBoxView, boundingRect} from './bbox.jsx';
+
+// TODO(wcrichto): make this dynamic
+let AUTOLABELED = 1;
+let HANDLABELED = 2;
+let STRIDE = 24;
 
 @observer
 class VideoView extends React.Component {
@@ -24,6 +28,7 @@ class VideoView extends React.Component {
       segStart: -1,
       activePage: 0
     };
+    this._trackCounter = -1;
   }
 
   _renderVideoSummary() {
@@ -118,19 +123,22 @@ class VideoView extends React.Component {
     if (!wasLoaded) { return; }
     let video = this.props.store;
     this._faces = {};
-    this._allFaces = [];
-    _.forEach(video.faces, (faces, frame) => {
-      this._faces[frame] = faces
-        .filter((face) =>
-          (face.x2 - face.x1) * (face.y2 - face.y1) > .005);
-      this._allFaces = this._allFaces.concat(this._faces[frame]);
+    this._allUnlabeledFaces = [];
+    _.forEach(video.faces, (frames, labelset) => {
+      this._faces[labelset] = {};
+      _.forEach(frames, (faces, frame) => {
+        this._faces[labelset][frame] = faces
+          .filter((face) =>
+            (face.x2 - face.x1) * (face.y2 - face.y1) > .005);
+        this._allUnlabeledFaces = this._allUnlabeledFaces.concat(this._faces[labelset][frame]);
+      });
     });
     this.forceUpdate();
   }
 
   _onChange = (box) => {
     if (box.track == null) { return; }
-    this._allFaces.forEach((other_box) => {
+    this._allUnlabeledFaces.forEach((other_box) => {
       if (box.track == other_box.track) {
         other_box.cls = box.cls;
       }
@@ -138,7 +146,7 @@ class VideoView extends React.Component {
   }
 
   _onTrack = (box) => {
-    let i = this._allFaces.indexOf(box);
+    let i = this._allUnlabeledFaces.indexOf(box);
     if (i == this.state.lastTrackBox) {
       console.log('Ending track');
       this.setState({curTrack: null, lastTrackBox: -1});
@@ -146,8 +154,9 @@ class VideoView extends React.Component {
       console.log('Creating track');
       let track = box.track;
       if (track == null) {
-        box.track = 100;
+        box.track = this._trackCounter;
         track = box.track;
+        this._trackCounter--;
       }
       this.setState({curTrack: track, lastTrackBox: i});
     } else {
@@ -167,13 +176,22 @@ class VideoView extends React.Component {
       let data = {faces: {}, video: this.props.store.id};
       let segEnd = ni;
       for (var i = this.state.segStart; i <= segEnd; ++i) {
-        data.faces[i * 24] = this._faces[i * 24].map((face) => face.toJSON());
+        let faces = []
+        let idx = i * STRIDE;
+        if (idx in this._faces[AUTOLABELED]) {
+          faces = this._faces[AUTOLABELED][idx].map((face) => face.toJSON());
+        }
+        data.faces[idx] = faces;
+        this.props.store.frames[idx] = {}; // so the labeler will mark them as accepted
       }
+
+      this.setState({segStart: -1});
 
       axios
         .post('/api/handlabeled', data)
         .then((_) => {
-          // update page
+          console.log('Success');
+          // do something with response?
         });
     }
   }
@@ -191,7 +209,7 @@ class VideoView extends React.Component {
       return <div>Loading faces...</div>;
     }
 
-    const stride = 24;
+    const stride = STRIDE;
     // TODO: doing something generic here (passing a list of items)
     // is challenging becaues of the way bounding boxes are drawn
     // I will revisit this when this is set in stone
@@ -207,19 +225,30 @@ class VideoView extends React.Component {
       <Pagination prev next first last ellipsis boundaryLinks maxButtons={10}
       activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
       </div>
-        {_.range(firstFrame, lastFrame, stride).map((n, ni) => {
-           let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
-           let faces = [];
-           if (n in this._faces) {
-             faces = this._faces[n];
-           }
-           return <BoundingBoxView
-                      key={n} bboxes={faces} path={path} ni={ni}
-                      selected={this.state.segStart != -1 && ni == this.state.segStart}
-                      accepted={n in video.frames}
-                      width={video.width} height={video.height}
-                      onChange={this._onChange} onTrack={this._onTrack} onAccept={this._onAccept} />;
-         })}
+      {_.range(firstFrame, lastFrame, stride).map((n) => {
+         let ni = n / STRIDE;
+         let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
+         let faces = [];
+         let accepted = n in video.frames;
+         if (accepted && n in this._faces[HANDLABELED]) {
+           faces = this._faces[HANDLABELED][n];
+         } else if (n in this._faces[AUTOLABELED]) {
+           faces = this._faces[AUTOLABELED][n];
+         }
+         let selected = this.state.segStart != -1 && ni == this.state.segStart;
+         let selectedCls = selected ? 'selected' : '';
+         let acceptedCls = accepted ? 'accepted' : '';
+         let cls = `bounding-box-wrapper ${selectedCls} ${acceptedCls}`;
+
+         return (
+           <div className={cls} key={n}>
+             <BoundingBoxView
+                 bboxes={faces} path={path} ni={ni}
+                 width={video.width} height={video.height}
+                 onChange={this._onChange} onTrack={this._onTrack}
+                 onAccept={this._onAccept} />
+           </div>);
+       })}
       </div>
     );
   }

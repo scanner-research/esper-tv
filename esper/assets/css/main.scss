@@ -117,16 +117,20 @@ body {
     .video-labeler {
         * { user-select: none; }
 
-        .bounding-boxes {
+        .bounding-box-wrapper {
             float: left;
 
-            &.selected img {
-                border: 4px solid purple;
+            &.accepted {
+                background: #9FD490;
             }
 
-            &.accepted img {
-                border: 2px solid #73FF45;
+            &.selected {
+                background: #C590D4;
             }
+        }
+
+        .bounding-boxes {
+            margin: 8px;
         }
 
         img {
