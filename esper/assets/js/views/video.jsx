@@ -20,8 +20,9 @@ class VideoView extends React.Component {
       curTrack: null,
       lastTrackBox: -1,
       segStart: -1,
-	  activePage: 2 
+      activePage: 0 
     };
+   this._handlePaginationSelect = this._handlePaginationSelect.bind(this)
   }
 
   _renderVideoSummary() {
@@ -113,31 +114,32 @@ class VideoView extends React.Component {
   }
 
   _handlePaginationSelect(selectedPage){
-	  this.setState({
-		  activePage: selectedPage
-	  });
+      this.setState({
+          activePage: selectedPage-1
+      });
   }
-	  
+      
 
   _renderLabeler() {
     let video = this.props.store;
-	const stride = Math.ceil(video.fps)/3;
+    const stride = Math.ceil(video.fps)/3;
     let all_boxes = [];
-	// TODO: doing something generic here (passing a list of items)
-	// is challenging becaues of the way bounding boxes are drawn
-	// I will revisit this when this is set in stone
-	const framesPerPage = 200;
-	const totalPages = video.num_frames/(stride*framesPerPage);
-	const activePage = this.state.activePage;
-	const firstFrame = activePage*framesPerPage*stride;
-	const lastFrame = Math.min(firstFrame+(framesPerPage*stride), video.num_frames);
+    // TODO: doing something generic here (passing a list of items)
+    // is challenging becaues of the way bounding boxes are drawn
+    // I will revisit this when this is set in stone
+    const framesPerPage = 200;
+    const totalPages = video.num_frames/(stride*framesPerPage);
+    const activePage = this.state.activePage;
+    const firstFrame = activePage*framesPerPage*stride;
+    const lastFrame = Math.min(firstFrame+(framesPerPage*stride), video.num_frames);
 
 
     return (
       <div className='video-labeler'>
-	  <div>
-      <Pagination prev next first last ellipsis boundaryLinks maxButtons={10} activePage={activePage+1} items={totalPages} onSelect={(x) => {this._handlePaginationSelect(x-1)}}/>
-	  </div>
+      <div>
+      <Pagination prev next first last ellipsis boundaryLinks maxButtons={10} 
+      activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
+      </div>
         {_.range(firstFrame, lastFrame, stride).map((n, ni) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
            let boxes = [];
