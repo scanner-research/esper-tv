@@ -22,7 +22,6 @@ class VideoView extends React.Component {
       segStart: -1,
       activePage: 0 
     };
-   this._handlePaginationSelect = this._handlePaginationSelect.bind(this)
   }
 
   _renderVideoSummary() {
@@ -113,7 +112,7 @@ class VideoView extends React.Component {
     );
   }
 
-  _handlePaginationSelect(selectedPage){
+  _handlePaginationSelect = (selectedPage) => {
       this.setState({
           activePage: selectedPage-1
       });
