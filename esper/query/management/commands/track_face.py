@@ -7,20 +7,6 @@ import cv2
 import os
 import numpy as np
 
-
-def load_imgs(img_directory):
-    imgs = []
-    for root, subdirs, files in os.walk(img_directory):
-        for file in files:
-            if os.path.splitext(file)[1].lower() in ('.jpg', '.jpeg'):
-                path = os.path.join(root, file)
-                imgs.append(path)
-
-    return imgs
-
-# FIXME: Exit gracefully if same images being sent to clustering algorithm a
-# second time...
-
 def dist(feat1, feat2):
     return np.sum(np.square(np.subtract(feat1, feat2)))
 
@@ -28,12 +14,30 @@ class Command(BaseCommand):
     help = 'Cluster faces in videos'
 
     def add_arguments(self, parser):
-        parser.add_argument('path')
-        parser.add_argument('threshold')
-        parser.add_argument('sequence_time')
-        parser.add_argument('min_feat_threshold')
+        parser.add_argument('path', type=str)
+        parser.add_argument('-t', '--threshold', type=float, default = .65)
+        parser.add_argument('-s', '--sequence_time', type=int, default = 5)
+        parser.add_argument('-m', '--min_feat_threshold', type=int, default = 3)
 
     def handle(self, *args, **options):
+        """
+        Takes embeddings for faces and merges them into 'tracks'
+        based on the distance of the embeddings.
+        It walks through each frame of the video and adds each new
+        face into a set of recently seen faces. The embedding of each
+        face in a track is averaged together ('avg_feature') and the first_frame
+        and last_frame of a track is recorded. If a similar (within 'threshold' 
+        distance of the 'avg_feature' of a track) has not been
+        seen in 'sequence_time' seconds, the track is added to the database. Any 
+        sequence without at least 'min_feat_threshold' embeddings is dropped.
+
+        Args:
+        path : newline seperated file of paths to track faces
+        threshold : L2 distance threshold for determining if a face embedding belongs to a track
+        sequence_time : threshold number of seconds without seeing a similar face to dump the track to the database
+        min_feat_threshold : minimum number of features in a track before dumping to the database
+        """
+
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
         threshold = float(options['threshold'])

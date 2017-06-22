@@ -36,7 +36,7 @@ class Command(BaseCommand):
                 print track.id
 
                 print("len of faces for path {}, is {}".format(path, len(faces)))
-                imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
+                imgs = ['./assets/thumbnails/{}_{}.jpg'.format(labelset.id, f.id)
                         for f in faces]
 
                 best = rc.get_gender(imgs)
