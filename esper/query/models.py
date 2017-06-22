@@ -77,7 +77,6 @@ class Track(models.Model):
     gender = models.CharField(max_length=2, default='0')   # M, F or U.
 
 
-
 class Face(models.Model):
     frame = models.ForeignKey(Frame)
     identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)

@@ -65,6 +65,7 @@ class VideoView extends React.Component {
              <li><b>d</b> - delete box</li>
              <li><b>t</b> - manage tracks</li>
              <li><b>a</b> - mark sequence as accepted</li>
+             <li><b>f</b> - blow-up a frame</li>
            </ul>
            <div>Current track: {this.state.curTrack || 'none'}</div>
          </div>
@@ -214,7 +215,7 @@ class VideoView extends React.Component {
     // is challenging becaues of the way bounding boxes are drawn
     // I will revisit this when this is set in stone
     const framesPerPage = 200;
-    const totalPages = video.num_frames/(stride*framesPerPage);
+    const totalPages = Math.ceil(video.num_frames/(stride*framesPerPage));
     const activePage = this.state.activePage;
     const firstFrame = activePage*framesPerPage*stride;
     const lastFrame = Math.min(firstFrame+(framesPerPage*stride), video.num_frames);
