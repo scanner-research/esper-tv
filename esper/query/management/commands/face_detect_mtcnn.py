@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face
+from query.models import Video, Face, LabelSet
 from scannerpy import ProtobufGenerator, Config
 import os
 import cv2
@@ -27,7 +27,10 @@ class Command(BaseCommand):
             video = Video.objects.filter(path=path)
             if len(video) == 0: continue
             video = video[0]
-            if len(Face.objects.filter(video=video)) > 0: continue
+            if len(LabelSet.objects.all()) == 0:
+                break
+            labelset = video.detected_labelset()
+            if len(Face.objects.filter(labelset=labelset)) > 0: continue
             filtered.append(path)
 
         # Run the detector via Scanner
@@ -47,11 +50,16 @@ class Command(BaseCommand):
         # Save the results to the database
         for path in paths:
             video = Video.objects.filter(path=path).get()
+            labelset = LabelSet()
+            labelset.name = "detected"
+            labelset.video = video
+            labelset.save()
             print path
             invid = cv2.VideoCapture(path)
             max_frame = int(invid.get(cv2.CAP_PROP_FRAME_COUNT))
             stride = int(math.ceil(video.fps)/3)
             print stride
+
             
             for frame_id in range(0, max_frame, stride):
                 invid.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
@@ -62,7 +70,7 @@ class Command(BaseCommand):
                 num_faces = bounding_boxes.shape[0]
                 for i in range(num_faces):
                     f = Face()
-                    f.video = video
+                    f.labelset = labelset
                     f.frame = frame_id
                     det = bounding_boxes[i][0:4]
                     confidence = bounding_boxes[i][4]
@@ -88,6 +96,6 @@ class Command(BaseCommand):
                     f.save()
 
                     cropped = img[bb[1]:bb[3],bb[0]:bb[2],:]
-                    thumbnail_path = 'assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
+                    thumbnail_path = 'assets/thumbnails/{}_{}.jpg'.format(labelset.id, f.id)
                     cv2.imwrite(thumbnail_path, cropped)
                 print frame_id

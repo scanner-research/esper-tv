@@ -2,7 +2,7 @@ import React from 'react';
 import {observer} from 'mobx-react';
 import mobx from 'mobx';
 import _ from 'lodash';
-import {Button, Collapse} from 'react-bootstrap';
+import {Button, Collapse, Pagination} from 'react-bootstrap';
 import leftPad from 'left-pad';
 
 import * as models from 'models/mod.jsx';
@@ -19,7 +19,8 @@ class VideoView extends React.Component {
       labelMode: true,
       curTrack: null,
       lastTrackBox: -1,
-      segStart: -1
+      segStart: -1,
+      activePage: 0 
     };
   }
 
@@ -111,13 +112,34 @@ class VideoView extends React.Component {
     );
   }
 
+  _handlePaginationSelect = (selectedPage) => {
+      this.setState({
+          activePage: selectedPage-1
+      });
+  }
+      
+
   _renderLabeler() {
     let video = this.props.store;
+    const stride = Math.ceil(video.fps)/3;
     let all_boxes = [];
+    // TODO: doing something generic here (passing a list of items)
+    // is challenging becaues of the way bounding boxes are drawn
+    // I will revisit this when this is set in stone
+    const framesPerPage = 200;
+    const totalPages = video.num_frames/(stride*framesPerPage);
+    const activePage = this.state.activePage;
+    const firstFrame = activePage*framesPerPage*stride;
+    const lastFrame = Math.min(firstFrame+(framesPerPage*stride), video.num_frames);
+
 
     return (
       <div className='video-labeler'>
-        {_.range(0, video.num_frames, 24).map((n, ni) => {
+      <div>
+      <Pagination prev next first last ellipsis boundaryLinks maxButtons={10} 
+      activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
+      </div>
+        {_.range(firstFrame, lastFrame, stride).map((n, ni) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
            let boxes = [];
            if (n in video.faces) {
