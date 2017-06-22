@@ -2,7 +2,7 @@ import React from 'react';
 import {observer} from 'mobx-react';
 import mobx from 'mobx';
 import _ from 'lodash';
-import {Button, Collapse} from 'react-bootstrap';
+import {Button, Collapse, Pagination} from 'react-bootstrap';
 import leftPad from 'left-pad';
 
 import * as models from 'models/mod.jsx';
@@ -20,8 +20,7 @@ class VideoView extends React.Component {
       curTrack: null,
       lastTrackBox: -1,
       segStart: -1,
-	  displayed_frames_per_page: 200,
-	  page: 0
+	  activePage: 2 
     };
   }
 
@@ -113,25 +112,33 @@ class VideoView extends React.Component {
     );
   }
 
+  _handlePaginationSelect(selectedPage){
+	  this.setState({
+		  activePage: selectedPage
+	  });
+  }
+	  
+
   _renderLabeler() {
     let video = this.props.store;
-	let stride = Math.ceil(video.fps)/3;
-	const frames_per_page = this.state.displayed_frames_per_page * stride;
-	const page = this.state.page;
-	let prev_button = '';
-	if (page > 0){
-		prev_button = <Button onClick={() => {this.setState({page : this.state.page-1});}}>Prev Page</Button>
-	}
-	let next_button = '';
-	if (frames_per_page*(page+1) < video.num_frames){
-		next_button = <Button onClick={() => {this.setState({page : this.state.page+1});}}>Next Page</Button>
-	}
-	// TODO: make sure changes do not cross pages
+	const stride = Math.ceil(video.fps)/3;
     let all_boxes = [];
+	// TODO: doing something generic here (passing a list of items)
+	// is challenging becaues of the way bounding boxes are drawn
+	// I will revisit this when this is set in stone
+	const framesPerPage = 200;
+	const totalPages = video.num_frames/(stride*framesPerPage);
+	const activePage = this.state.activePage;
+	const firstFrame = activePage*framesPerPage*stride;
+	const lastFrame = Math.min(firstFrame+(framesPerPage*stride), video.num_frames);
+
 
     return (
       <div className='video-labeler'>
-        {_.range(frames_per_page*page, Math.min(frames_per_page*(page+1), video.num_frames), stride).map((n, ni) => {
+	  <div>
+      <Pagination prev next first last ellipsis boundaryLinks maxButtons={10} activePage={activePage+1} items={totalPages} onSelect={(x) => {this._handlePaginationSelect(x-1)}}/>
+	  </div>
+        {_.range(firstFrame, lastFrame, stride).map((n, ni) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
            let boxes = [];
            if (n in video.faces) {
@@ -194,8 +201,6 @@ class VideoView extends React.Component {
                       width={video.width} height={video.height}
                       onChange={onChange} onTrack={onTrack} onAccept={onAccept} />;
          })}
-	{prev_button}
-	{next_button}
       </div>
     );
   }
