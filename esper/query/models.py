@@ -59,6 +59,11 @@ class DetectorsUsed(models.Model):
     detector = models.ForeignKey(Detector)
 
 
+class Frame(models.Model):
+    labelset = models.ForeignKey(LabelSet)
+    number = models.IntegerField()
+
+
 class Identity(models.Model):
     name = models.CharField(max_length=MAX_STR_LEN)
     classifier = models.BinaryField()
@@ -67,17 +72,16 @@ class Identity(models.Model):
 
 
 class Track(models.Model):
-    first_frame = models.IntegerField()
-    last_frame = models.IntegerField()
-    is_male = models.NullBooleanField()
-    labelset = models.ForeignKey(LabelSet)
+    first_frame = models.ForeignKey(Frame, related_name='first_frame')
+    last_frame = models.ForeignKey(Frame, related_name='last_frame')
+    gender = models.CharField(max_length=2, default='0')   # M, F or U.
+
 
 
 class Face(models.Model):
-    frame = models.IntegerField()
+    frame = models.ForeignKey(Frame)
     identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)
     track = models.ForeignKey(Track, null=True, on_delete=models.SET_NULL)
     bbox = ProtoField(proto.BoundingBox)
     features = models.TextField() # So we can use json.dumps to store a list.
     gender = models.CharField(max_length=2, default='0')   # M, F or U.
-    labelset = models.ForeignKey(LabelSet)

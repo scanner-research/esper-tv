@@ -74,7 +74,7 @@ export default class VideoSummaryView extends React.Component {
         {!this.state.show_video
         ? (<img src={"/static/thumbnails/" + video.id + ".jpg"}
                 onClick={this._onClickThumbnail.bind(this)} />)
-         : (this.video.loadedFaces == 0
+         : (!this.video.loadedFaces
           ? (<div>Loading...</div>)
           : (<div>
             <canvas ref={(n) => { this._canvas = n; }}></canvas>

@@ -1,6 +1,7 @@
 import React from 'react';
 import {observer} from 'mobx-react';
 import {observable, autorun} from 'mobx';
+import {Face} from 'models/mod.jsx';
 
 export let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
@@ -12,116 +13,113 @@ export let boundingRect = (div) => {
   };
 };
 
-export class Box {
-  @observable x
-  @observable y
-  @observable w
-  @observable h
-  @observable cls
-  @observable track
-
-  constructor(x1, y1, x2, y2, cls, track) {
-    this.x = x1;
-    this.y = y1;
-    this.w = x2 - x1;
-    this.h= y2 - y1;
-    this.cls = cls;
-    this.track = track;
-  }
-}
+// TODO(wcrichto): if you move a box and mouseup outsie the box, then the mouseup doesn't
+// register with the BoxView
 
 @observer
 class BoxView extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      box: this.props.box,
       clickX: -1,
       clickY: -1,
-      clicked: false
+      clicked: false,
+      mouseX: -1,
+      mouseY: -1
     };
-    this._mouseX = -1;
-    this._mouseY = -1;
   }
 
-  _onMouseDown(e) {
-    let rect = boundingRect(this._div);
+  // See "Bind functions early" https://mobx.js.org/best/react-performance.html
+  // for why we use this syntax for member functions.
+  _onMouseDown = (e) => {
     this.setState({
       clicked: true,
-      clickX: e.pageX - rect.left,
-      clickY: e.pageY - rect.top
+      clickX: e.pageX,
+      clickY: e.pageY,
+      mouseX: e.pageX,
+      mouseY: e.pageY
     });
     e.stopPropagation();
   }
 
-  _onMouseMove(e) {
-    let rect = boundingRect(this._div);
-    let box = this.state.box;
-    let {width, height} = this.props;
-    let ox = rect.left - (box.x * width);
-    let oy = rect.top - (box.y * height);
-    this._mouseX = e.pageX - ox;
-    this._mouseY = e.pageY - oy;
+  _onMouseMove = (e) => {
     if (!this.state.clicked) { return; }
-    let clamp = (n) => Math.max(Math.min(n, 1), 0);
-    box.x = clamp((this._mouseX - this.state.clickX) / width);
-    box.y = clamp((this._mouseY - this.state.clickY) / height);
+    this.setState({
+      mouseX: e.pageX,
+      mouseY: e.pageY
+    });
   }
 
-  _onMouseUp(e) {
+  _onMouseUp = (e) => {
+    let box = this.props.box;
+    let {width, height} = this.props;
+    let offsetX = this.state.mouseX - this.state.clickX;
+    let offsetY = this.state.mouseY - this.state.clickY;
+    box.x1 += offsetX / width;
+    box.x2 += offsetX / width;
+    box.y1 += offsetY / height;
+    box.y2 += offsetY / height;
     this.setState({clicked: false});
     e.stopPropagation();
   }
 
-  _onKeyDown(e) {
+  _onMouseOver = (e) => {
+    document.addEventListener('keydown', this._onKeyDown);
+  }
+
+  _onMouseOut = (e) => {
+    document.removeEventListener('keydown', this._onKeyDown);
+  }
+
+  _onKeyDown = (e) => {
     let chr = String.fromCharCode(e.which);
-    let box = this.state.box;
+    let box = this.props.box;
     let {width, height} = this.props;
-    let covers =
-      box.x * width <= this._mouseX && this._mouseX <= (box.x + box.w) * width &&
-      box.y * height <= this._mouseY && this._mouseY <= (box.y + box.h) * height;
     if (chr == ' ') {
-      if (covers) {
-        let cls = 'gender-F';
-        if (box.cls == 'gender-F') {
-          cls = 'gender-M';
-        }
-        box.cls = cls;
-        this.props.onChange();
+      let cls = 'F';
+      if (box.cls == 'F') {
+        cls = 'M';
       }
+      box.cls = cls;
+      this.props.onChange(this.props.i);
 
       e.preventDefault();
-    } else if (chr == 'D' && covers) {
-      this.props.onDelete();
-    } else if(chr == 'T' && covers) {
-      this.props.onTrack();
+    } else if (chr == 'D') {
+      this.props.onDelete(this.props.i);
+    } else if(chr == 'T') {
+      this.props.onTrack(this.props.i);
     }
   }
 
   componentDidMount() {
-    this._div.addEventListener('mouseup', this._onMouseUp.bind(this));
-    this._mouseMoveListener = this._onMouseMove.bind(this);
-    document.addEventListener('mousemove', this._mouseMoveListener);
-    this._div.addEventListener('mousedown', this._onMouseDown.bind(this));
-    this._keyDownListener = this._onKeyDown.bind(this);
-    document.addEventListener('keydown', this._keyDownListener);
+    document.addEventListener('mousemove', this._onMouseMove);
   }
 
   componentWillUnmount() {
-    document.removeEventListener('mousemove', this._mouseMoveListener);
-    document.removeEventListener('keydown', this._keyDownListener);
+    document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('mousemove', this._onMouseMove);
   }
 
   render() {
-    let box = this.state.box;
+    let box = this.props.box;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (this.state.clicked) {
+      offsetX = this.state.mouseX - this.state.clickX;
+      offsetY = this.state.mouseY - this.state.clickY;
+    }
     let style = {
-      left: box.x * this.props.width,
-      top: box.y * this.props.height,
-      width: box.w * this.props.width,
-      height: box.h * this.props.height
+      left: box.x1 * this.props.width + offsetX,
+      top: box.y1 * this.props.height + offsetY,
+      width: (box.x2-box.x1) * this.props.width,
+      height: (box.y2-box.y1) * this.props.height
     };
 
-    return <div className={`bounding-box ${box.cls}`}
+    return <div onMouseOver={this._onMouseOver}
+                onMouseOut={this._onMouseOut}
+                onMouseUp={this._onMouseUp}
+                onMouseDown={this._onMouseDown}
+                className={`bounding-box gender-${box.cls}`}
                 style={style}
                 ref={(n) => {this._div = n}}>{box.track}</div>;
   }
@@ -133,98 +131,112 @@ export class BoundingBoxView extends React.Component {
     startY: -1,
     curX: -1,
     curY: -1,
-    mouseIn: false,
     fullwidth: false,
+    mouseIn: false
   }
 
-  _onMouseDown(e) {
+  constructor(props) {
+    super(props);
+  }
+
+  _onMouseOver = (e) => {
+    document.addEventListener('mousemove', this._onMouseMove);
+    document.addEventListener('keydown', this._onKeyDown);
+  }
+
+  _onMouseOut = (e) => {
+    document.removeEventListener('mousemove', this._onMouseMove);
+    document.removeEventListener('keydown', this._onKeyDown);
+  }
+
+  _onMouseDown = (e) => {
     let rect = boundingRect(this._div);
-    this._ox = rect.left;
-    this._oy = rect.top;
     this.setState({
-      startX: e.pageX - this._ox,
-      startY: e.pageY - this._oy
+      startX: e.pageX - rect.left,
+      startY: e.pageY - rect.top
     });
   }
 
-  _onMouseMove(e) {
-    if (!this._div) { return; }
+  _onMouseMove = (e) => {
     let rect = boundingRect(this._div);
-    this._ox = rect.left;
-    this._oy = rect.top;
-    this._ow = rect.width;
-    this._oh = rect.height;
-    let curX = e.pageX - this._ox;
-    let curY = e.pageY - this._oy;
-    if (0 <= curX && curX <= this._ow &&
-        0 <= curY && curY <= this._oh) {
+    let curX = e.pageX - rect.left;
+    let curY = e.pageY - rect.top;
+    if (0 <= curX && curX <= rect.width &&
+        0 <= curY && curY <= rect.height) {
       this.setState({curX: curX, curY: curY});
     }
   }
 
-  _onMouseUp(e) {
-    this.props.bboxes.push(new Box(
-      this.state.startX, this.state.startY,
-      this.state.curX, this.state.curY,
-      'gender-0', null));
+  _onMouseUp = (e) => {
+    this.props.bboxes.push(this._makeBox());
     this.setState({startX: -1});
   }
 
-  _onKeyDown(e) {
+  _onKeyDown = (e) => {
     let chr = String.fromCharCode(e.which);
-    if (chr == 'F' && this.state.mouseIn) {
+    if (chr == 'F') {
       this.setState({fullwidth: !this.state.fullwidth});
-    } else if (chr == 'A' && this.state.mouseIn) {
-      this.props.onAccept();
+    } else if (chr == 'A') {
+      this.props.onAccept(this.props.ni);
     }
   }
 
-  componentDidMount() {
-    this._div.addEventListener('mousedown', this._onMouseDown.bind(this));
-    document.addEventListener('mousemove', this._onMouseMove.bind(this));
-    this._div.addEventListener('mouseup', this._onMouseUp.bind(this));
-    document.addEventListener('keydown', this._onKeyDown.bind(this));
-    this._div.addEventListener('mouseover', (() => {
-      this.setState({mouseIn: true});
-    }).bind(this));
-    this._div.addEventListener('mouseout', (() => {
-      this.setState({mouseIn: false});
-    }).bind(this));
-  }
-
-  _onDelete(i) {
+  _onDelete = (i) => {
     this.props.bboxes.splice(i, 1);
   }
 
-  _onChange(i) {
+  _onChange = (i) => {
     let box = this.props.bboxes[i];
     this.props.onChange(box);
   }
 
-  _onTrack(i) {
+  _onTrack = (i) => {
     let box = this.props.bboxes[i];
     this.props.onTrack(box);
   }
 
+  _getDimensions() {
+    return {
+      width: this.state.fullwidth ? 780 : (this.props.width * (100 / this.props.height)),
+      height: this.state.fullwidth ? (this.props.height * (780 / this.props.width)) : 100
+    };
+  }
+
+  _makeBox() {
+    let {width, height} = this._getDimensions();
+    return new Face({
+       bbox: {
+         x1: this.state.startX/width,
+         y1: this.state.startY/height,
+         x2: this.state.curX/width,
+         y2: this.state.curY/height,
+       },
+       track: null,
+       gender: '0'
+    });
+  }
+
   render() {
     let imgStyle = this.state.fullwidth ? {width: '780px', height: 'auto'} : {};
-    let cls = `bounding-boxes ${this.props.selected ? 'selected' : ''}`;
+    let selectedCls = this.props.selected ? 'selected' : '';
+    let acceptedCls = this.props.accepted ? 'accepted' : '';
+    let cls = `bounding-boxes ${selectedCls} ${acceptedCls}`;
+    let {width, height} = this._getDimensions();
     return (
-      <div ref={(n) => {this._div = n;}} className={cls}>
+      <div className={cls}
+           onMouseDown={this._onMouseDown}
+           onMouseUp={this._onMouseUp}
+           onMouseOver={this._onMouseOver}
+           onMouseOut={this._onMouseOut}
+           ref={(n) => { this._div = n; }}>
         {this.state.startX != -1
-         ? <BoxView box={new Box(this.state.startX,
-                                 this.state.startY,
-                                 this.state.curX,
-                                 this.state.curY,
-                                 'gender-0', null)} />
+         ? <BoxView box={this._makeBox()} width={width} height={height} />
          : <div />}
         {this.props.bboxes.map((box, i) =>
-          <BoxView box={box} key={i}
-                   width={this.state.fullwidth ? 780 : (this.props.width * (100 / this.props.height))}
-                   height={this.state.fullwidth ? (this.props.height * (780 / this.props.width)) : 100}
-                   onDelete={() => this._onDelete(i)}
-                   onChange={() => this._onChange(i)}
-                   onTrack={() => this._onTrack(i)} />)}
+          <BoxView box={box} key={i} i={i} width={width} height={height}
+                   onDelete={this._onDelete}
+                   onChange={this._onChange}
+                   onTrack={this._onTrack} />)}
         <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
              style={imgStyle} />
       </div>

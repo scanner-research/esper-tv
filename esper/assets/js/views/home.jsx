@@ -3,6 +3,7 @@ import {observer} from 'mobx-react';
 
 import VideoSummary from './video_summary.jsx';
 import * as models from 'models/mod.jsx';
+import {Button, Collapse} from 'react-bootstrap';
 
 @observer
 export default class Home extends React.Component {

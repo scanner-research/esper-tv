@@ -115,17 +115,22 @@ body {
     }
 
     .video-labeler {
+        * { user-select: none; }
+
         .bounding-boxes {
             float: left;
 
             &.selected img {
                 border: 4px solid purple;
             }
+
+            &.accepted img {
+                border: 2px solid #73FF45;
+            }
         }
 
         img {
             height: 100px;
-            user-select: none;
         }
     }
 }

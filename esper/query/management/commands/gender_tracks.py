@@ -3,7 +3,7 @@ from faceDB.face_db import FaceDB
 from faceDB.face import FaceCluster
 from faceDB.util import *   # only required for saving cluster images
 from carnie_helper import RudeCarnie
-from query.models import Video, Face, Track 
+from query.models import *
 import random
 import json
 
@@ -16,30 +16,31 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
-        
+
         model_dir = '/usr/src/app/deps/rude-carnie/inception_gender_checkpoint'
         rc = RudeCarnie(model_dir=model_dir)
 
         for path in paths:
             confident = 0
             if path == '':
-                return 
+                return
             video = Video.objects.filter(path=path).get()
-            tracks = Track.objects.filter(video=video).all()
+            labelset = video.detected_labelset()
+            tracks = Track.objects.filter(first_frame__labelset=labelset).all()
 
             for track in tracks:
-                if track.is_male is not None:
+                if track.gender != '0':
                     print 'skipping_track', track.id
                     continue
                 faces = Face.objects.filter(track=track)
                 print track.id
 
-                print("len of faces for path {}, is {}".format(path, len(faces))) 
+                print("len of faces for path {}, is {}".format(path, len(faces)))
                 imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                         for f in faces]
-     
+
                 best = rc.get_gender(imgs)
-                
+
                 # Update each of the faces.
                 male_sum = 0.0
                 female_sum = 0.0
@@ -51,5 +52,5 @@ class Command(BaseCommand):
                         male_sum += best[i][1]
                     elif best[i][0] == 'F':
                         female_sum += best[i][1]
-                track.is_male = male_sum>female_sum
+                track.gender = 'M' if male_sum>female_sum else 'F'
                 track.save()

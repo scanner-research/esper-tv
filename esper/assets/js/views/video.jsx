@@ -1,9 +1,10 @@
 import React from 'react';
-import {observer} from 'mobx-react';
 import mobx from 'mobx';
 import _ from 'lodash';
-import {Button, Collapse} from 'react-bootstrap';
 import leftPad from 'left-pad';
+import axios from 'axios';
+import {observer} from 'mobx-react';
+import {Button, Collapse} from 'react-bootstrap';
 
 import * as models from 'models/mod.jsx';
 import VideoSummary from './video_summary.jsx';
@@ -111,74 +112,91 @@ class VideoView extends React.Component {
     );
   }
 
+  _onFacesLoaded(wasLoaded) {
+    if (!wasLoaded) { return; }
+    let video = this.props.store;
+    this._faces = {};
+    this._allFaces = [];
+    _.forEach(video.faces, (faces, frame) => {
+      this._faces[frame] = faces
+        .filter((face) =>
+          (face.x2 - face.x1) * (face.y2 - face.y1) > .005);
+      this._allFaces = this._allFaces.concat(this._faces[frame]);
+    });
+    this.forceUpdate();
+  }
+
+  _onChange = (box) => {
+    if (box.track == null) { return; }
+    this._allFaces.forEach((other_box) => {
+      if (box.track == other_box.track) {
+        other_box.cls = box.cls;
+      }
+    });
+  }
+
+  _onTrack = (box) => {
+    let i = this._allFaces.indexOf(box);
+    if (i == this.state.lastTrackBox) {
+      console.log('Ending track');
+      this.setState({curTrack: null, lastTrackBox: -1});
+    } else if (this.state.curTrack == null) {
+      console.log('Creating track');
+      let track = box.track;
+      if (track == null) {
+        box.track = 100;
+        track = box.track;
+      }
+      this.setState({curTrack: track, lastTrackBox: i});
+    } else {
+      console.log('Adding to track')
+      box.track = this.state.curTrack;
+      this.setState({lastTrackBox: i});
+    }
+  }
+
+  _onAccept = (ni) => {
+    let curSeg = this.state.segStart;
+    if (curSeg == -1) {
+      this.setState({segStart: ni});
+    } else if (curSeg == ni) {
+      this.setState({segStart: -1});
+    } else {
+      let data = {faces: {}, video: this.props.store.id};
+      let segEnd = ni;
+      for (var i = this.state.segStart; i <= segEnd; ++i) {
+        data.faces[i * 24] = this._faces[i * 24].map((face) => face.toJSON());
+      }
+
+      axios
+        .post('/api/handlabeled', data)
+        .then((_) => {
+
+        });
+    }
+  }
+
   _renderLabeler() {
     let video = this.props.store;
-    let all_boxes = [];
+
+    if (!video.loadedFaces || !video.loadedFrames || !this._faces) {
+      return <div>Loading faces...</div>;
+    }
 
     return (
       <div className='video-labeler'>
         {_.range(0, video.num_frames, 24).map((n, ni) => {
            let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
-           let boxes = [];
-           if (n in video.faces) {
-             let faces = video.faces[n];
-             boxes = faces
-               .filter((face) =>
-                 (face.bbox.x2 - face.bbox.x1) * (face.bbox.y2 - face.bbox.y1) > 2000)
-               .map((face) =>
-                 new Box(face.bbox.x1/video.width, face.bbox.y1/video.height,
-                         face.bbox.x2/video.width, face.bbox.y2/video.height,
-                         `gender-${face.gender}`,
-                         face.track)
-               );
-             all_boxes = all_boxes.concat(boxes);
+           let faces = [];
+           if (n in this._faces) {
+             faces = this._faces[n];
            }
-
-           let onChange = (box) => {
-             if (box.track == null) { return; }
-             all_boxes.forEach((other_box) => {
-               if (box.track == other_box.track) {
-                 other_box.cls = box.cls;
-               }
-             });
-           };
-
-           let onTrack = (box) => {
-             let i = all_boxes.indexOf(box);
-             if (i == this.state.lastTrackBox) {
-               console.log('Ending track');
-               this.setState({curTrack: null, lastTrackBox: -1});
-             } else if (this.state.curTrack == null) {
-               console.log('Creating track');
-               let track = box.track;
-               if (track == null) {
-                 box.track = 100;
-                 track = box.track;
-               }
-               this.setState({curTrack: track, lastTrackBox: i});
-             } else {
-               console.log('Adding to track')
-               box.track = this.state.curTrack;
-               this.setState({lastTrackBox: i});
-             }
-           };
-
-           let onAccept = () => {
-             let curSeg = this.state.segStart;
-             if (curSeg == -1) {
-               this.setState({segStart: ni});
-             } else if (curSeg == ni) {
-               this.setState({segStart: -1});
-             } else {
-               console.log('segment');
-             }
-           };
-
            return <BoundingBoxView
-                      key={n} bboxes={boxes} path={path}
+                      key={n} bboxes={faces} path={path} ni={ni}
                       selected={this.state.segStart != -1 && ni == this.state.segStart}
+                      accepted={n in video.frames}
                       width={video.width} height={video.height}
-                      onChange={onChange} onTrack={onTrack} onAccept={onAccept} />;
+                      onChange={this._onChange} onTrack={this._onTrack} onAccept={this._onAccept} />;
          })}
       </div>
     );
@@ -198,7 +216,8 @@ class VideoView extends React.Component {
   render() {
     let video = this.props.store;
 
-    video.loadFaces();
+    video.loadFaces().then(this._onFacesLoaded.bind(this));
+    video.loadFrames();
 
     if (!video.loadedMeta) {
       return <div>Loading video...</div>;

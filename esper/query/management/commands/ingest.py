@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from query.models import Video
+from query.models import *
 from scannerpy import Database
 from scannerpy.stdlib.montage import make_montage
 import subprocess
@@ -83,6 +83,17 @@ class Command(BaseCommand):
                 video.width = width
                 video.height = height
                 video.save()
+
+                # Create corresponding label sets
+                def make_labelset(name):
+                    labelset = LabelSet()
+                    labelset.name = name
+                    labelset.video = video
+                    labelset.save()
+                make_labelset("detected")
+                make_labelset("handlabeled")
+
+                # Extract static file
                 make_thumbnail(video, db)
                 extract_audio(video)
                 extract_frames(video)

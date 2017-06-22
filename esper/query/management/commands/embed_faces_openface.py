@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Identity, LabelSet
+from query.models import *
 from faceDB.open_face_helper import OpenFaceHelper
 import random
 import json
@@ -37,9 +37,7 @@ class Command(BaseCommand):
         #load facenet models and start tensorflow
         out_size=160
 
-
         batch_size = 1000
-
 
         for path in paths:
             if path == '':
@@ -47,8 +45,8 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             labelset = video.detected_labelset()
-            faces = Face.objects.filter(labelset=labelset).all()
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 30]
+            faces = Face.objects.filter(frame__labelset=labelset).all()
+            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
             print len(faces)
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):

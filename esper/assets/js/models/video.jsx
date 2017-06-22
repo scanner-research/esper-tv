@@ -1,18 +1,21 @@
 import axios from 'axios';
 import {observable} from 'mobx';
+import {Face} from './face.jsx';
 
 export class Video {
   @observable loadedMeta = false;
   @observable loadedFaces = false;
+  @observable loadedFrames = false;
 
   faces = {};
   ids = {};
+  frames = {}
 
   constructor(props) {
     if (typeof props != "object") {
       this.id = props;
       axios
-        .get('/api/videos/', {params: {'id': this.id}})
+        .get('/api/videos', {params: {'id': this.id}})
         .then(((response) => {
           let video = response.data.videos[0];
           this._setProps(video);
@@ -30,26 +33,35 @@ export class Video {
     this.loadedMeta = true;
   }
 
+  loadFrames() {
+    if (!this.loadedFrames) {
+      return axios
+        .get('/api/frames', {params: {
+          'video_id': this.id, 'handlabeled': true}})
+        .then(((response) => {
+          response.data.frames.forEach(((frame) => {
+            this.frames[frame.number] = frame;
+          }).bind(this));
+          this.loadedFrames = true;
+          return true;
+        }).bind(this));
+    } else {
+      return new Promise((resolve, _) => resolve(false));
+    }
+  }
+
   loadFaces() {
     if (!this.loadedFaces) {
-      axios
-        .get('/api/faces/', {params: {'video_id': this.id}})
+      return axios
+        .get('/api/faces', {params: {'video_id': this.id}})
         .then(((response) => {
-          this.faces = response.data.faces;
-          for (var frame in this.faces) {
-            this.faces[frame].forEach(((face, i) => {
-              let id = face.identity;
-              if (id == null) {
-                return;
-              }
-              if (!(id in this.ids)) {
-                this.ids[id] = [];
-              }
-              this.ids[id].push([frame, i]);
-            }).bind(this));
-          }
+          this.faces = _.mapValues(response.data.faces, (frame) =>
+            frame.map((face) => new Face(face)));
           this.loadedFaces = true;
+          return true;
         }).bind(this));
+    } else {
+      return new Promise((resolve, _) => resolve(false));
     }
   }
 };
@@ -59,7 +71,7 @@ export class VideoCollection {
 
   constructor () {
     axios
-      .get('/api/videos/')
+      .get('/api/videos')
       .then(((response) => {
         let videos = response.data.videos;
         this.videos = videos.map((props) => new Video(props));

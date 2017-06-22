@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, LabelSet
+from query.models import *
 from scannerpy import Database, DeviceType, Job
 from scannerpy.stdlib import parsers, pipelines
 import os
@@ -23,7 +23,7 @@ class Command(BaseCommand):
                 if len(video) == 0: continue
                 video = video[0]
                 labelset = video.detected_labelset()
-                if len(Face.objects.filter(labelset=labelset)) > 0: continue
+                if len(Face.objects.filter(frame__labelset=labelset)) > 0: continue
                 filtered.append(path)
 
             stride = 24
@@ -36,22 +36,26 @@ class Command(BaseCommand):
 
             for path, video_faces_table in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()
-                labelset = LabelSet()
-                labelset.name = "detected"
-                labelset.video = video
-                labelset.save()
+                labelset = video.detected_labelset()
 
                 table = db.table(path)
                 frames = table.load(['frame'], rows=range(0, table.num_rows(), stride))
 
                 video_faces = video_faces_table.load(['bboxes'], parsers.bboxes)
                 for (i, frame_faces), (_, frame) in zip(video_faces, frames):
+                    frame_obj, _ = Frame.objects.get_or_create(labelset=labelset, number=i*stride)
                     for bbox in frame_faces:
                         f = Face()
-                        f.labelset = labelset
-                        f.frame = i * stride
-                        f.bbox = bbox
+                        f.frame = frame_obj
+                        normalized_bbox = db.protobufs.BoundingBox()
+                        normalized_bbox.CopyFrom(bbox)
+                        normalized_bbox.x1 /= video.width
+                        normalized_bbox.x2 /= video.width
+                        normalized_bbox.y1 /= video.height
+                        normalized_bbox.y2 /= video.height
+                        f.bbox = normalized_bbox
                         f.save()
+
                         thumbnail_path = 'assets/thumbnails/{}_{}.jpg'.format(labelset.id, f.id)
                         thumbnail = frame[0][int(bbox.y1):int(bbox.y2),
                                              int(bbox.x1):int(bbox.x2)]

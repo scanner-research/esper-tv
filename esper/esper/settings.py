@@ -138,3 +138,7 @@ WEBPACK_LOADER = {
         'STATS_FILES': os.path.join(BASE_DIR, 'webpack-stats.json')
     }
 }
+
+# Make AJAX work with Django's CSRF protection
+# https://stackoverflow.com/questions/39254562/csrf-with-django-reactredux-using-axios
+CSRF_COOKIE_NAME = "XSRF-TOKEN"

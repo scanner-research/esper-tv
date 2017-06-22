@@ -3,7 +3,7 @@ from faceDB.face_db import FaceDB
 from faceDB.face import FaceCluster
 from faceDB.util import *   # only required for saving cluster images
 from carnie_helper import RudeCarnie
-from query.models import Video, Face, Identity
+from query.models import *
 import random
 import json
 
@@ -38,9 +38,10 @@ class Command(BaseCommand):
 
             rc = RudeCarnie(model_dir=model_dir)
             video = Video.objects.filter(path=path).get()
-            faces = Face.objects.filter(video=video).all()
+            labelset = video.detected_labelset()
+            faces = Face.objects.filter(frame__labelset=labelset).all()
             print("len of faces for path {}, is {}".format(path, len(faces)))
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 50]
+            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
             imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                     for f in faces]
             best = rc.get_gender(imgs, single_look=True)

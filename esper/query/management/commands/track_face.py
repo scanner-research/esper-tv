@@ -46,7 +46,8 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             labelset = video.detected_labelset()
-            faces = Face.objects.filter(labelset=labelset).exclude(features='').order_by('frame').all()
+            faces = Face.objects.filter(frame__labelset=labelset) \
+                                .exclude(features='').order_by('frame').all()
 
             fps = video.fps
 
@@ -65,7 +66,7 @@ class Command(BaseCommand):
                 curr_face = faces[face_idx]
                 curr_feature = np.array(json.loads(curr_face.features))
                 curr_face_id = curr_face.id
-                curr_frame_id = curr_face.frame
+                curr_frame_id = curr_face.frame.number
                 confidence = curr_face.bbox.score;
                 if confidence < .98:
                     low_confidence += 1
@@ -89,7 +90,7 @@ class Command(BaseCommand):
                                     continue
                                 first_frame = Face.objects.filter(id=item[2][0]).get().frame
                                 last_frame = Face.objects.filter(id=item[2][-1]).get().frame
-                                track = Track.objects.create(labelset=labelset, first_frame=first_frame, last_frame=last_frame)
+                                track = Track(first_frame=first_frame, last_frame=last_frame)
                                 track.save()
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.filter(id=seq_face_id).get()
@@ -121,7 +122,7 @@ class Command(BaseCommand):
                 if (seq_len < min_feat_threshold):
                     short_seq += len(item[2])
                     continue
-                track = Track.objects.create(labelset=labelset, first_frame=item[2][0].frame, last_frame=item[2][-1].frame)
+                track = Track(first_frame=item[2][0].frame, last_frame=item[2][-1].frame)
                 track.save()
                 for seq_face_id in item[2]:
                     seq_face = Face.objects.filter(id=seq_face_id).get()
