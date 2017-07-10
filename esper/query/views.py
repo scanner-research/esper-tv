@@ -49,7 +49,10 @@ def faces(request):
             del face_json['features']
             face_json['bbox'] = bbox
             bboxes[face.frame.number].append(face_json);
-        all_bboxes[labelset.id] = bboxes
+        # 1 is Autolabeled 2 is handlabled ugly but works until 
+        # we use something more than a string in the model
+        set_id = 1 if labelset.name == 'detected' else 2
+        all_bboxes[set_id] = bboxes
     return JsonResponse({'faces': all_bboxes})
 
 def identities(request):

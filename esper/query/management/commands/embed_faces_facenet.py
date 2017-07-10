@@ -55,8 +55,9 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             labelset = video.detected_labelset()
-            faces = Face.objects.filter(labelset=labelset).all()
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 30]
+            faces = Face.objects.filter(frame__labelset=labelset).all()
+
+            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
             frames = [f.frame for f in faces]
 
             print len(faces)
@@ -64,10 +65,8 @@ class Command(BaseCommand):
             face_indexes = []
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
-                print 'in face loop'
                 curr_img = cv2.imread('./assets/thumbnails/{}_{}.jpg'.format(labelset.id, faces[face_idx].id))
                 if curr_img is None:
-                    print 'continuing'
                     continue
                 face_indexes.append(face_idx)
                 curr_img = cv2.resize(curr_img, (out_size, out_size))
