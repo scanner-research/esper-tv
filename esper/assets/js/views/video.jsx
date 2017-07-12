@@ -231,8 +231,10 @@ class VideoView extends React.Component {
          let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
          let faces = [];
          let accepted = n in video.frames;
-         if (accepted && n in this._faces[HANDLABELED]) {
-           faces = this._faces[HANDLABELED][n];
+         if (accepted) {
+           if ( n in this._faces[HANDLABELED] ){
+             faces = this._faces[HANDLABELED][n];
+           }
          } else if (n in this._faces[AUTOLABELED]) {
            faces = this._faces[AUTOLABELED][n];
          }
