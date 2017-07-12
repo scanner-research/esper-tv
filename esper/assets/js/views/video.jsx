@@ -181,6 +181,7 @@ class VideoView extends React.Component {
         let idx = i * STRIDE;
         if (idx in this._faces[AUTOLABELED]) {
           faces = this._faces[AUTOLABELED][idx].map((face) => face.toJSON());
+          this._faces[HANDLABELED][idx] = this._faces[AUTOLABELED][idx]
         }
         data.faces[idx] = faces;
         this.props.store.frames[idx] = {}; // so the labeler will mark them as accepted
@@ -236,6 +237,9 @@ class VideoView extends React.Component {
              faces = this._faces[HANDLABELED][n];
            }
          } else if (n in this._faces[AUTOLABELED]) {
+           faces = this._faces[AUTOLABELED][n];
+         } else{
+           this._faces[AUTOLABELED][n] = [];
            faces = this._faces[AUTOLABELED][n];
          }
          let selected = this.state.segStart != -1 && ni == this.state.segStart;
