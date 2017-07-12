@@ -29,6 +29,7 @@ class VideoView extends React.Component {
       activePage: 0
     };
     this._trackCounter = -1;
+    document.addEventListener('keydown', this._onKeyDown);
   }
 
   _renderVideoSummary() {
@@ -66,6 +67,7 @@ class VideoView extends React.Component {
              <li><b>t</b> - manage tracks</li>
              <li><b>a</b> - mark sequence as accepted</li>
              <li><b>f</b> - blow-up a frame</li>
+             <li><b>c</b> - clear track/frame selection</li>
            </ul>
            <div>Current track: {this.state.curTrack || 'none'}</div>
          </div>
@@ -148,10 +150,7 @@ class VideoView extends React.Component {
 
   _onTrack = (box) => {
     let i = this._allUnlabeledFaces.indexOf(box);
-    if (i == this.state.lastTrackBox) {
-      console.log('Ending track');
-      this.setState({curTrack: null, lastTrackBox: -1});
-    } else if (this.state.curTrack == null) {
+    if (this.state.curTrack == null) {
       console.log('Creating track');
       let track = box.track;
       if (track == null) {
@@ -167,12 +166,23 @@ class VideoView extends React.Component {
     }
   }
 
+  _onKeyDown = (e) => {
+    let chr = String.fromCharCode(e.which);
+    // Clear track, first accepted frame
+    if (chr == "C") {
+      this.setState({
+        curTrack : null,
+        segStart : -1,
+        lastTrackBox : -1
+      });
+    }
+  }
+
+
   _onAccept = (ni) => {
     let curSeg = this.state.segStart;
     if (curSeg == -1) {
       this.setState({segStart: ni});
-    } else if (curSeg == ni) {
-      this.setState({segStart: -1});
     } else {
       let data = {faces: {}, video: this.props.store.id};
       let segEnd = ni;
