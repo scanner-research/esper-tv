@@ -67,8 +67,9 @@ def handlabeled(request):
     labelset = video.handlabeled_labelset()
 
     for frame_num, faces in params['faces'].iteritems():
-        Frame.objects.get_or_create(labelset=labelset, number=frame_num)
-
+        f, created = Frame.objects.get_or_create(labelset=labelset, number=frame_num)
+        if not created:
+            Face.objects.filter(frame=f).delete()
     tracks = defaultdict(list)
     for frame_num, faces in params['faces'].iteritems():
         for face_params in faces:

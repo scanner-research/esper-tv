@@ -187,12 +187,10 @@ class VideoView extends React.Component {
       let data = {faces: {}, video: this.props.store.id};
       let segEnd = ni;
       for (var i = this.state.segStart; i <= segEnd; ++i) {
-        let faces = []
         let idx = i * STRIDE;
-        if (idx in this._faces[AUTOLABELED]) {
-          faces = this._faces[AUTOLABELED][idx].map((face) => face.toJSON());
-          this._faces[HANDLABELED][idx] = this._faces[AUTOLABELED][idx]
-        }
+        let labeled_faces = this._getFacesForFrame(idx)
+        let faces = labeled_faces.map((face) => face.toJSON());
+        this._faces[HANDLABELED][idx] = labeled_faces
         data.faces[idx] = faces;
         this.props.store.frames[idx] = {}; // so the labeler will mark them as accepted
       }
@@ -212,6 +210,22 @@ class VideoView extends React.Component {
       this.setState({
           activePage: selectedPage-1
       });
+  }
+  _getFacesForFrame = (n) => {
+     let video = this.props.store;
+     let faces = []
+     let accepted = n in video.frames;
+     if (accepted) {
+       if ( n in this._faces[HANDLABELED] ){
+         faces = this._faces[HANDLABELED][n];
+       }
+     } else if (n in this._faces[AUTOLABELED]) {
+       faces = this._faces[AUTOLABELED][n];
+     } else{
+       this._faces[AUTOLABELED][n] = [];
+       faces = this._faces[AUTOLABELED][n];
+     }
+     return faces
   }
 
   _renderLabeler() {
@@ -240,23 +254,12 @@ class VideoView extends React.Component {
       {_.range(firstFrame, lastFrame, stride).map((n) => {
          let ni = n / STRIDE;
          let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
-         let faces = [];
-         let accepted = n in video.frames;
-         if (accepted) {
-           if ( n in this._faces[HANDLABELED] ){
-             faces = this._faces[HANDLABELED][n];
-           }
-         } else if (n in this._faces[AUTOLABELED]) {
-           faces = this._faces[AUTOLABELED][n];
-         } else{
-           this._faces[AUTOLABELED][n] = [];
-           faces = this._faces[AUTOLABELED][n];
-         }
          let selected = this.state.segStart != -1 && ni == this.state.segStart;
+         let accepted = n in video.frames;
          let selectedCls = selected ? 'selected' : '';
          let acceptedCls = accepted ? 'accepted' : '';
          let cls = `bounding-box-wrapper ${selectedCls} ${acceptedCls}`;
-
+         let faces = this._getFacesForFrame(n);
          return (
            <div className={cls} key={n}>
              <BoundingBoxView
