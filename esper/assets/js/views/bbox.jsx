@@ -142,6 +142,9 @@ export class BoundingBoxView extends React.Component {
   _onMouseOver = (e) => {
     document.addEventListener('mousemove', this._onMouseMove);
     document.addEventListener('keydown', this._onKeyDown);
+    if (!(e.buttons & 1)){
+      this.setState({startX: -1});
+    }
   }
 
   _onMouseOut = (e) => {
