@@ -214,16 +214,12 @@ class VideoView extends React.Component {
   _getFacesForFrame = (n) => {
      let video = this.props.store;
      let faces = []
-     let accepted = n in video.frames;
-     if (accepted) {
-       if ( n in this._faces[HANDLABELED] ){
-         faces = this._faces[HANDLABELED][n];
-       }
-     } else if (n in this._faces[AUTOLABELED]) {
-       faces = this._faces[AUTOLABELED][n];
+     let labelset_id = n in video.frames ? 2 : 1;
+     if (n in this._faces[labelset_id]) {
+       faces = this._faces[labelset_id][n];
      } else{
-       this._faces[AUTOLABELED][n] = [];
-       faces = this._faces[AUTOLABELED][n];
+       this._faces[labelset_id][n] = [];
+       faces = this._faces[labelset_id][n];
      }
      return faces
   }
