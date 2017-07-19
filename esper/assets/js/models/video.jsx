@@ -6,6 +6,8 @@ export class Video {
   @observable loadedMeta = false;
   @observable loadedFaces = false;
   @observable loadedFrames = false;
+  loadingFaces = false;
+  loadingFrames = false;
 
   faces = {};
   ids = {};
@@ -34,7 +36,8 @@ export class Video {
   }
 
   loadFrames() {
-    if (!this.loadedFrames) {
+    if (!this.loadedFrames && !this.loadingFrames) {
+      this.loadingFrames = true;
       return axios
         .get('/api/frames', {params: {
           'video_id': this.id, 'handlabeled': true}})
@@ -51,7 +54,8 @@ export class Video {
   }
 
   loadFaces() {
-    if (!this.loadedFaces) {
+    if (!this.loadedFaces && !this.loadingFaces) {
+      this.loadingFaces = true;
       return axios
         .get('/api/faces', {params: {'video_id': this.id}})
         .then(((response) => {
