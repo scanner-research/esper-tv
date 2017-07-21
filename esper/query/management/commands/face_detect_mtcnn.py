@@ -54,7 +54,7 @@ class Command(BaseCommand):
             print path
             invid = cv2.VideoCapture(path)
             max_frame = int(invid.get(cv2.CAP_PROP_FRAME_COUNT))
-            stride = 24 
+            stride = video.get_stride() 
 
             
             for frame_id in range(0, max_frame, stride):
@@ -66,9 +66,6 @@ class Command(BaseCommand):
                 num_faces = bounding_boxes.shape[0]
                 frame_obj, _ = Frame.objects.get_or_create(labelset=labelset, number=frame_id)
                 for i in range(num_faces):
-                    f = Face()
-                    f.labelset = labelset
-                    f.frame = frame_obj 
                     det = bounding_boxes[i][0:4]
                     confidence = bounding_boxes[i][4]
                     img_size = np.asarray(img.shape)[0:2]
@@ -80,7 +77,7 @@ class Command(BaseCommand):
                     bb[1] = np.maximum(det[1]-vmargin_pix/2, 0)
                     bb[2] = np.minimum(det[2]+hmargin_pix/2, img_size[1])
                     bb[3] = np.minimum(det[3]+vmargin_pix/2, img_size[0])
-                    if confidence < .9:
+                    if confidence < .8:
                         continue
                     normalized_bbox = proto.BoundingBox()
                     
@@ -90,6 +87,12 @@ class Command(BaseCommand):
                     normalized_bbox.y1 = bb[1]/float(video.height)
                     normalized_bbox.y2 = bb[3]/float(video.height)
 
+                    if (normalized_bbox.x2-normalized_bbox.x1 < 0.04):
+                        continue
+
+                    f = Face()
+                    f.labelset = labelset
+                    f.frame = frame_obj 
                     f.bbox = normalized_bbox
                     f.save()
 

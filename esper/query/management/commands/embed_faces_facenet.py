@@ -57,7 +57,7 @@ class Command(BaseCommand):
             labelset = video.detected_labelset()
             faces = Face.objects.filter(frame__labelset=labelset).all()
 
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
+            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .04]
             frames = [f.frame for f in faces]
 
             print len(faces)

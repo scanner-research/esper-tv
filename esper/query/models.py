@@ -1,5 +1,6 @@
 from django.db import models
 import numpy as np
+import math
 from scannerpy import ProtobufGenerator, Config
 
 cfg = Config()
@@ -44,6 +45,9 @@ class Video(models.Model):
     def handlabeled_labelset(self):
         return LabelSet.objects.filter(video=self, name="handlabeled").get()
 
+    def get_stride(self):
+        return int(math.ceil(self.fps)/2)
+
 
 class LabelSet(models.Model):
     video = models.ForeignKey(Video)
@@ -72,8 +76,7 @@ class Identity(models.Model):
 
 
 class Track(models.Model):
-    first_frame = models.ForeignKey(Frame, related_name='first_frame')
-    last_frame = models.ForeignKey(Frame, related_name='last_frame')
+    video = models.ForeignKey(Video, null=True)
     gender = models.CharField(max_length=2, default='0')   # M, F or U.
 
 

@@ -13,7 +13,6 @@ import {Box, BoundingBoxView, boundingRect} from './bbox.jsx';
 // TODO(wcrichto): make this dynamic
 let AUTOLABELED = 1;
 let HANDLABELED = 2;
-let STRIDE = 24;
 
 @observer
 class VideoView extends React.Component {
@@ -184,10 +183,11 @@ class VideoView extends React.Component {
     if (curSeg == -1) {
       this.setState({segStart: ni});
     } else {
+      let video = this.props.store;
       let data = {faces: {}, video: this.props.store.id};
       let segEnd = ni;
       for (var i = this.state.segStart; i <= segEnd; ++i) {
-        let idx = i * STRIDE;
+        let idx = i * video.stride;
         let labeled_faces = this._getFacesForFrame(idx)
         let faces = labeled_faces.map((face) => face.toJSON());
         this._faces[HANDLABELED][idx] = labeled_faces
@@ -231,7 +231,7 @@ class VideoView extends React.Component {
       return <div>Loading faces...</div>;
     }
 
-    const stride = STRIDE;
+    const stride = video.stride;
     // TODO: doing something generic here (passing a list of items)
     // is challenging becaues of the way bounding boxes are drawn
     // I will revisit this when this is set in stone
@@ -248,7 +248,7 @@ class VideoView extends React.Component {
       activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
       </div>
       {_.range(firstFrame, lastFrame, stride).map((n) => {
-         let ni = n / STRIDE;
+         let ni = n / stride;
          let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
          let selected = this.state.segStart != -1 && ni == this.state.segStart;
          let accepted = n in video.frames;

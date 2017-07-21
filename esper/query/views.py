@@ -9,6 +9,7 @@ import json
 from collections import defaultdict
 from scannerpy import Config
 
+
 # TODO(wcrichto): find a better way to do this
 Config()
 from scanner.types_pb2 import BoundingBox
@@ -22,7 +23,7 @@ def videos(request):
         videos = Video.objects.all()
     else:
         videos = [Video.objects.filter(id=id).get()]
-    return JsonResponse({'videos': [model_to_dict(v) for v in videos]})
+    return JsonResponse({'videos': [dict(model_to_dict(v).items() + {'stride': v.get_stride()}.items()) for v in videos]})
 
 def frames(request):
     video_id = request.GET.get('video_id', None)
@@ -42,7 +43,7 @@ def faces(request):
     all_bboxes = {}
     for labelset in labelsets:
         bboxes = defaultdict(list)
-        faces = Face.objects.filter(frame__labelset=labelset).all()
+        faces = Face.objects.filter(frame__labelset=labelset).select_related('frame').all()
         for face in faces:
             bbox = json.loads(MessageToJson(face.bbox))
             face_json = model_to_dict(face)
@@ -65,11 +66,18 @@ def handlabeled(request):
     params = json.loads(request.body)
     video = Video.objects.filter(id=params['video']).get()
     labelset = video.handlabeled_labelset()
+    frame_nums = map(int, params['faces'].keys())
 
-    for frame_num, faces in params['faces'].iteritems():
-        f, created = Frame.objects.get_or_create(labelset=labelset, number=frame_num)
-        if not created:
-            Face.objects.filter(frame=f).delete()
+    min_frame = min(frame_nums)
+    max_frame = max(frame_nums)
+    #old frames, create new_frames
+    old_frames = Frame.objects.filter(labelset=labelset, number__lte=max_frame, number__gte=min_frame).all()
+    if len(old_frames) > 0:
+        Face.objects.filter(frame__in=old_frames).delete()
+    old_frame_nums = [old_frame.number for old_frame in old_frames]
+    missing_frame_nums = [num for num in frame_nums if num not in old_frame_nums]
+    new_frames = [Frame(labelset=labelset, number=num) for num in missing_frame_nums]
+    Frame.objects.bulk_create(new_frames)
     tracks = defaultdict(list)
     for frame_num, faces in params['faces'].iteritems():
         for face_params in faces:
@@ -78,23 +86,20 @@ def handlabeled(request):
                 tracks[track_id].append(frame_num)
 
     id_to_track = {}
+    all_frames = Frame.objects.filter(labelset=labelset, number__lte=max_frame, number__gte=min_frame).all()
+    curr_video_tracks = Track.objects.filter(video=video).all()
+    for track in curr_video_tracks:
+        id_to_track[track.id] = track
     for track_id, frames in tracks.iteritems():
-        frames.sort()
-        first_frame = Frame.objects.get(labelset=labelset, number=frames[0])
-        last_frame = Frame.objects.get(labelset=labelset, number=frames[-1])
         if track_id < 0:
-            track = Track(first_frame=first_frame,
-                          last_frame=last_frame)
+            track = Track(video=video)
             track.save()
-        else:
-            track = Track.objects.filter(id=track_id).get()
-            track.first_frame = min(first_frame, track.first_frame)
-            track.last_frame = min(last_frame, track.last_frame)
-        id_to_track[track_id] = track
+            id_to_track[track_id] = track
+    logger.error("done creating tracks")
 
-    for frame_num, faces in params['faces'].iteritems():
-        frame = Frame.objects.get(labelset=labelset, number=frame_num)
-        for face_params in faces:
+    new_faces = []
+    for frame in all_frames:
+        for face_params in params['faces'][str(frame.number)]:
             bbox = BoundingBox()
             bbox.x1 = face_params['bbox']['x1']
             bbox.y1 = face_params['bbox']['y1']
@@ -106,6 +111,7 @@ def handlabeled(request):
                 face_params['track'] = id_to_track[track_id]
             face = Face(**face_params)
             face.frame = frame
-            face.save()
+            new_faces.append(face)
+    Face.objects.bulk_create(new_faces)
 
     return JsonResponse({'success': True})
