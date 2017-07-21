@@ -139,6 +139,8 @@ class VideoView extends React.Component {
   }
 
   _onChange = (box) => {
+    let i = this._allUnlabeledFaces.indexOf(box);
+	if (i == -1) { this._allUnlabeledFaces.push(box);}
     if (box.track == null) { return; }
     this._allUnlabeledFaces.forEach((other_box) => {
       if (box.track == other_box.track) {
@@ -149,6 +151,7 @@ class VideoView extends React.Component {
 
   _onTrack = (box) => {
     let i = this._allUnlabeledFaces.indexOf(box);
+	if (i == -1) { this._allUnlabeledFaces.push(box);}
     if (this.state.curTrack == null) {
       console.log('Creating track');
       let track = box.track;
