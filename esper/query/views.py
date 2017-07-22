@@ -95,7 +95,6 @@ def handlabeled(request):
             track = Track(video=video)
             track.save()
             id_to_track[track_id] = track
-    logger.error("done creating tracks")
 
     new_faces = []
     for frame in all_frames:
