@@ -68,6 +68,7 @@ class VideoView extends React.Component {
              <li><b>f</b> - blow-up a frame</li>
              <li><b>c</b> - clear track/frame selection</li>
              <li><b>q</b> - set all boxes with track to selected track</li>
+             <li><b>u</b> - remove all boxes with the same track</li>
            </ul>
            <div>Current track: {this.state.curTrack || 'none'}</div>
          </div>
@@ -180,7 +181,27 @@ class VideoView extends React.Component {
 		other_box.track = this.state.curTrack; 
 	  }
 	});
-  
+  }
+
+  _onDeleteTrack = (box) => {
+    if (box.track == null) {return;}
+    let track_to_remove = box.track;
+    _.forEach(this._faces, (labelset, labelset_id) => {
+      _.forEach(labelset, (face_list, frame_id) => {
+        let remove_indexes = []
+        face_list.forEach((frame, ni) => {
+          if (frame.track == track_to_remove) {
+            remove_indexes.push(ni);
+          }
+        });
+        remove_indexes.sort()
+        for (let i = remove_indexes.length -1; i >= 0; --i){
+          face_list.splice(remove_indexes[i], 1);
+        }
+
+      });
+    });
+    this.setState({lastTrackBox : -1, curTrack : null});
   }
 
   _onKeyDown = (e) => {
@@ -282,7 +303,8 @@ class VideoView extends React.Component {
                  bboxes={faces} path={path} ni={ni}
                  width={video.width} height={video.height}
                  onChange={this._onChange} onTrack={this._onTrack}
-                 onAccept={this._onAccept} onSetTrack={this._onSetTrack}/>
+                 onAccept={this._onAccept} onSetTrack={this._onSetTrack}
+                 onDeleteTrack={this._onDeleteTrack}/>
            </div>);
        })}
       <Pagination prev next first last ellipsis boundaryLinks maxButtons={10}
