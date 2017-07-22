@@ -67,6 +67,7 @@ class VideoView extends React.Component {
              <li><b>a</b> - mark sequence as accepted</li>
              <li><b>f</b> - blow-up a frame</li>
              <li><b>c</b> - clear track/frame selection</li>
+             <li><b>q</b> - set all boxes with track to selected track</li>
            </ul>
            <div>Current track: {this.state.curTrack || 'none'}</div>
          </div>
@@ -168,6 +169,20 @@ class VideoView extends React.Component {
     }
   }
 
+  //set all boxes with the same track to the current track
+  _onSetTrack = (box) => {
+	let i = this._allUnlabeledFaces.indexOf(box);
+	if (i == -1) { this._allUnlabeledFaces.push(box);}
+	if (this.state.curTrack == null || box.track == null) {return;}
+	let track_to_set = box.track;
+	this._allUnlabeledFaces.forEach((other_box) => {
+	  if(other_box.track == track_to_set){
+		other_box.track = this.state.curTrack; 
+	  }
+	});
+  
+  }
+
   _onKeyDown = (e) => {
     let chr = String.fromCharCode(e.which);
     // Clear track, first accepted frame
@@ -179,7 +194,6 @@ class VideoView extends React.Component {
       });
     }
   }
-
 
   _onAccept = (ni) => {
     let curSeg = this.state.segStart;
@@ -214,7 +228,7 @@ class VideoView extends React.Component {
           activePage: selectedPage-1
       });
 
-	  window.history.replaceState(window.history.state,'', '/video/'+this.props.store.id+'/'+selectedPage)
+    window.history.replaceState(window.history.state,'', '/video/'+this.props.store.id+'/'+selectedPage)
 
   }
   _getFacesForFrame = (n) => {
@@ -268,7 +282,7 @@ class VideoView extends React.Component {
                  bboxes={faces} path={path} ni={ni}
                  width={video.width} height={video.height}
                  onChange={this._onChange} onTrack={this._onTrack}
-                 onAccept={this._onAccept} />
+                 onAccept={this._onAccept} onSetTrack={this._onSetTrack}/>
            </div>);
        })}
       <Pagination prev next first last ellipsis boundaryLinks maxButtons={10}

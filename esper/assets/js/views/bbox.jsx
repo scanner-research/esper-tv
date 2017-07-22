@@ -88,6 +88,8 @@ class BoxView extends React.Component {
       this.props.onDelete(this.props.i);
     } else if(chr == 'T') {
       this.props.onTrack(this.props.i);
+    } else if(chr == 'Q') {
+      this.props.onSetTrack(this.props.i);
     }
   }
 
@@ -198,6 +200,11 @@ export class BoundingBoxView extends React.Component {
     this.props.onTrack(box);
   }
 
+  _onSetTrack = (i) => {
+    let box = this.props.bboxes[i];
+    this.props.onSetTrack(box);
+  }
+
   _getDimensions() {
     return {
       width: this.state.fullwidth ? 780 : (this.props.width * (100 / this.props.height)),
@@ -236,7 +243,8 @@ export class BoundingBoxView extends React.Component {
           <BoxView box={box} key={i} i={i} width={width} height={height}
                    onDelete={this._onDelete}
                    onChange={this._onChange}
-                   onTrack={this._onTrack} />)}
+                   onTrack={this._onTrack}
+                   onSetTrack={this._onSetTrack}/>)}
         <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
              style={imgStyle} />
       </div>
