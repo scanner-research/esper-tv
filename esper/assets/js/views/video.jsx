@@ -25,7 +25,7 @@ class VideoView extends React.Component {
       curTrack: null,
       lastTrackBox: -1,
       segStart: -1,
-      activePage: 0
+      activePage: this.props.page - 1 
     };
     this._trackCounter = -1;
     document.addEventListener('keydown', this._onKeyDown);
@@ -213,6 +213,9 @@ class VideoView extends React.Component {
       this.setState({
           activePage: selectedPage-1
       });
+
+	  window.history.replaceState(window.history.state,'', '/video/'+this.props.store.id+'/'+selectedPage)
+
   }
   _getFacesForFrame = (n) => {
      let video = this.props.store;
@@ -268,6 +271,8 @@ class VideoView extends React.Component {
                  onAccept={this._onAccept} />
            </div>);
        })}
+      <Pagination prev next first last ellipsis boundaryLinks maxButtons={10}
+      activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
       </div>
     );
   }
@@ -310,4 +315,4 @@ class VideoView extends React.Component {
   }
 };
 
-export default (props) => <VideoView store={new models.Video(props.id)} />;
+export default (props) => <VideoView store={new models.Video(props.id)} page={props.page == null? 1 : Number(props.page)} />;

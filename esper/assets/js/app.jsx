@@ -20,7 +20,8 @@ export default class App extends React.Component {
         <div>
           <h1><Link to="/">Esper</Link></h1>
           <Route exact path="/" component={render_component(views.Home)} />
-          <Route path="/video/:id" component={render_component(views.Video)} />
+          <Route exact path="/video/:id/:page" component={render_component(views.Video)} />
+          <Route exact path="/video/:id" component={render_component(views.Video)} />
           <Route path="/identities/" component={render_component(views.Identities)} />
           <Route path="/identity/" component={render_component(views.Identity)} />
         </div>
