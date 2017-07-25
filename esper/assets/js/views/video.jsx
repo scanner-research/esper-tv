@@ -238,7 +238,6 @@ class VideoView extends React.Component {
         let faces = labeled_faces.map((face) => face.toJSON());
         sent[idx] = labeled_faces;
         data.faces[idx] = faces;
-        this.props.store.frames[idx] = {}; // so the labeler will mark them as accepted
       }
 
 
@@ -247,10 +246,13 @@ class VideoView extends React.Component {
         .then((resp) => {
           _.forEach(sent, (data, key) => {
             this._faces[HANDLABELED][key] = data
-            this.setState({segStart: -1,
-                           segEnd: -1});
+            this.props.store.frames[key] = {}; // so the labeler will mark them as accepted
           });
+          this.setState({segStart: -1,
+                         segEnd: -1});
           // do something with response?
+        }).catch((err) => {
+          alert("Server failed to process labels: "+err);
         });
     }
   }
