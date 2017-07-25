@@ -17,7 +17,7 @@ rm lfw.tgz
 popd
 
 # Get rude_carnie gender recognition
-git clone https://github.com/Parimarjan/rude-carnie.git
+git clone https://github.com/MattPerron/rude-carnie.git
 # tmp solution (this is not downloaded anywhere)
 cp -r /tmp/inception_gender_checkpoint ./rude-carnie/
 

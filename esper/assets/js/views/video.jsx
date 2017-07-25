@@ -131,9 +131,7 @@ class VideoView extends React.Component {
     _.forEach(video.faces, (frames, labelset) => {
       this._faces[labelset] = {};
       _.forEach(frames, (faces, frame) => {
-        this._faces[labelset][frame] = faces
-          .filter((face) =>
-            (face.x2 - face.x1) * (face.y2 - face.y1) > .005);
+        this._faces[labelset][frame] = faces;
         this._allUnlabeledFaces = this._allUnlabeledFaces.concat(this._faces[labelset][frame]);
       });
     });
