@@ -25,6 +25,7 @@ class VideoView extends React.Component {
       curTrack: null,
       lastTrackBox: -1,
       segStart: -1,
+      segEnd: -1,
       activePage: this.props.page - 1 
     };
     this._trackCounter = -1;
@@ -64,7 +65,8 @@ class VideoView extends React.Component {
              <li><b>space bar</b> - change gender</li>
              <li><b>d</b> - delete box</li>
              <li><b>t</b> - manage tracks</li>
-             <li><b>a</b> - mark sequence as accepted</li>
+             <li><b>s</b> - select sequence of frames</li>
+             <li><b>a</b> - mark selected sequence as accepted</li>
              <li><b>f</b> - blow-up a frame</li>
              <li><b>c</b> - clear track/frame selection</li>
              <li><b>q</b> - set all boxes with track to selected track</li>
@@ -209,34 +211,45 @@ class VideoView extends React.Component {
       this.setState({
         curTrack : null,
         segStart : -1,
+        segEnd : -1,
         lastTrackBox : -1
       });
+    }else if (chr == 'A'){
+      this._onAccept();
     }
   }
 
-  _onAccept = (ni) => {
-    let curSeg = this.state.segStart;
-    if (curSeg == -1) {
+  _onSelect = (ni) => {
+    if (this.state.segStart < 0){
       this.setState({segStart: ni});
-    } else {
+    }else if (ni > this.state.segStart){
+      this.setState({segEnd: ni});
+    }
+  }
+
+  _onAccept = () => {
+    if (this.state.segStart >= 0 && this.state.segEnd > this.state.segStart) {
       let video = this.props.store;
       let data = {faces: {}, video: this.props.store.id};
-      let segEnd = ni;
-      for (var i = this.state.segStart; i <= segEnd; ++i) {
+      let sent = {}
+      for (var i = this.state.segStart; i <= this.state.segEnd; ++i) {
         let idx = i * video.stride;
         let labeled_faces = this._getFacesForFrame(idx)
         let faces = labeled_faces.map((face) => face.toJSON());
-        this._faces[HANDLABELED][idx] = labeled_faces
+        sent[idx] = labeled_faces;
         data.faces[idx] = faces;
         this.props.store.frames[idx] = {}; // so the labeler will mark them as accepted
       }
 
-      this.setState({segStart: -1});
 
       axios
         .post('/api/handlabeled', data)
-        .then((_) => {
-          console.log('Success');
+        .then((resp) => {
+          _.forEach(sent, (data, key) => {
+            this._faces[HANDLABELED][key] = data
+            this.setState({segStart: -1,
+                           segEnd: -1});
+          });
           // do something with response?
         });
     }
@@ -289,7 +302,7 @@ class VideoView extends React.Component {
       {_.range(firstFrame, lastFrame, stride).map((n) => {
          let ni = n / stride;
          let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
-         let selected = this.state.segStart != -1 && ni == this.state.segStart;
+         let selected = this.state.segStart == ni || (this.state.segStart <= ni &&  ni <= this.state.segEnd);
          let accepted = n in video.frames;
          let selectedCls = selected ? 'selected' : '';
          let acceptedCls = accepted ? 'accepted' : '';
@@ -301,7 +314,7 @@ class VideoView extends React.Component {
                  bboxes={faces} path={path} ni={ni}
                  width={video.width} height={video.height}
                  onChange={this._onChange} onTrack={this._onTrack}
-                 onAccept={this._onAccept} onSetTrack={this._onSetTrack}
+                 onSelect={this._onSelect} onSetTrack={this._onSetTrack}
                  onDeleteTrack={this._onDeleteTrack}/>
            </div>);
        })}

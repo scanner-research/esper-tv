@@ -183,8 +183,8 @@ export class BoundingBoxView extends React.Component {
     let chr = String.fromCharCode(e.which);
     if (chr == 'F') {
       this.setState({fullwidth: !this.state.fullwidth});
-    } else if (chr == 'A') {
-      this.props.onAccept(this.props.ni);
+    } else if (chr == 'S') {
+      this.props.onSelect(this.props.ni);
     }
   }
 
