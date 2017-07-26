@@ -46,7 +46,7 @@ class Video(models.Model):
         return LabelSet.objects.filter(video=self, name="handlabeled").get()
 
     def get_stride(self):
-        return 24 
+        return int(math.ceil(self.fps)/2) 
 
 
 class LabelSet(models.Model):
