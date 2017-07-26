@@ -58,6 +58,16 @@ class VideoView extends React.Component {
         {this.state.labelMode
          ? <div>
            <br />
+           <div>Current track: {this.state.curTrack || 'none'}</div>
+           <br />
+           <u>Segment Labels</u>
+           <ul>
+             <li> 0 - Clear Labels </li>
+             {_.map(video.data.labels, (label, id) => 
+               <li key={id}> {id} - {label} </li>
+              )}
+           </ul>
+
            <u>Instructions</u>
            <ul>
              <li><b>Click/drag image</b> - make new box</li>
@@ -72,7 +82,6 @@ class VideoView extends React.Component {
              <li><b>q</b> - set all boxes with track to selected track</li>
              <li><b>u</b> - remove all boxes with the same track</li>
            </ul>
-           <div>Current track: {this.state.curTrack || 'none'}</div>
          </div>
         : <div />}
       </div>
@@ -128,13 +137,14 @@ class VideoView extends React.Component {
   _onFacesLoaded(wasLoaded) {
     if (!wasLoaded) { return; }
     let video = this.props.store;
-    this._faces = {};
+    if (!video.loaded) { return; }
+    this._frames = {};
     this._allUnlabeledFaces = [];
-    _.forEach(video.faces, (frames, labelset) => {
-      this._faces[labelset] = {};
-      _.forEach(frames, (faces, frame) => {
-        this._faces[labelset][frame] = faces;
-        this._allUnlabeledFaces = this._allUnlabeledFaces.concat(this._faces[labelset][frame]);
+    _.forEach(video.data.frames, (frames, labelset) => {
+      this._frames[labelset] = {};
+      _.forEach(frames, (frame_data, frame) => {
+        this._frames[labelset][frame] = frame_data; 
+        this._allUnlabeledFaces = this._allUnlabeledFaces.concat(this._frames[labelset][frame].faces);
       });
     });
     this.forceUpdate();
@@ -216,6 +226,26 @@ class VideoView extends React.Component {
       });
     }else if (chr == 'A'){
       this._onAccept();
+    }else if (chr >= '0' && chr <= '9'){
+      this._onSetFrameLabel(Number(chr))
+    }
+  }
+
+  _onSetFrameLabel = (n) => {
+    let video = this.props.store;
+    if (this.state.segStart >= 0 && this.state.segEnd > this.state.segStart && 
+            (n==0 || n in video.data.labels)) {
+      for (var i = this.state.segStart; i <= this.state.segEnd; ++i) {
+        let idx = i * video.stride;
+        let frame = this._getFrameData(idx);
+        if (n == 0){
+          frame.labels = [];
+        }else if (frame.labels.indexOf(n)==-1) {
+          frame.labels.push(n);
+          frame.labels.sort()
+        }
+      }
+      this.forceUpdate();
     }
   }
 
@@ -230,23 +260,21 @@ class VideoView extends React.Component {
   _onAccept = () => {
     if (this.state.segStart >= 0 && this.state.segEnd > this.state.segStart) {
       let video = this.props.store;
-      let data = {faces: {}, video: this.props.store.id};
+      let data = {frames: {}, video: this.props.store.id};
       let sent = {}
       for (var i = this.state.segStart; i <= this.state.segEnd; ++i) {
         let idx = i * video.stride;
-        let labeled_faces = this._getFacesForFrame(idx)
-        let faces = labeled_faces.map((face) => face.toJSON());
-        sent[idx] = labeled_faces;
-        data.faces[idx] = faces;
+        let labeled_frame = this._getFrameData(idx)
+        let faces = labeled_frame.faces.map((face) => face.toJSON());
+        sent[idx] = labeled_frame;
+        data.frames[idx] = {'faces':faces, 'labels':labeled_frame.labels};
       }
-
 
       axios
         .post('/api/handlabeled', data)
         .then((resp) => {
           _.forEach(sent, (data, key) => {
-            this._faces[HANDLABELED][key] = data
-            this.props.store.frames[key] = {}; // so the labeler will mark them as accepted
+            this._frames[HANDLABELED][key] = data
           });
           this.setState({segStart: -1,
                          segEnd: -1});
@@ -265,23 +293,27 @@ class VideoView extends React.Component {
     window.history.replaceState(window.history.state,'', '/video/'+this.props.store.id+'/'+selectedPage)
 
   }
-  _getFacesForFrame = (n) => {
+  _getFrameData = (n) => {
      let video = this.props.store;
-     let faces = []
-     let labelset_id = n in video.frames ? 2 : 1;
-     if (n in this._faces[labelset_id]) {
-       faces = this._faces[labelset_id][n];
+     let ret = {}
+     let labelset_id = n in this._frames[2] ? 2 : 1;
+     if (n in this._frames[labelset_id]) {
+       ret = this._frames[labelset_id][n];
      } else{
-       this._faces[labelset_id][n] = [];
-       faces = this._faces[labelset_id][n];
+       this._frames[labelset_id][n] = {'faces':[], 'labels':[]};
+       ret = this._frames[labelset_id][n];
      }
-     return faces
+     return ret;
+  }
+  
+  _getFacesForFrame = (n) => {
+    return this._getFrameData(n).faces;
   }
 
   _renderLabeler() {
     let video = this.props.store;
 
-    if (!video.loadedFaces || !video.loadedFrames || !this._faces) {
+    if (!video.loaded || !this._frames) {
       return <div>Loading faces...</div>;
     }
 
@@ -305,23 +337,27 @@ class VideoView extends React.Component {
          let ni = n / stride;
          let path = `/static/thumbnails/${video.id}_frame_${leftPad(n+1, 6, '0')}.jpg`;
          let selected = this.state.segStart == ni || (this.state.segStart <= ni &&  ni <= this.state.segEnd);
-         let accepted = n in video.frames;
+         let accepted = n in this._frames[HANDLABELED];
          let selectedCls = selected ? 'selected' : '';
          let acceptedCls = accepted ? 'accepted' : '';
          let cls = `bounding-box-wrapper ${selectedCls} ${acceptedCls}`;
-         let faces = this._getFacesForFrame(n);
+         let frame_data = this._getFrameData(n);
          return (
            <div className={cls} key={n}>
+            <p>{frame_data.labels.join(',')} </p>
+
              <BoundingBoxView
-                 bboxes={faces} path={path} ni={ni}
+                 bboxes={frame_data.faces} path={path} ni={ni}
                  width={video.width} height={video.height}
                  onChange={this._onChange} onTrack={this._onTrack}
                  onSelect={this._onSelect} onSetTrack={this._onSetTrack}
                  onDeleteTrack={this._onDeleteTrack}/>
            </div>);
        })}
-      <Pagination prev next first last ellipsis boundaryLinks maxButtons={10}
-      activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
+        <div>
+          <Pagination prev next first last ellipsis boundaryLinks maxButtons={10}
+          activePage={activePage+1} items={totalPages} onSelect={this._handlePaginationSelect}/>
+        </div>
       </div>
     );
   }
@@ -340,8 +376,7 @@ class VideoView extends React.Component {
   render() {
     let video = this.props.store;
 
-    video.loadFaces().then(this._onFacesLoaded.bind(this));
-    video.loadFrames();
+    video.loadVideoData().then(this._onFacesLoaded.bind(this));
 
     if (!video.loadedMeta) {
       return <div>Loading video...</div>;

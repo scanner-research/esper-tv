@@ -46,7 +46,7 @@ class Video(models.Model):
         return LabelSet.objects.filter(video=self, name="handlabeled").get()
 
     def get_stride(self):
-        return int(math.ceil(self.fps)/2)
+        return 24 
 
 
 class LabelSet(models.Model):
@@ -62,11 +62,16 @@ class DetectorsUsed(models.Model):
     video = models.ForeignKey(LabelSet)
     detector = models.ForeignKey(Detector)
 
+class FrameLabel(models.Model):
+    name = models.CharField(max_length=MAX_STR_LEN)
 
 class Frame(models.Model):
     labelset = models.ForeignKey(LabelSet)
     number = models.IntegerField()
+    labels = models.ManyToManyField(FrameLabel)
 
+    def label_ids(self):
+        return [l.id for l in self.labels.all()]
 
 class Identity(models.Model):
     name = models.CharField(max_length=MAX_STR_LEN)
@@ -74,14 +79,12 @@ class Identity(models.Model):
     cohesion = models.FloatField()
     labelset = models.ForeignKey(LabelSet)
 
-
 class Track(models.Model):
     video = models.ForeignKey(Video, null=True)
     gender = models.CharField(max_length=2, default='0')   # M, F or U.
 
-
 class Face(models.Model):
-    frame = models.ForeignKey(Frame)
+    frame = models.ForeignKey(Frame, related_name='faces')
     identity = models.ForeignKey(Identity, null=True, on_delete=models.SET_NULL)
     track = models.ForeignKey(Track, null=True, on_delete=models.SET_NULL)
     bbox = ProtoField(proto.BoundingBox)
