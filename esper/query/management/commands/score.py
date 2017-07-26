@@ -25,8 +25,8 @@ class VideoStats(object):
 class Command(BaseCommand):
     help = 'Detect faces in videos'
 
-    def add_arguments(self, parser):
-        parser.add_argument('path')
+    #def add_arguments(self, parser):
+        #parser.add_argument('path')
 
     def bbox_area(self, bbox, video):
         return ((bbox.x2 - bbox.x1)*video.width) * \
@@ -57,24 +57,27 @@ class Command(BaseCommand):
         d_faces_dict = defaultdict(list)
         g_faces_dict = defaultdict(list)
 
+        face_size_thres = 0.10
         for d_face in d_faces:
-            d_faces_dict[d_face.frame.number].append(d_face)
+            if self.bbox_area(d_face.bbox, video) > (face_size_thres * video.width * video.height):
+                d_faces_dict[d_face.frame.number].append(d_face)
 
         for g_face in g_faces:
-            g_faces_dict[g_face.frame.number].append(g_face)
+            if self.bbox_area(g_face.bbox, video) > (face_size_thres * video.width * video.height):
+                g_faces_dict[g_face.frame.number].append(g_face)
 
         return (d_faces_dict, g_faces_dict)
 
 
-    def eval_detector(self, video, frame_number, d_faces, g_faces):
+    def eval_frame(self, video, frame_number, d_faces, g_faces):
         if len(d_faces) == 0 and len(g_faces) == 0:
             return (0, 0, 0, 0, 0)
 
-        iou_threshold = 0.6
+        iou_threshold = 0.5
         true_positives = 0
         false_positives = 0
         false_negatives = 0
-        gender_mismatches = 0
+        gender_matches = 0
          
         d_dict = defaultdict(int)
         g_dict = defaultdict(int)
@@ -87,8 +90,8 @@ class Command(BaseCommand):
                         false_positives += 1
                     else:
                         true_positives += 1
-                    if d_face.gender != g_face.gender:
-                        gender_mismatches += 1
+                        if d_face.gender == g_face.gender:
+                            gender_matches += 1
                     g_dict[g_face] += 1
                     d_dict[d_face] += 1
 
@@ -100,47 +103,77 @@ class Command(BaseCommand):
             if g_dict[g_face] == 0:
                 false_negatives += 1
 
-        print("Frame({}) : d({}), g({}), tp({}), fp({}), fn({})".format(frame_number, len(d_faces), len(g_faces), true_positives, false_positives, false_negatives))
+        #print("Frame({}) : d({}), g({}), tp({}), fp({}), fn({})".format(frame_number, len(d_faces), len(g_faces), true_positives, false_positives, false_negatives))
 
-        return (len(d_faces), true_positives, false_positives, false_negatives, gender_mismatches)
+        return (len(d_faces), true_positives, false_positives, false_negatives, gender_matches)
 
+    def eval_video(self, video):
+        num_frames = 0
+        frame_mismatches = 0
+
+        num_detections = 0
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
+        gender_matches = 0 #gender match is on true positive detections
+
+        (d_faces_dict, g_faces_dict) = self.fetch_faces(video)
+
+        for frame_number in range(0, video.num_frames, video.get_stride()):
+        #for frame_number in range(0, 1000, video.get_stride()):
+            num_frames += 1
+            d_faces = d_faces_dict[frame_number]
+            g_faces = g_faces_dict[frame_number]
+            (det, tp, fp, fn, gen) = self.eval_frame(video, frame_number, d_faces, g_faces)
+            num_detections += det
+            true_positives += tp
+            false_positives += fp
+            false_negatives += fn
+            if fp != 0 or fn != 0:
+                frame_mismatches += 1
+            gender_matches += gen
+
+        print("Video({}) : num_frames({}), frame_mismatches({}), det({}), tp({}), fp({}), fn({}), gender_matches({})".format(video.id, num_frames, frame_mismatches, num_detections, true_positives, false_positives, false_negatives, gender_matches))
+
+        if (true_positives + false_positives) != 0:
+            det_precision = true_positives / (true_positives + false_positives)
+        else:
+            det_precision = 0.0
+        if (true_positives + false_negatives) != 0:
+            det_recall = true_positives / (true_positives + false_negatives)
+        else:
+            det_recall = 0.0
+        if true_positives != 0:
+            gender_precision = gender_matches / true_positives
+        else:
+            gender_precision = 1.0
+
+        return (det_precision, det_recall, gender_precision)
 
     def handle(self, *args, **options):
-        with open(options['path']) as f:
-            paths = [s.strip() for s in f.readlines()]
+        #with open(options['path']) as f:
+        #    paths = [s.strip() for s in f.readlines()]
 
-        for path in paths:
+        start_video_id = 1
+        end_video_id = 20
+
+        avg_det_precision = 0.0
+        avg_det_recall = 0.0
+        avg_gender_precision = 0.0
+
+        for video_id in range(start_video_id, end_video_id):
             #video = Video.objects.filter(path=path).get()
-            video = Video.objects.filter(id=1).get()
-            print("Video {}".format(path))
+            video = Video.objects.filter(id=video_id).get()
+            #print("Video {}".format(path))
+            (det_precision, det_recall, gender_precision) = self.eval_video(video)
+            print("Video({}) : Detection precision({}), Detection recall({}), Gender precision({})".format(video.id, det_precision, det_recall, gender_precision))
 
-            num_frames = 0
-            frame_mismatches = 0
+            avg_det_precision += det_precision
+            avg_det_recall += det_recall
+            avg_gender_precision += gender_precision
 
-            num_detections = 0
-            true_positives = 0
-            false_positives = 0
-            false_negatives = 0
-            gender_mismatches = 0 #gender mismatch is on true positive detections
-
-            (d_faces_dict, g_faces_dict) = self.fetch_faces(video)
-
-            for frame_number in range(0, video.num_frames, video.get_stride()):
-            #for frame_number in range(0, 1000, video.get_stride()):
-                num_frames += 1
-                d_faces = d_faces_dict[frame_number]
-                g_faces = g_faces_dict[frame_number]
-                (det, tp, fp, fn, gen) = self.eval_detector(video, frame_number, d_faces, g_faces)
-                num_detections += det
-                true_positives += tp
-                false_positives += fp
-                false_negatives += fn
-                if fp != 0 or fn != 0:
-                    frame_mismatches += 1
-                gender_mismatches += gen
-
-            print("Video({}) : num_frames({}), frame_mismatches({}), det({}), tp({}), fp({}), fn({}), gender_mismatches({})".format(video.id, num_frames, frame_mismatches, num_detections, true_positives, false_positives, false_negatives, gender_mismatches))
-            precision = true_positives / (true_positives + false_positives)
-            recall = true_positives / (true_positives + false_negatives)
-            print("Video({}) : Precision({}), Recall({})".format(video.id, precision, recall))
+        avg_det_precision /= (end_video_id - start_video_id)
+        avg_det_recall /= (end_video_id - start_video_id)
+        avg_gender_precision /= (end_video_id - start_video_id)
+        print("Average: Detection precision({}), Detection recall({}), Gender precision({})".format(avg_det_precision, avg_det_recall, avg_gender_precision))
 
