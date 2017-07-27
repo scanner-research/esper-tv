@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 import align.detect_face
 from collections import defaultdict
+from array import *
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)
@@ -46,6 +47,11 @@ class Command(BaseCommand):
         iou = int_area/(self.bbox_area(bbox1, video)+self.bbox_area(bbox2, video)-int_area)
         return iou
 
+    def remove_duplicates(self, l):
+        s = set()
+        return [x for x in l
+                if x not in s and not s.add(x)]
+
     # fetch all faces in a video
     def fetch_faces(self, video):
         d_labelset = video.detected_labelset() # prediction
@@ -57,16 +63,22 @@ class Command(BaseCommand):
         d_faces_dict = defaultdict(list)
         g_faces_dict = defaultdict(list)
 
-        face_size_thres = 0.10
+        selected_frames = []
+
+        face_size_thres = 0.05
         for d_face in d_faces:
             if self.bbox_area(d_face.bbox, video) > (face_size_thres * video.width * video.height):
                 d_faces_dict[d_face.frame.number].append(d_face)
+                selected_frames.append(d_face.frame.number)
 
         for g_face in g_faces:
             if self.bbox_area(g_face.bbox, video) > (face_size_thres * video.width * video.height):
                 g_faces_dict[g_face.frame.number].append(g_face)
+                selected_frames.append(d_face.frame.number)
 
-        return (d_faces_dict, g_faces_dict)
+        selected_frames = self.remove_duplicates(selected_frames)
+
+        return (selected_frames, d_faces_dict, g_faces_dict)
 
 
     def eval_frame(self, video, frame_number, d_faces, g_faces):
@@ -108,7 +120,6 @@ class Command(BaseCommand):
         return (len(d_faces), true_positives, false_positives, false_negatives, gender_matches)
 
     def eval_video(self, video):
-        num_frames = 0
         frame_mismatches = 0
 
         num_detections = 0
@@ -117,11 +128,11 @@ class Command(BaseCommand):
         false_negatives = 0
         gender_matches = 0 #gender match is on true positive detections
 
-        (d_faces_dict, g_faces_dict) = self.fetch_faces(video)
+        (selected_frames, d_faces_dict, g_faces_dict) = self.fetch_faces(video)
 
-        for frame_number in range(0, video.num_frames, video.get_stride()):
+
+        for frame_number in selected_frames:
         #for frame_number in range(0, 1000, video.get_stride()):
-            num_frames += 1
             d_faces = d_faces_dict[frame_number]
             g_faces = g_faces_dict[frame_number]
             (det, tp, fp, fn, gen) = self.eval_frame(video, frame_number, d_faces, g_faces)
@@ -133,7 +144,9 @@ class Command(BaseCommand):
                 frame_mismatches += 1
             gender_matches += gen
 
-        print("Video({}) : num_frames({}), frame_mismatches({}), det({}), tp({}), fp({}), fn({}), gender_matches({})".format(video.id, num_frames, frame_mismatches, num_detections, true_positives, false_positives, false_negatives, gender_matches))
+        print("Video({}) : num_frames({}), selected_frames({}), frame_mismatches({})".format(video.id, int(video.num_frames/video.get_stride()), len(selected_frames), frame_mismatches))
+
+        print("Video({}) : num_detections({}), tp({}), fp({}), fn({}), gender_matches({})".format(video.id, num_detections, true_positives, false_positives, false_negatives, gender_matches))
 
         if (true_positives + false_positives) != 0:
             det_precision = true_positives / (true_positives + false_positives)
