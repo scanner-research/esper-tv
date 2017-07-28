@@ -54,29 +54,32 @@ class Command(BaseCommand):
 
     # fetch all faces in a video
     def fetch_faces(self, video):
+        face_size_thres = 0.05 # threshold for filtering frames
+
         d_labelset = video.detected_labelset() # prediction
         g_labelset = video.handlabeled_labelset() # ground truth
 
-        d_faces = Face.objects.filter(frame__labelset=d_labelset).prefetch_related('frame').all()
-        g_faces = Face.objects.filter(frame__labelset=g_labelset).prefetch_related('frame').all()
+        #d_faces = Face.objects.filter(frame__labelset=d_labelset).prefetch_related('frame').all()
+        #g_faces = Face.objects.filter(frame__labelset=g_labelset).prefetch_related('frame').all()
 
-        d_faces_dict = defaultdict(list)
-        g_faces_dict = defaultdict(list)
+        g_faces = Face.objects.filter(frame__labelset=g_labelset, frame__labels__name="Talking Heads").prefetch_related('frame').all()
 
         selected_frames = []
-
-        face_size_thres = 0.05
-        for d_face in d_faces:
-            if self.bbox_area(d_face.bbox, video) > (face_size_thres * video.width * video.height):
-                d_faces_dict[d_face.frame.number].append(d_face)
-                selected_frames.append(d_face.frame.number)
+        g_faces_dict = defaultdict(list)
 
         for g_face in g_faces:
             if self.bbox_area(g_face.bbox, video) > (face_size_thres * video.width * video.height):
                 g_faces_dict[g_face.frame.number].append(g_face)
-                selected_frames.append(d_face.frame.number)
+                selected_frames.append(g_face.frame.number)
 
         selected_frames = self.remove_duplicates(selected_frames)
+
+
+        d_faces = Face.objects.filter(frame__labelset=d_labelset, frame__number__in=selected_frames).prefetch_related('frame').all()
+        d_faces_dict = defaultdict(list)
+        for d_face in d_faces:
+            if self.bbox_area(d_face.bbox, video) > (face_size_thres * video.width * video.height):
+                d_faces_dict[d_face.frame.number].append(d_face)
 
         return (selected_frames, d_faces_dict, g_faces_dict)
 
@@ -168,7 +171,7 @@ class Command(BaseCommand):
         #    paths = [s.strip() for s in f.readlines()]
 
         start_video_id = 1
-        end_video_id = 20
+        end_video_id = 61
 
         avg_det_precision = 0.0
         avg_det_recall = 0.0
