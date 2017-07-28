@@ -43,7 +43,7 @@ def extract_audio(video):
 def extract_frames(video):
     subprocess.check_call(['mkdir', '-p', 'assets/thumbnails'])
     print video.path
-    cmd = 'ffmpeg -y -i "{}" assets/thumbnails/{}_frame_%06d.png' \
+    cmd = 'ffmpeg -ss 00:00:00 -t 01:00:00 -y -i "{}" assets/thumbnails/{}_frame_%06d.png' \
           .format(video.path, video.id)
     subprocess.check_call(cmd, shell=True)
 
@@ -76,7 +76,7 @@ class Command(BaseCommand):
                 video = Video()
                 video.path = path
                 video.fps = get_fps(path)
-                video.num_frames = get_num_frames(path)
+                video.num_frames = min(get_num_frames(path), int(video.fps*60*60))
                 width, height = get_dimensions(path)
                 video.width = width
                 video.height = height
