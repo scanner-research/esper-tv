@@ -123,10 +123,11 @@ class Command(BaseCommand):
             batch_images = []
             frame_ids = []
             for frame_id in range(0, max_frame, stride):
-                invid.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
-                retval, img = invid.read()
-                if retval==False:
-                    break
+                #invid.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
+                #retval, img = invid.read()
+                #if retval==False:
+                #    break
+                img = cv2.imread("assets/thumbnails/{}_frame_{:>06}.png".format(video.id, frame_id+1))
                 batch_images.append(img)
                 frame_ids.append(frame_id)
                 if len(batch_images) == batchsize:
