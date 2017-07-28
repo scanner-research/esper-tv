@@ -21,7 +21,7 @@ class Command(BaseCommand):
         faces = [f for f in faces if f.gender == '0']
         print(len(faces))
         
-        imgs = ['./assets/thumbnails/{}_{}.jpg'.format(labelset.id, f.id) for f in faces]
+        imgs = ['./assets/thumbnails/{}_{}.png'.format(labelset.id, f.id) for f in faces]
         male_ids = []
         female_ids = []
         if len(imgs) == 0:
