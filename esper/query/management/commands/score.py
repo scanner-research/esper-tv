@@ -11,17 +11,79 @@ import tensorflow as tf
 import align.detect_face
 from collections import defaultdict
 from array import *
+from functools import wraps
+import inspect
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)
 
+def initializer(func):
+    """
+    Automatically assigns the parameters.
+
+    >>> class process:
+    ...     @initializer
+    ...     def __init__(self, cmd, reachable=False, user='root'):
+    ...         pass
+    >>> p = process('halt', True)
+    >>> p.cmd, p.reachable, p.user
+    ('halt', True, 'root')
+    """
+    names, varargs, keywords, defaults = inspect.getargspec(func)
+
+    @wraps(func)
+    def wrapper(self, *args, **kargs):
+        for name, arg in list(zip(names[1:], args)) + list(kargs.items()):
+            setattr(self, name, arg)
+
+        for name, default in zip(reversed(names), reversed(defaults)):
+            if not hasattr(self, name):
+                setattr(self, name, default)
+
+        func(self, *args, **kargs)
+
+    return wrapper
+
 class VideoStats(object):
-    def __init__(self, num_detections, mismatches, tp, fp, fn):
-        self.frame_nodet = frame_nodet
-        self.frame_mismatches = frame_mismatch
-        self.true_positives = tp
-        self.false_positives = fp
-        self.false_negatives = fn
+    @initializer
+    def __init__(self, video_id = 0, num_frames=0, selected_frames=0, mismatched_frames=0, num_detections=0, true_positives=0, false_positives=0, false_negatives=0, gender_matches=0):
+        pass
+
+    def compute_acc_stats(self):
+        if (self.true_positives + self.false_positives) != 0:
+            det_precision = self.true_positives / (self.true_positives + self.false_positives)
+        else:
+            det_precision = 0.0
+        if (self.true_positives + self.false_negatives) != 0:
+            det_recall = self.true_positives / (self.true_positives + self.false_negatives)
+        else:
+            det_recall = 0.0
+        if self.true_positives != 0:
+            gender_precision = self.gender_matches / self.true_positives
+        else:
+            gender_precision = 1.0
+        return (det_precision, det_recall, gender_precision)
+
+
+    def __str__(self):
+        frame_stats = "Video({}): num_frames({}), selected_frames({}), mismatched_frames({})".format(self.video_id, self.num_frames, self.selected_frames, self.mismatched_frames)
+
+        det_stats = "Video({}): num_detections({}), tp({}), fp({}), fn({}), gender_matches({})".format(self.video_id, self.num_detections, self.true_positives, self.false_positives, self.false_negatives, self.gender_matches)
+
+        acc_stats = "Video({}): Detection precision({}), Detection recall({}), Gender precision({})".format(self.video_id, *self.compute_acc_stats())
+
+        return frame_stats + "\n" + det_stats + "\n" + acc_stats
+
+    def __add__(self, other):
+        num_frames = self.num_frames + other.num_frames
+        selected_frames = self.selected_frames + other.selected_frames
+        mismatched_frames = self.mismatched_frames + other.mismatched_frames
+        num_detections = self.num_detections + other.num_detections
+        true_positives = self.true_positives + other.true_positives
+        false_positives = self.false_positives + other.false_positives
+        false_negatives = self.false_negatives + other.false_negatives
+        gender_matches = self.gender_matches + other.gender_matches
+        return VideoStats(self.video_id, num_frames, selected_frames, mismatched_frames, num_detections, true_positives, false_positives, false_negatives, gender_matches)
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
@@ -123,48 +185,25 @@ class Command(BaseCommand):
         return (len(d_faces), true_positives, false_positives, false_negatives, gender_matches)
 
     def eval_video(self, video):
-        frame_mismatches = 0
-
-        num_detections = 0
-        true_positives = 0
-        false_positives = 0
-        false_negatives = 0
-        gender_matches = 0 #gender match is on true positive detections
-
         (selected_frames, d_faces_dict, g_faces_dict) = self.fetch_faces(video)
 
+        vstats = VideoStats(video_id=video.id, num_frames=int(video.num_frames/video.get_stride()),
+                                                            selected_frames = len(selected_frames))
 
         for frame_number in selected_frames:
         #for frame_number in range(0, 1000, video.get_stride()):
             d_faces = d_faces_dict[frame_number]
             g_faces = g_faces_dict[frame_number]
             (det, tp, fp, fn, gen) = self.eval_frame(video, frame_number, d_faces, g_faces)
-            num_detections += det
-            true_positives += tp
-            false_positives += fp
-            false_negatives += fn
+            vstats.num_detections += det
+            vstats.true_positives += tp
+            vstats.false_positives += fp
+            vstats.false_negatives += fn
             if fp != 0 or fn != 0:
-                frame_mismatches += 1
-            gender_matches += gen
+                vstats.mismatched_frames += 1
+            vstats.gender_matches += gen
 
-        print("Video({}) : num_frames({}), selected_frames({}), frame_mismatches({})".format(video.id, int(video.num_frames/video.get_stride()), len(selected_frames), frame_mismatches))
-
-        print("Video({}) : num_detections({}), tp({}), fp({}), fn({}), gender_matches({})".format(video.id, num_detections, true_positives, false_positives, false_negatives, gender_matches))
-
-        if (true_positives + false_positives) != 0:
-            det_precision = true_positives / (true_positives + false_positives)
-        else:
-            det_precision = 0.0
-        if (true_positives + false_negatives) != 0:
-            det_recall = true_positives / (true_positives + false_negatives)
-        else:
-            det_recall = 0.0
-        if true_positives != 0:
-            gender_precision = gender_matches / true_positives
-        else:
-            gender_precision = 1.0
-
-        return (det_precision, det_recall, gender_precision)
+        return vstats
 
     def handle(self, *args, **options):
         #with open(options['path']) as f:
@@ -173,23 +212,15 @@ class Command(BaseCommand):
         start_video_id = 1
         end_video_id = 61
 
-        avg_det_precision = 0.0
-        avg_det_recall = 0.0
-        avg_gender_precision = 0.0
+        vtotal_stats = VideoStats(video_id=0)
 
         for video_id in range(start_video_id, end_video_id):
             #video = Video.objects.filter(path=path).get()
             video = Video.objects.filter(id=video_id).get()
             #print("Video {}".format(path))
-            (det_precision, det_recall, gender_precision) = self.eval_video(video)
-            print("Video({}) : Detection precision({}), Detection recall({}), Gender precision({})".format(video.id, det_precision, det_recall, gender_precision))
+            vstats = self.eval_video(video)
+            print(vstats)
 
-            avg_det_precision += det_precision
-            avg_det_recall += det_recall
-            avg_gender_precision += gender_precision
+            vtotal_stats = vtotal_stats + vstats
 
-        avg_det_precision /= (end_video_id - start_video_id)
-        avg_det_recall /= (end_video_id - start_video_id)
-        avg_gender_precision /= (end_video_id - start_video_id)
-        print("Average: Detection precision({}), Detection recall({}), Gender precision({})".format(avg_det_precision, avg_det_recall, avg_gender_precision))
-
+        print(vtotal_stats)
