@@ -44,7 +44,7 @@ def initializer(func):
 
     return wrapper
 
-class VideoStats(object):
+class VideoEvalStats(object):
     @initializer
     def __init__(self, video_id = 0, num_frames=0, tp_frames=0, fp_frames=0, fn_frames=0, mismatched_tp_frames=0, num_detections=0, tp_detections=0, fp_detections=0, fn_detections=0, num_males=0, num_females=0, gender_matches=0, male_mismatches=0, female_mismatches=0):
         pass
@@ -107,13 +107,31 @@ class VideoStats(object):
         male_mismatches = self.male_mismatches + other.male_mismatches
         female_mismatches = self.female_mismatches + other.female_mismatches
 
-        return VideoStats(self.video_id, num_frames, tp_frames, fp_frames, fn_frames, mismatched_tp_frames, num_detections, tp_detections, fp_detections, fn_detections, num_males, num_females, gender_matches, male_mismatches, female_mismatches)
+        return VideoEvalStats(self.video_id, num_frames, tp_frames, fp_frames, fn_frames, mismatched_tp_frames, num_detections, tp_detections, fp_detections, fn_detections, num_males, num_females, gender_matches, male_mismatches, female_mismatches)
+
+
+class VideoStats(object):
+    @initializer
+    def __init__(self, video_id = 0, num_frames=0, selected_frames=0, num_detections=0, num_males=0, num_females=0):
+        pass
+
+    def __str__(self):
+        stats = "Video({}): num_frames({}), selected_frames({}), num_detections({}), num_males({}), num_females({})".format(self.video_id, self.num_frames, self.selected_frames, self.num_detections, self.num_males, self.num_females)
+        return stats
+
+    def __add__(self, other):
+        num_frames = self.num_frames + other.num_frames
+        selected_frames = self.selected_frames + other.selected_frames
+        num_detections = self.num_detections + other.num_detections
+        num_males = self.num_males + other.num_males
+        num_females = self.num_females + other.num_females
+        return VideoStats(self.video_id, num_frames, selected_frames, num_detections, num_males, num_females)
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
 
-    #def add_arguments(self, parser):
-        #parser.add_argument('path')
+    def add_arguments(self, parser):
+        parser.add_argument('command')
 
     def bbox_area(self, bbox, video):
         return ((bbox.x2 - bbox.x1)*video.width) * \
@@ -167,11 +185,11 @@ class Command(BaseCommand):
         d_faces_dict = defaultdict(list)
 
         # metrics for automatic detection of frames with "talking heads"
-        face_size_thres = 0.05
+        face_size_thres = 0.03
         det_score_thres = 0.95
 
         for d_face in d_faces:
-            if d_face.bbox.score > 0.95 and self.bbox_area(d_face.bbox, video) > (face_size_thres * video.width * video.height):
+            if d_face.bbox.score > det_score_thres and self.bbox_area(d_face.bbox, video) > (face_size_thres * video.width * video.height):
                 d_faces_dict[d_face.frame.number].append(d_face)
                 detected_frames.append(d_face.frame.number)
 
@@ -267,8 +285,7 @@ class Command(BaseCommand):
 
         (tp_frames, fp_frames, fn_frames) = self.eval_frame_selection(ground_truth_frames, detected_frames)
 
-        vstats = VideoStats(video_id=video.id, num_frames=int(video.num_frames/video.get_stride()),
-                    tp_frames = len(tp_frames), fp_frames=len(fp_frames), fn_frames=len(fn_frames))
+        vstats = VideoEvalStats(video_id=video.id, num_frames=int(video.num_frames/video.get_stride()), tp_frames = len(tp_frames), fp_frames=len(fp_frames), fn_frames=len(fn_frames))
 
         #for frame_number in range(0, 1000, video.get_stride()):
         for frame_number in tp_frames:
@@ -282,22 +299,54 @@ class Command(BaseCommand):
 
         return vstats
 
-    def handle(self, *args, **options):
-        #with open(options['path']) as f:
-        #    paths = [s.strip() for s in f.readlines()]
-
-        start_video_id = 1
-        end_video_id = 11
-
-        vtotal_stats = VideoStats(video_id=0)
+    def eval_videos(self, start_video_id, end_video_id):
+        vtotal_stats = VideoEvalStats(video_id=0)
 
         for video_id in range(start_video_id, end_video_id):
-            #video = Video.objects.filter(path=path).get()
             video = Video.objects.filter(id=video_id).get()
-            #print("Video {}".format(path))
             vstats = self.eval_video(video)
             print(vstats)
 
             vtotal_stats = vtotal_stats + vstats
 
         print(vtotal_stats)
+
+    def infer_videos(self, start_video_id, end_video_id):
+        vtotal_stats = VideoStats(video_id=0)
+
+        for video_id in range(start_video_id, end_video_id):
+            video = Video.objects.filter(id=video_id).get()
+            (detected_frames, d_faces_dict) = self.fetch_automatic_detections(video)
+
+            vstats = VideoStats(video_id=video.id, num_frames=int(video.num_frames/video.get_stride()), selected_frames=len(detected_frames))
+
+            #for frame_number in range(0, 1000, video.get_stride()):
+            for frame_number in detected_frames:
+                # evaluate detection
+                d_faces = d_faces_dict[frame_number]
+                for d_face in d_faces:
+                    vstats.num_detections += 1
+                    if d_face.gender == 'M':
+                        vstats.num_males += 1
+                    else:
+                        vstats.num_females += 1
+
+            print(vstats)
+
+            vtotal_stats = vtotal_stats + vstats
+        print(vtotal_stats)
+
+    def handle(self, *args, **options):
+        start_video_id = 1
+        end_video_id = 61
+
+        #with open(options['path']) as f:
+        #    paths = [s.strip() for s in f.readlines()]
+        command = options['command']
+        if command == "eval":
+            self.eval_videos(start_video_id, end_video_id) # compare with labeled data
+        elif command == "infer":
+            self.infer_videos(start_video_id, end_video_id) # no labeled data (just infer)
+        else:
+            print("Error: eval or run")
+
