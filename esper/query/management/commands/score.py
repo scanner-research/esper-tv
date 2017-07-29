@@ -46,7 +46,7 @@ def initializer(func):
 
 class VideoStats(object):
     @initializer
-    def __init__(self, video_id = 0, num_frames=0, tp_frames=0, fp_frames=0, fn_frames=0, mismatched_tp_frames=0, num_detections=0, tp_detections=0, fp_detections=0, fn_detections=0, gender_matches=0):
+    def __init__(self, video_id = 0, num_frames=0, tp_frames=0, fp_frames=0, fn_frames=0, mismatched_tp_frames=0, num_detections=0, tp_detections=0, fp_detections=0, fn_detections=0, num_males=0, num_females=0, gender_matches=0, male_mismatches=0, female_mismatches=0):
         pass
 
 
@@ -66,34 +66,48 @@ class VideoStats(object):
 
     def compute_det_acc_stats(self):
         (det_precision, det_recall) = self.compute_precision_recall(self.tp_detections, self.fp_detections, self.fn_detections)
+        return (det_precision, det_recall)
+
+    def compute_gender_acc_stats(self):
         if self.tp_detections != 0:
-            gender_precision = self.gender_matches / self.tp_detections
+            gender_precision = self.gender_matches / (self.num_males + self.num_females)
         else:
             gender_precision = 1.0
-        return (det_precision, det_recall, gender_precision)
+        return gender_precision
 
     def __str__(self):
-        frame_stats = "Video({}): num_frames({}), tp({}), fp({}), fn({})".format(self.video_id, self.num_frames, self.tp_frames, self.fp_frames, self.fn_frames)
-        frame_acc_stats = "Video({}): Frame selection precision({}), Frame selection recall({})".format(self.video_id, *self.compute_frame_acc_stats())
+        frame_stats = "Video({})[FRAME SELECTION]: num_frames({}), tp({}), fp({}), fn({})".format(self.video_id, self.num_frames, self.tp_frames, self.fp_frames, self.fn_frames)
+        frame_acc_stats = "Video({})[FRAME SELECTION]: Frame selection precision({}), Frame selection recall({})".format(self.video_id, *self.compute_frame_acc_stats())
 
-        det_stats = "Video({}): num_detections({}), tp({}), fp({}), fn({}), mismatched_frames({}), gender_matches({})".format(self.video_id, self.num_detections, self.tp_detections, self.fp_detections, self.fn_detections, self.mismatched_tp_frames, self.gender_matches)
+        det_stats = "Video({})[DETECTION]: num_detections({}), tp({}), fp({}), fn({}), mismatched_frames({})".format(self.video_id, self.num_detections, self.tp_detections, self.fp_detections, self.fn_detections, self.mismatched_tp_frames)
+        det_acc_stats = "Video({})[DETECTION]: Detection precision({}), Detection recall({})".format(self.video_id, *self.compute_det_acc_stats())
 
-        det_acc_stats = "Video({}): Detection precision({}), Detection recall({}), Gender precision({})".format(self.video_id, *self.compute_det_acc_stats())
+        gender_stats = "Video({})[GENDER]: males({}), females({}), gender_matches({}), male_mismatches({}), female_mismatches({})".format(self.video_id, self.num_males, self.num_females, self.gender_matches, self.male_mismatches, self.female_mismatches)
+        gender_acc_stats = "Video({})[GENDER]: Gender precision({})".format(self.video_id, self.compute_gender_acc_stats())
 
-        return frame_stats + "\n" + frame_acc_stats + "\n" + det_stats + "\n" + det_acc_stats
+        return frame_stats + "\n" + frame_acc_stats + "\n" + det_stats + "\n" + det_acc_stats + "\n" + gender_stats + "\n" + gender_acc_stats
 
     def __add__(self, other):
         num_frames = self.num_frames + other.num_frames
+
+        # frame selection
         tp_frames = self.tp_frames + other.tp_frames
         fp_frames = self.fp_frames + other.fp_frames
         fn_frames = self.fn_frames + other.fn_frames
-        mismatched_tp_frames = self.mismatched_tp_frames + other.mismatched_tp_frames
+        # face detection
         num_detections = self.num_detections + other.num_detections
+        mismatched_tp_frames = self.mismatched_tp_frames + other.mismatched_tp_frames
         tp_detections = self.tp_detections + other.tp_detections
         fp_detections = self.fp_detections + other.fp_detections
         fn_detections = self.fn_detections + other.fn_detections
+        # gender detection
+        num_males = self.num_males + other.num_males
+        num_females = self.num_females + other.num_females
         gender_matches = self.gender_matches + other.gender_matches
-        return VideoStats(self.video_id, num_frames, tp_frames, fp_frames, fn_frames, mismatched_tp_frames, num_detections, tp_detections, fp_detections, fn_detections, gender_matches)
+        male_mismatches = self.male_mismatches + other.male_mismatches
+        female_mismatches = self.female_mismatches + other.female_mismatches
+
+        return VideoStats(self.video_id, num_frames, tp_frames, fp_frames, fn_frames, mismatched_tp_frames, num_detections, tp_detections, fp_detections, fn_detections, num_males, num_females, gender_matches, male_mismatches, female_mismatches)
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
@@ -125,7 +139,7 @@ class Command(BaseCommand):
                 if x not in s and not s.add(x)]
 
 
-    def fetch_ground_truth(self, video, label):
+    def fetch_ground_truth(self, video, label = "Talking Heads"):
         g_labelset = video.handlabeled_labelset() # ground truth
         #g_faces = Face.objects.filter(frame__labelset=g_labelset).prefetch_related('frame').all()
 
@@ -142,7 +156,7 @@ class Command(BaseCommand):
         return (ground_truth_frames, g_faces_dict)
 
 
-    def fetch_automatic_detections(self, video, label):
+    def fetch_automatic_detections(self, video, label = "Talking Heads"):
         d_labelset = video.detected_labelset() # prediction
         #d_faces = Face.objects.filter(frame__labelset=d_labelset).prefetch_related('frame').all()
 
@@ -164,15 +178,7 @@ class Command(BaseCommand):
         detected_frames = self.remove_duplicates(detected_frames)
         return (detected_frames, d_faces_dict)
 
-    # fetch all faces in a video
-    def fetch_faces(self, video, label = "Talking Heads"):
-        (ground_truth_frames, g_faces_dict) = self.fetch_ground_truth(video, label)
-        (detected_frames, d_faces_dict) = self.fetch_automatic_detections(video, label)
-
-        return (ground_truth_frames, g_faces_dict, detected_frames, d_faces_dict)
-
-
-    def eval_frame(self, video, frame_number, d_faces, g_faces):
+    def eval_detection(self, video, frame_number, d_faces, g_faces, vstats):
         if len(d_faces) == 0 and len(g_faces) == 0:
             return (0, 0, 0, 0, 0)
 
@@ -185,6 +191,8 @@ class Command(BaseCommand):
         d_dict = defaultdict(int)
         g_dict = defaultdict(int)
 
+        gender_eval_list = []
+
         for d_face in d_faces:
             for g_face in g_faces:
                 iou = self.compute_iou(d_face.bbox, g_face.bbox, video)
@@ -193,8 +201,9 @@ class Command(BaseCommand):
                         fp_detections += 1
                     else:
                         tp_detections += 1
-                        if d_face.gender == g_face.gender:
-                            gender_matches += 1
+                        #if d_face.gender == g_face.gender:
+                        #    gender_matches += 1
+                        gender_eval_list.append((d_face.gender, g_face.gender))
                     g_dict[g_face] += 1
                     d_dict[d_face] += 1
 
@@ -206,9 +215,15 @@ class Command(BaseCommand):
             if g_dict[g_face] == 0:
                 fn_detections += 1
 
-        #print("Frame({}) : d({}), g({}), tp({}), fp({}), fn({})".format(frame_number, len(d_faces), len(g_faces), tp_detections, fp_detections, fn_detections))
+        # update detection stats
+        vstats.num_detections += len(d_faces)
+        vstats.tp_detections += tp_detections
+        vstats.fp_detections += fp_detections
+        vstats.fn_detections += fn_detections
+        if fp_detections != 0 or fn_detections != 0:
+            vstats.mismatched_tp_frames += 1
 
-        return (len(d_faces), tp_detections, fp_detections, fn_detections, gender_matches)
+        return (vstats, gender_eval_list)
 
     def eval_frame_selection(self, g_frame_list, d_frame_list):
         tp_frames = [x for x in g_frame_list if x in d_frame_list]
@@ -216,26 +231,54 @@ class Command(BaseCommand):
         fn_frames = [x for x in g_frame_list if x not in tp_frames]
         return (tp_frames, fp_frames, fn_frames)
 
+    def eval_gender(self, gender_eval_list, vstats):
+        num_males = 0
+        num_females = 0
+        gender_matches = 0
+        male_mismatches = 0
+        female_mismatches = 0
+        for (d, g) in gender_eval_list:
+            if d == 'M':
+                num_males += 1
+                if g != d:
+                    male_mismatches += 1
+                else:
+                    gender_matches += 1
+            else:
+                num_females += 1
+                if g != d:
+                    female_mismatches += 1
+                else:
+                    gender_matches += 1
+
+        #update gender stats
+        vstats.num_males += num_males
+        vstats.num_females += num_females
+        vstats.gender_matches += gender_matches
+        vstats.male_mismatches += male_mismatches
+        vstats.female_mismatches += female_mismatches
+
+        return vstats
+
+
     def eval_video(self, video):
-        (ground_truth_frames, g_faces_dict, detected_frames, d_faces_dict) = self.fetch_faces(video)
+        (ground_truth_frames, g_faces_dict) = self.fetch_ground_truth(video)
+        (detected_frames, d_faces_dict) = self.fetch_automatic_detections(video)
 
         (tp_frames, fp_frames, fn_frames) = self.eval_frame_selection(ground_truth_frames, detected_frames)
 
         vstats = VideoStats(video_id=video.id, num_frames=int(video.num_frames/video.get_stride()),
                     tp_frames = len(tp_frames), fp_frames=len(fp_frames), fn_frames=len(fn_frames))
 
-        for frame_number in tp_frames:
         #for frame_number in range(0, 1000, video.get_stride()):
+        for frame_number in tp_frames:
+            # evaluate detection
             d_faces = d_faces_dict[frame_number]
             g_faces = g_faces_dict[frame_number]
-            (num_detections, tp_detections, fp_detections, fn_detections, gender_matches) = self.eval_frame(video, frame_number, d_faces, g_faces)
-            vstats.num_detections += num_detections
-            vstats.tp_detections += tp_detections
-            vstats.fp_detections += fp_detections
-            vstats.fn_detections += fn_detections
-            if fp_detections != 0 or fn_detections != 0:
-                vstats.mismatched_tp_frames += 1
-            vstats.gender_matches += gender_matches
+            (vstats, gender_eval_list) = self.eval_detection(video, frame_number, d_faces, g_faces, vstats)
+
+            # evaluate gender
+            vstats = self.eval_gender(gender_eval_list, vstats)
 
         return vstats
 
@@ -244,7 +287,7 @@ class Command(BaseCommand):
         #    paths = [s.strip() for s in f.readlines()]
 
         start_video_id = 1
-        end_video_id = 61
+        end_video_id = 11
 
         vtotal_stats = VideoStats(video_id=0)
 
