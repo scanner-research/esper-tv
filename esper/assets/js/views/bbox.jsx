@@ -88,6 +88,10 @@ class BoxView extends React.Component {
       this.props.onDelete(this.props.i);
     } else if(chr == 'T') {
       this.props.onTrack(this.props.i);
+    } else if(chr == 'Q') {
+      this.props.onSetTrack(this.props.i);
+    } else if(chr == 'U') {
+      this.props.onDeleteTrack(this.props.i);
     }
   }
 
@@ -142,6 +146,9 @@ export class BoundingBoxView extends React.Component {
   _onMouseOver = (e) => {
     document.addEventListener('mousemove', this._onMouseMove);
     document.addEventListener('keydown', this._onKeyDown);
+    if (!(e.buttons & 1)){
+      this.setState({startX: -1});
+    }
   }
 
   _onMouseOut = (e) => {
@@ -176,8 +183,8 @@ export class BoundingBoxView extends React.Component {
     let chr = String.fromCharCode(e.which);
     if (chr == 'F') {
       this.setState({fullwidth: !this.state.fullwidth});
-    } else if (chr == 'A') {
-      this.props.onAccept(this.props.ni);
+    } else if (chr == 'S') {
+      this.props.onSelect(this.props.ni);
     }
   }
 
@@ -193,6 +200,16 @@ export class BoundingBoxView extends React.Component {
   _onTrack = (i) => {
     let box = this.props.bboxes[i];
     this.props.onTrack(box);
+  }
+
+  _onSetTrack = (i) => {
+    let box = this.props.bboxes[i];
+    this.props.onSetTrack(box);
+  }
+
+  _onDeleteTrack = (i) => {
+    let box = this.props.bboxes[i];
+    this.props.onDeleteTrack(box);
   }
 
   _getDimensions() {
@@ -233,7 +250,9 @@ export class BoundingBoxView extends React.Component {
           <BoxView box={box} key={i} i={i} width={width} height={height}
                    onDelete={this._onDelete}
                    onChange={this._onChange}
-                   onTrack={this._onTrack} />)}
+                   onTrack={this._onTrack}
+                   onSetTrack={this._onSetTrack}
+                   onDeleteTrack={this._onDeleteTrack}/>)}
         <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
              style={imgStyle} />
       </div>

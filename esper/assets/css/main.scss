@@ -118,7 +118,10 @@ body {
         * { user-select: none; }
 
         .bounding-box-wrapper {
+            white-space: pre;
             float: left;
+            outline: #000000 solid 1px;
+            text-align: center;
 
             &.accepted {
                 background: #9FD490;

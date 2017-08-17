@@ -4,12 +4,10 @@ import {Face} from './face.jsx';
 
 export class Video {
   @observable loadedMeta = false;
-  @observable loadedFaces = false;
-  @observable loadedFrames = false;
+  @observable loaded = false;
+  loading = false;
 
-  faces = {};
-  ids = {};
-  frames = {}
+  data = {};
 
   constructor(props) {
     if (typeof props != "object") {
@@ -33,16 +31,19 @@ export class Video {
     this.loadedMeta = true;
   }
 
-  loadFrames() {
-    if (!this.loadedFrames) {
+  loadVideoData() {
+    if (!this.loaded && !this.loading) {
+      this.loading = true;
       return axios
-        .get('/api/frames', {params: {
-          'video_id': this.id, 'handlabeled': true}})
+        .get('/api/frame_and_faces', {params: {'video_id': this.id}})
         .then(((response) => {
-          response.data.frames.forEach(((frame) => {
-            this.frames[frame.number] = frame;
-          }).bind(this));
-          this.loadedFrames = true;
+          this.data = response.data;
+          _.forEach(this.data.frames, (frames, labelset_id) => {
+              _.forEach(frames, (set, frame_no) => {
+                set.faces = set.faces.map((face) => new Face(face));
+              });
+          });
+          this.loaded = true;
           return true;
         }).bind(this));
     } else {
@@ -50,21 +51,6 @@ export class Video {
     }
   }
 
-  loadFaces() {
-    if (!this.loadedFaces) {
-      return axios
-        .get('/api/faces', {params: {'video_id': this.id}})
-        .then(((response) => {
-          this.faces = _.mapValues(response.data.faces, (frames) =>
-            _.mapValues(frames, (frame) =>
-              frame.map((face) => new Face(face))));
-          this.loadedFaces = true;
-          return true;
-        }).bind(this));
-    } else {
-      return new Promise((resolve, _) => resolve(false));
-    }
-  }
 };
 
 export class VideoCollection {

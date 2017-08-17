@@ -72,9 +72,9 @@ class Command(BaseCommand):
                 curr_face_id = curr_face.id
                 curr_frame_id = curr_face.frame.number
                 confidence = curr_face.bbox.score;
-                if confidence < .98:
-                    low_confidence += 1
-                    continue
+#                if confidence < .98:
+#                    low_confidence += 1
+#                    continue
 
                 if old_frame_id != curr_frame_id:
                     keep_set = []
@@ -92,9 +92,7 @@ class Command(BaseCommand):
                                 if (seq_len < min_feat_threshold):
                                     short_seq += len(item[2])
                                     continue
-                                first_frame = Face.objects.filter(id=item[2][0]).get().frame
-                                last_frame = Face.objects.filter(id=item[2][-1]).get().frame
-                                track = Track(first_frame=first_frame, last_frame=last_frame)
+                                track = Track(video=video)
                                 track.save()
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.filter(id=seq_face_id).get()
@@ -121,24 +119,20 @@ class Command(BaseCommand):
                     recent_features[best_match][4] = np.add(recent_features[best_match][4], curr_feature)
                     recent_features[best_match][3] = np.divide(recent_features[best_match][4], len(recent_features[best_match][2]))
 
-            for item in complete_set:
+            for item in recent_features:
                 seq_len = len(item[2])
                 if (seq_len < min_feat_threshold):
                     short_seq += len(item[2])
                     continue
-                track = Track(first_frame=item[2][0].frame, last_frame=item[2][-1].frame)
+                track = Track(video=video)
                 track.save()
                 for seq_face_id in item[2]:
                     seq_face = Face.objects.filter(id=seq_face_id).get()
-                    seq_face.track_id = track.id;
+                    seq_face.track = track;
                     in_seq += 1
                     seq_face.save()
             print 'total faces: ', faces_len
             print 'in output seq: ', in_seq
             print 'dropped in short seq: ', short_seq
             print 'low confidence', low_confidence
-            recent_features_sum = 0
-            for feat in recent_features:
-                recent_features_sum += len(feat[2])
-            print 'left in recent_features', recent_features_sum
-            print 'accounted for: ', (recent_features_sum + low_confidence + short_seq + in_seq)
+            print 'accounted for: ', (low_confidence + short_seq + in_seq)
