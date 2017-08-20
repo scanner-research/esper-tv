@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Track
+from query.models import *
 import random
 import json
 import tensorflow as tf
@@ -7,17 +7,24 @@ import cv2
 import os
 import numpy as np
 
+
 def dist(feat1, feat2):
     return np.sum(np.square(np.subtract(feat1, feat2)))
+
+
+# TODO(matt): clean this up, seems like there's a lot of redundant/commented code
+# The 5-tuple that's stored in "recent_features" should be a dict for human-readable keys
 
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
 
     def add_arguments(self, parser):
         parser.add_argument('path', type=str)
-        parser.add_argument('-t', '--threshold', type=float, default = .65)
-        parser.add_argument('-s', '--sequence_time', type=int, default = 5)
-        parser.add_argument('-m', '--min_feat_threshold', type=int, default = 3)
+        parser.add_argument('bbox_labeler', nargs='?', default='tinyfaces')
+        parser.add_argument('feature_labeler', nargs='?', default='facenet')
+        parser.add_argument('-t', '--threshold', type=float, default=.65)
+        parser.add_argument('-s', '--sequence_time', type=int, default=5)
+        parser.add_argument('-m', '--min_feat_threshold', type=int, default=3)
 
     def handle(self, *args, **options):
         """
@@ -26,9 +33,9 @@ class Command(BaseCommand):
         It walks through each frame of the video and adds each new
         face into a set of recently seen faces. The embedding of each
         face in a track is averaged together ('avg_feature') and the first_frame
-        and last_frame of a track is recorded. If a similar (within 'threshold' 
+        and last_frame of a track is recorded. If a similar (within 'threshold'
         distance of the 'avg_feature' of a track) has not been
-        seen in 'sequence_time' seconds, the track is added to the database. Any 
+        seen in 'sequence_time' seconds, the track is added to the database. Any
         sequence without at least 'min_feat_threshold' embeddings is dropped.
 
         Args:
@@ -44,43 +51,46 @@ class Command(BaseCommand):
         sequence_time = float(options['sequence_time'])
         min_feat_threshold = int(options['min_feat_threshold'])
 
+        bbox_labeler = Labeler.objects.get(name=options['bbox_labeler'])
+        feature_labeler = Labeler.objects.get(name=options['feature_labeler'])
+
         for path in paths:
             if path == '':
                 return
             print path
             video = Video.objects.filter(path=path).get()
-            labelset = video.detected_labelset()
-            faces = Face.objects.filter(frame__labelset=labelset) \
-                                .exclude(features='').order_by('frame').all()
+            face_features = FaceFeatures.objects.filter(
+                instance__frame__video=video,
+                instance__labeler=bbox_labeler,
+                labeler=feature_labeler).order_by('instance__frame').all()
 
             fps = video.fps
 
             # [first_frame, last_frame, all_features, avg_feature, sum_feature]
             recent_features = []
-            faces_len = len(faces)
+            faces_len = len(face_features)
             in_seq = 0
             short_seq = 0
             low_confidence = 0
 
             old_frame_id = 0
             #index in the face array NOT the face id
-            for face_idx in range(len(faces)):
+            for face_idx in range(faces_len):
 
-
-                curr_face = faces[face_idx]
+                curr_face = face_features[face_idx]
                 curr_feature = np.array(json.loads(curr_face.features))
-                curr_face_id = curr_face.id
-                curr_frame_id = curr_face.frame.number
-                confidence = curr_face.bbox.score;
-#                if confidence < .98:
-#                    low_confidence += 1
-#                    continue
+                curr_face_id = curr_face.instance.id
+                curr_frame_id = curr_face.instance.frame.number
+                confidence = curr_face.instance.bbox.score
+                #                if confidence < .98:
+                #                    low_confidence += 1
+                #                    continue
 
                 if old_frame_id != curr_frame_id:
                     keep_set = []
                     complete_set = []
                     for feat in recent_features:
-                        if float(curr_frame_id - feat[1])/fps > sequence_time:
+                        if float(curr_frame_id - feat[1]) / fps > sequence_time:
                             complete_set.append(feat)
                         else:
                             keep_set.append(feat)
@@ -92,14 +102,13 @@ class Command(BaseCommand):
                                 if (seq_len < min_feat_threshold):
                                     short_seq += len(item[2])
                                     continue
-                                track = Track(video=video)
+                                track = Face()
                                 track.save()
                                 for seq_face_id in item[2]:
-                                    seq_face = Face.objects.filter(id=seq_face_id).get()
-                                    seq_face.track = track;
+                                    seq_face = FaceInstance.objects.get(id=seq_face_id)
+                                    seq_face.concept = track
                                     in_seq += 1
                                     seq_face.save()
-
 
                     old_frame_id = curr_frame_id
                 best_match = -1
@@ -112,23 +121,26 @@ class Command(BaseCommand):
                 #if best_match >= 0:
                 #    print best_match, best_distance
                 if best_match == -1 or best_distance > threshold:
-                    recent_features.append([curr_frame_id, curr_frame_id, [curr_face_id], curr_feature, curr_feature])
+                    recent_features.append(
+                        [curr_frame_id, curr_frame_id, [curr_face_id], curr_feature, curr_feature])
                 else:
-                    recent_features[best_match][1] = curr_frame_id;
+                    recent_features[best_match][1] = curr_frame_id
                     recent_features[best_match][2].append(curr_face_id)
-                    recent_features[best_match][4] = np.add(recent_features[best_match][4], curr_feature)
-                    recent_features[best_match][3] = np.divide(recent_features[best_match][4], len(recent_features[best_match][2]))
+                    recent_features[best_match][4] = np.add(recent_features[best_match][4],
+                                                            curr_feature)
+                    recent_features[best_match][3] = np.divide(recent_features[best_match][4],
+                                                               len(recent_features[best_match][2]))
 
             for item in recent_features:
                 seq_len = len(item[2])
                 if (seq_len < min_feat_threshold):
                     short_seq += len(item[2])
                     continue
-                track = Track(video=video)
+                track = Face()
                 track.save()
                 for seq_face_id in item[2]:
-                    seq_face = Face.objects.filter(id=seq_face_id).get()
-                    seq_face.track = track;
+                    seq_face = FaceInstance.objects.get(id=seq_face_id)
+                    seq_face.concept = track
                     in_seq += 1
                     seq_face.save()
             print 'total faces: ', faces_len

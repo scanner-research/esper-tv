@@ -26,6 +26,7 @@ services:
     image: scannerresearch/esper
     volumes:
       - ./esper:/usr/src/app
+      - ${HOME}/.bash_history:/root/.bash_history
     ports:
       - "8000"
 """)

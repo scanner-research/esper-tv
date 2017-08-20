@@ -17,7 +17,8 @@ RUN git clone https://github.com/torch/distro.git /opt/torch --recursive && \
         do luarocks install $NAME; \
     done
 
-RUN apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 \
+RUN apt-get update && \
+    apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 \
     npm nodejs vim mysql-client libmysqlclient-dev && \
     ln -s /usr/bin/nodejs /usr/bin/node
 

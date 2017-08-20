@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, Identity, LabelSet
+from query.models import *
 import random
 import json
 import tensorflow as tf
@@ -18,23 +18,31 @@ def load_imgs(img_directory):
 
     return imgs
 
+
 # FIXME: Exit gracefully if same images being sent to clustering algorithm a
 # second time...
+
+
+# TODO(wcrichto): merge this with the other embed faces script
 
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
 
     def add_arguments(self, parser):
         parser.add_argument('path')
+        parser.add_argument('labeler', default='tinyfaces')
 
     def handle(self, *args, **options):
+        face_labeler = Labeler.objects.get(name=options['labeler'])
+        feature_labeler, _ = Labeler.objects.get_or_create(name='facenet')
+
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
-        model_path = '/usr/src/app/deps/facenet/models/20170216-091149/'
+        model_path = '/usr/src/app/deps/facenet/models/20170512-110547/'
         print model_path
 
         #load facenet models and start tensorflow
-        out_size=160
+        out_size = 160
         meta_file, ckpt_file = facenet.get_model_filenames(model_path)
         g = tf.Graph()
         g.as_default()
@@ -43,19 +51,17 @@ class Command(BaseCommand):
         saver = tf.train.import_meta_graph(os.path.join(model_path, meta_file))
         saver.restore(sess, os.path.join(model_path, ckpt_file))
 
-        images_placeholder =  tf.get_default_graph().get_tensor_by_name('input:0')
+        images_placeholder = tf.get_default_graph().get_tensor_by_name('input:0')
         embeddings = tf.get_default_graph().get_tensor_by_name('embeddings:0')
-        phase_train_placeholder =  tf.get_default_graph().get_tensor_by_name('phase_train:0')
+        phase_train_placeholder = tf.get_default_graph().get_tensor_by_name('phase_train:0')
         batch_size = 1000
-
 
         for path in paths:
             if path == '':
                 return
             print path
-            video = Video.objects.filter(path=path).get()
-            labelset = video.detected_labelset()
-            faces = Face.objects.filter(frame__labelset=labelset).all()
+            video = Video.objects.get(path=path)
+            faces = FaceInstance.objects.filter(frame__video=video, labeler=face_labeler).all()
 
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .04]
             frames = [f.frame for f in faces]
@@ -65,7 +71,7 @@ class Command(BaseCommand):
             face_indexes = []
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
-                curr_img = cv2.imread('./assets/thumbnails/{}_{}.jpg'.format(labelset.id, faces[face_idx].id))
+                curr_img = cv2.imread('./assets/thumbnails/face_{}.jpg'.format(faces[face_idx].id))
                 if curr_img is None:
                     continue
                 face_indexes.append(face_idx)
@@ -73,19 +79,28 @@ class Command(BaseCommand):
                 curr_img = facenet.prewhiten(curr_img)
                 whitened_batch.append(curr_img)
                 if len(whitened_batch) == batch_size:
-                    print face_idx+1
-                    feed_dict = {images_placeholder:whitened_batch, phase_train_placeholder:False}
+                    print face_idx + 1
+                    feed_dict = {images_placeholder: whitened_batch, phase_train_placeholder: False}
                     embs = sess.run(embeddings, feed_dict=feed_dict)
-                    for i in range(len(face_indexes)):
-                        faces[face_indexes[i]].features = json.dumps(embs[i].tolist())
-                        faces[face_indexes[i]].save()
+                    features = [
+                        FaceFeatures(
+                            features=json.dumps(embs[i].tolist()),
+                            instance=faces[face_indexes[i]],
+                            labeler=feature_labeler)
+                        for i in range(len(face_indexes))]
+                    FaceFeatures.objects.bulk_create(features)
+
                     #reset for the next batch
-                    first_face_idx = face_idx+1
+                    first_face_idx = face_idx + 1
                     whitened_batch = []
                     face_indexes = []
             if len(whitened_batch) > 0:
-                feed_dict = {images_placeholder:whitened_batch, phase_train_placeholder:False}
+                feed_dict = {images_placeholder: whitened_batch, phase_train_placeholder: False}
                 embs = sess.run(embeddings, feed_dict=feed_dict)
-                for i in range(len(face_indexes)):
-                    faces[face_indexes[i]].features = json.dumps(embs[i].tolist())
-                    faces[face_indexes[i]].save()
+                features = [
+                    FaceFeatures(
+                        features=json.dumps(embs[i].tolist()),
+                        instance=faces[face_indexes[i]],
+                        labeler=feature_labeler)
+                    for i in range(len(face_indexes))]
+                FaceFeatures.objects.bulk_create(features)

@@ -18,8 +18,10 @@ def load_imgs(img_directory):
 
     return imgs
 
+
 # FIXME: Exit gracefully if same images being sent to clustering algorithm a
 # second time...
+
 
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
@@ -35,7 +37,7 @@ class Command(BaseCommand):
         print model_path
 
         #load facenet models and start tensorflow
-        out_size=160
+        out_size = 160
 
         batch_size = 1000
 
@@ -43,20 +45,19 @@ class Command(BaseCommand):
             if path == '':
                 return
             print path
-            video = Video.objects.filter(path=path).get()
-            labelset = video.detected_labelset()
-            faces = Face.objects.filter(frame__labelset=labelset).all()
+            video = Video.objects.get(path=path)
+            faces = FaceInstance.objects.filter(frame__video=video).all()
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
             print len(faces)
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
                 curr_face = faces[face_idx]
-                curr_img_path = './assets/thumbnails/{}_{}.jpg'.format(labelset.id, curr_face.id)
+                curr_img_path = './assets/thumbnails/face_{}.jpg'.format(curr_face.id)
                 try:
                     rep = of.get_rep(curr_img_path)
                 except Exception:
                     continue
-                curr_face.features=json.dumps(rep.tolist())
+                curr_face.features = json.dumps(rep.tolist())
                 curr_face.save()
                 if (face_idx + 1) % 100 == 0:
                     print face_idx

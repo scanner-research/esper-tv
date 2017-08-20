@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 import query.models as models
 
 class Command(BaseCommand):
-    help = 'Remove rows from the database, e.g. python manage.py cleanup Face'
+    help = 'Remove rows from the database, e.g. python manage.py cleanup Concept'
 
     def add_arguments(self, parser):
         parser.add_argument('table')

@@ -54,6 +54,10 @@ body {
 .bounding-boxes {
     position: relative;
 
+    img {
+        height: 100px;
+    }
+
     .bounding-box {
         position: absolute;
         border-width: 2px;
@@ -69,6 +73,16 @@ body {
         &:hover {
             border-width: 3px;
         }
+    }
+}
+
+/* .search-input { */
+/*     width: 300px; */
+/* } */
+
+.search-results {
+    .bounding-boxes {
+        float: left;
     }
 }
 
@@ -136,8 +150,5 @@ body {
             margin: 8px;
         }
 
-        img {
-            height: 100px;
-        }
     }
 }
