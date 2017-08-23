@@ -30,7 +30,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('path')
-        parser.add_argument('labeler', default='tinyfaces')
+        parser.add_argument('labeler', nargs='?', default='tinyfaces')
 
     def handle(self, *args, **options):
         face_labeler = Labeler.objects.get(name=options['labeler'])

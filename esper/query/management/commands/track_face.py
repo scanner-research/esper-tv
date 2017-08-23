@@ -6,7 +6,7 @@ import tensorflow as tf
 import cv2
 import os
 import numpy as np
-
+from django.core.exceptions import ValidationError
 
 def dist(feat1, feat2):
     return np.sum(np.square(np.subtract(feat1, feat2)))
@@ -62,8 +62,7 @@ class Command(BaseCommand):
             face_features = FaceFeatures.objects.filter(
                 instance__frame__video=video,
                 instance__labeler=bbox_labeler,
-                labeler=feature_labeler).order_by('instance__frame').all()
-
+                labeler=feature_labeler).order_by('instance__frame__number').all()
             fps = video.fps
 
             # [first_frame, last_frame, all_features, avg_feature, sum_feature]
@@ -76,7 +75,6 @@ class Command(BaseCommand):
             old_frame_id = 0
             #index in the face array NOT the face id
             for face_idx in range(faces_len):
-
                 curr_face = face_features[face_idx]
                 curr_feature = np.array(json.loads(curr_face.features))
                 curr_face_id = curr_face.instance.id
@@ -104,11 +102,14 @@ class Command(BaseCommand):
                                     continue
                                 track = Face()
                                 track.save()
+                                last_frame = None
                                 for seq_face_id in item[2]:
                                     seq_face = FaceInstance.objects.get(id=seq_face_id)
+                                    if seq_face.frame.number == last_frame: continue
                                     seq_face.concept = track
                                     in_seq += 1
                                     seq_face.save()
+                                    last_frame = seq_face.frame.number
 
                     old_frame_id = curr_frame_id
                 best_match = -1
@@ -138,11 +139,14 @@ class Command(BaseCommand):
                     continue
                 track = Face()
                 track.save()
+                last_frame = None
                 for seq_face_id in item[2]:
                     seq_face = FaceInstance.objects.get(id=seq_face_id)
+                    if seq_face.frame.number == last_frame: continue
                     seq_face.concept = track
                     in_seq += 1
                     seq_face.save()
+                    last_frame = seq_face.frame.number
             print 'total faces: ', faces_len
             print 'in output seq: ', in_seq
             print 'dropped in short seq: ', short_seq

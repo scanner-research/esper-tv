@@ -76,13 +76,18 @@ body {
     }
 }
 
-/* .search-input { */
-/*     width: 300px; */
-/* } */
+.search-result {
+    float: left;
+    position: relative;
 
-.search-results {
+    video {
+        position: absolute;
+        z-index: 0;
+        height: 100px;
+    }
+
     .bounding-boxes {
-        float: left;
+        z-index: 1;
     }
 }
 

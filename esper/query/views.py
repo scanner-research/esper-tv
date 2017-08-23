@@ -178,35 +178,51 @@ def handlabeled(request):
 
 def search(request):
     concept = request.GET.get('concept')
+    # TODO(wcrichto): Unify video and face cases?
+    # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
+    # an individual query for every concept, which is a Bad Idea.
     if concept == 'video':
-        min_frame_numbers = Video.objects.values('id').annotate(frame=models.Min('frame__number'))
+        min_frame_numbers = Video.objects.values('id').annotate(
+            min_frame=models.Min('frame__number'), max_frame=models.Max('frame__number'))
         qs = [
-            Video.objects.filter(id=f['id'], frame__number=f['frame']).values('id', 'frame__id').get()
-            for f in min_frame_numbers
+            Video.objects.filter(id=f['id'], frame__number=f['min_frame']).distinct().values(
+                'id', 'frame__id').get() for f in min_frame_numbers
         ]
         clips = defaultdict(list)
-        for result in qs:
-            clips[result['id']].append({'frame': result['frame__id'], 'bboxes': []})
+        for result, f in zip(qs, min_frame_numbers):
+            clips[result['id']].append({
+                'frame': result['frame__id'],
+                'bboxes': [],
+                'start': f['min_frame'],
+                'end': f['max_frame']
+            })
         clips = dict(clips)
 
     elif concept == 'face':
         min_frame_numbers = Face.objects.values('id').annotate(
-            frame=models.Min('faceinstance__frame__number'))
+            min_frame=models.Min('faceinstance__frame__number'),
+            max_frame=models.Max('faceinstance__frame__number'))
         qs = [
-            Face.objects.filter(id=f['id'], faceinstance__frame__number=f['frame']).values(
-                'id', 'faceinstance__frame__id', 'faceinstance__fame__video__id',
-                'faceinstance__bbox') for f in min_frame_numbers
+            Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(
+                'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
+                'faceinstance__bbox').get() for f in min_frame_numbers if f['min_frame'] is not None
         ]
+        print qs
+        sys.stdout.flush()
         clips = defaultdict(list)
-        for result in qs:
+        for result, f in zip(qs, min_frame_numbers):
             clips[result['faceinstance__frame__video__id']].append({
                 'concept':
                 result['id'],
                 'frame':
                 result['faceinstance__frame__id'],
+                'start':
+                f['min_frame'],
+                'end':
+                f['max_frame'],
                 'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))]
             })
         clips = dict(clips)
-    videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}
 
+    videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}
     return JsonResponse({'clips': clips, 'videos': videos})

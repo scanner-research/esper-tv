@@ -19,8 +19,11 @@ class ProtoField(models.BinaryField):
 
     def to_python(self, value):
         v = self._proto()
-        v.ParseFromString(value)
-        return v
+        try:
+            v.ParseFromString(value)
+            return v
+        except TypeError:
+            return None
 
     def deconstruct(self):
         name, path, args, kwargs = super(ProtoField, self).deconstruct()
@@ -34,7 +37,7 @@ def CharField():
 class VideoBase(models.Model):
     path = CharField()
     num_frames = models.IntegerField()
-    fps = models.IntegerField()
+    fps = models.FloatField()
     width = models.IntegerField()
     height = models.IntegerField()
     timestamp = models.DateTimeField(null=True, blank=True)
@@ -64,10 +67,15 @@ def InstanceBase(Frame, Labeler, Concept):
         bbox = ProtoField(proto.BoundingBox)
         frame = models.ForeignKey(Frame)
         labeler = models.ForeignKey(Labeler)
-        concept = models.ForeignKey(Concept, null=True, blank=True)
+        concept = models.ForeignKey(Concept, null=True, blank=True, on_delete=models.SET_NULL)
 
         class Meta:
             abstract = True
+            unique_together = ("concept", "frame")
+
+        def save(self, *args, **kwargs):
+            self.validate_unique()
+            super(InstanceBase, self).save(*args, **kwargs)
 
     return InstanceBase
 
@@ -80,6 +88,11 @@ def FeaturesBase(Labeler, Instance):
 
         class Meta:
             abstract = True
+            unique_together = ("labeler", "instance")
+
+        def save(self, *args, **kwargs):
+            self.validate_unique()
+            super(InstanceBase, self).save(*args, **kwargs)
 
     return FeaturesBase
 
