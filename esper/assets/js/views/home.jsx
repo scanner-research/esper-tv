@@ -39,6 +39,9 @@ class SearchInput extends React.Component {
     face: [
       ['id', 'int'],
       ['identity', 'enum']
+    ],
+    face_diffs: [
+      ['id', 'int']
     ]
   }
 
@@ -69,6 +72,7 @@ class SearchInput extends React.Component {
   }
 
   _onAddProperty(e) {
+    console.log("adding property")
     let form = ReactDOM.findDOMNode(this._form);
     let key = form.elements['property-key'].value;
     let value = form.elements['property-value'].value;
@@ -85,6 +89,7 @@ class SearchInput extends React.Component {
           <FormControl componentClass="select" placeholder="Select...">
             <option value="video">Video</option>
             <option value="face">Face</option>
+            <option value="face_diffs">Face Diffs</option>
           </FormControl>
         </FormGroup>
         <FormGroup controlId="active-properties">
