@@ -24,6 +24,8 @@ DIFF_BBOX_THRESHOLD = 0.35
 # 24 frames/sec - so this requires more than a sec overlap
 FRAME_OVERLAP_THRESHOLD = 25
 
+colors = ['white', 'red', 'blue', 'green', 'cyan', 'black', 'yellow']
+
 def index(request):
     return render(request, 'index.html')
 
@@ -196,6 +198,8 @@ def _get_face_min_frames(labeler='tinyfaces'):
     particular labeler.
     @ret: dict, with keys id, min_frame, max_frame.
     '''
+    # TODO: labeler seems to be a wasted db call (?) -> could get rid of it by
+    # converting return value to dict and just adding labeler manually.
     return Face.objects.filter(labeler__name=labeler) \
     .values('id').annotate(min_frame=models.Min('faceinstance__frame__number'),
         max_frame=models.Max('faceinstance__frame__number'))
@@ -210,15 +214,20 @@ def _get_face_query(min_frame_numbers):
     return [Face.objects.filter(id=f['id'],
             faceinstance__frame__number=f['min_frame']).values(
             'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
-            'faceinstance__bbox').get() for f in min_frame_numbers if
+            'faceinstance__bbox', 'labeler__name').get() for f in min_frame_numbers if
             f['min_frame'] is not None]
 
 def _get_face_clips(results):
     '''
     @results: zipped value having results, min_frame_numbers (as returned from
     _get_face_query, and _get_face_min_frames).
-    @ret: dict
+    @ret: dict, with keys:
+        -
+        - color: What color the bounding box around it should be. Essentially mapping each labeler
+          to a color.
     '''
+    # FIXME(pari): can probably save some sql calls - like for getting frame__video__id, or
+    # labeler_name, if we process it one video at a time? Not sure if its worth saving them though.
     clips = defaultdict(list)
     for result, f in results:
         clips[result['faceinstance__frame__video__id']].append({
@@ -230,68 +239,71 @@ def _get_face_clips(results):
             f['min_frame'],
             'end':
             f['max_frame'],
-            'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))]
+            'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))],
+            'color' : colors[hash(result['labeler__name']) % len(colors)]
         })
+
+    # sort these from frame numbers. This is especially useful when diffing the output.
+    for k in clips:
+        clips[k].sort(key = lambda x: x['start'])
 
     return dict(clips)
 
-def _get_face_label_mismatches(zip1, zip2, mistakes, overlaps=[]):
+def _find_frame_overlaps(cur_labeler, frame, labelers):
     '''
     '''
-    # keep track of overlaps being added now - so does not modify the passed in overlaps
-    cur_overlaps = []
-    for i, (result, f) in enumerate(zip1):
-        # this check is useful for the scenario when we do an outer loop over results2, can
-        # avoid the samples that have already been considered.
-        if i in overlaps:
+    overlaps = []
+    for k, v in labelers.iteritems():
+        if k == cur_labeler:
             continue
-
-        mistake = True
-        bbox = result['faceinstance__bbox']
-        for j, (result2, f2) in enumerate(zip2):
-            if f2['min_frame'] > f['max_frame'] or f2['max_frame'] < f['min_frame']:
-                print('skipping j')
-                continue
-            else:
-                print('not skipping j')
-
-            # first check if the frames overlap - as the two labelers might have marked
-            # frames differently
-            a = (f['min_frame'], f['max_frame'])
-            b = (f2['min_frame'], f2['max_frame'])
-            o = _overlap(a,b)
-            print('overlap: ', o)
+        for (qs, cur_frame) in v:
+            # FIXME: if assuming v is sorted according to min_frames, then we can do this.
+            # if cur_frame['min_frame'] > frame['max_frame']:
+                # # skip the rest of this key.
+                # break
+            a = (frame['min_frame'], frame['max_frame'])
+            b = (cur_frame['min_frame'], cur_frame['max_frame'])
             if _overlap(a,b) > FRAME_OVERLAP_THRESHOLD:
-                print('overlap over threshold')
-                # we don't want same frame to be considered when looping over result2
-                # first.
-                cur_overlaps.append(j)
-                # frames overlap, now check if bboxes are close enough.
-                print('bbox dist: ', _bbox_dist(bbox, result2['faceinstance__bbox']))
-                if _bbox_dist(bbox, result2['faceinstance__bbox']) < DIFF_BBOX_THRESHOLD:
+                overlaps.append((qs, cur_frame))
+
+    return overlaps
+
+def _get_face_label_mismatches(labelers):
+    '''
+    @labelers: dict, with keys as name of labels, and values as zip(qs, min_frame_numbers)
+    TODO: can definitely optimize these loops further.
+    '''
+    # TODO: can keep track of overlaps to skip over some of the faces - especially in 2nd/3rd loop.
+    mistakes = []
+    for k, v in labelers.iteritems():
+        # loop over each track in v.
+        for (qs, min_frames) in v:
+            bbox = qs['faceinstance__bbox']
+            # find all possible frame overlaps between this face and others.
+            overlaps = _find_frame_overlaps(k, min_frames, labelers)
+            # check if any of these overlaps have bbox's within an acceptable threshold. If they
+            # don't then it is a mistake.
+            mistake = True
+            for (o, _) in overlaps:
+                if _bbox_dist(bbox, o['faceinstance__bbox']) < DIFF_BBOX_THRESHOLD:
+                    # within a threshold - so the labelers agree on this.
                     mistake = False
-                else:
-                    mistake = True
-                    # add it to mistakes
-                    mistakes.append((result2, f2))
                     break
-            else:
-                print('overlap less!')
 
-        if mistake:
-            mistakes.append((result, f))
+            # TODO: When we find a mistake, not sure if we should also add frames from overlaps
+            # For now, just ignore them as there could be too many of those etc - and as long as we
+            # loop over each labeler keys, then eventually those would get added.
+            if mistake:
+                mistakes.append((qs, min_frames))
 
-    print('at the end, num mistakes = ', len(mistakes))
-    return cur_overlaps
+    return mistakes
 
 def search(request):
-    print('python printing!!!!!')
     concept = request.GET.get('concept')
     # TODO(wcrichto): Unify video and face cases?
     # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
     # an individual query for every concept, which is a Bad Idea.
 
-    # TODO (pari): remove the logging stuff
     if concept == 'video':
         min_frame_numbers = Video.objects.values('id').annotate(
             min_frame=models.Min('frame__number'), max_frame=models.Max('frame__number'))
@@ -319,26 +331,24 @@ def search(request):
 
     # Mismatched labels.
     elif concept == 'face_diffs':
-        print('***********face diffs*************')
-        min_frame_numbers = _get_face_min_frames(labeler='tinyfaces')
-        min_frame_numbers2 = _get_face_min_frames(labeler='dummy')
-        print("num min frame1 : ", len(min_frame_numbers))
-        print('******************')
-        print("num min frame2 : ", len(min_frame_numbers2))
+        # figure out the different labelers used
+        labeler_names = Face.objects.values('labeler__name').distinct()
+        labeler_names = [l['labeler__name'] for l in labeler_names]
 
-        qs = _get_face_query(min_frame_numbers)
-        qs2 = _get_face_query(min_frame_numbers2)
+        labelers = {}
+        # process each distinct labeler
+        for labeler in labeler_names:
+            min_frame_numbers = _get_face_min_frames(labeler=labeler)
+            # FIXME: sort min_frame_numbers - so then can optimize the loops when finding overlaps.
+            # not sure why its failing if I convert it to a list.
+            qs = _get_face_query(min_frame_numbers)
 
-        mistakes = []
-        overlaps = _get_face_label_mismatches(zip(qs, min_frame_numbers), zip(qs2, min_frame_numbers2),
-                    mistakes)
-        print('mistakes after round 1: ', mistakes)
-        _ = _get_face_label_mismatches(zip(qs2, min_frame_numbers2), zip(qs, min_frame_numbers),
-                mistakes, overlaps=overlaps)
+            # TODO: if similar stuff can be used across other searches, potentially could make
+            # classes instead of using these zips?
+            labelers[labeler] = zip(qs, min_frame_numbers)
 
+        mistakes = _get_face_label_mismatches(labelers)
         clips = _get_face_clips(mistakes)
-        print('clips  = ', clips)
 
     videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}
-
     return JsonResponse({'clips': clips, 'videos': videos})

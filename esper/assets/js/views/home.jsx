@@ -4,7 +4,6 @@ import {observable} from 'mobx';
 import {observer} from 'mobx-react';
 import axios from 'axios';
 import {Box, BoundingBoxView} from './bbox.jsx';
-
 import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Button} from 'react-bootstrap';
 
 class SearchResult {
@@ -190,8 +189,9 @@ class SearchResultView extends React.Component {
          : <div />}
         <BoundingBoxView
             bboxes={this.props.clip.bboxes}
-            width={this.props.video.width}
-            height={this.props.video.height}
+            color = {this.props.clip.color}
+            width= {this.props.video.width}
+            height= {this.props.video.height}
             path={`/static/thumbnails/frame_${this.props.clip.frame}.jpg`}/>
       </div>
     );
