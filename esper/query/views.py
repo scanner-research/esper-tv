@@ -235,32 +235,39 @@ def _get_face_clips(results):
 
     return dict(clips)
 
-def _get_face_label_mismatches(result1, result2, mistakes, overlaps=[]):
-
+def _get_face_label_mismatches(zip1, zip2, mistakes, overlaps=[]):
+    '''
+    '''
     # keep track of overlaps being added now - so does not modify the passed in overlaps
     cur_overlaps = []
-    for i, (result, f) in enumerate(result1):
+    for i, (result, f) in enumerate(zip1):
         # this check is useful for the scenario when we do an outer loop over results2, can
         # avoid the samples that have already been considered.
         if i in overlaps:
             continue
+
         mistake = True
         bbox = result['faceinstance__bbox']
-
-        for j, (result2, f2) in enumerate(result2):
+        for j, (result2, f2) in enumerate(zip2):
             if f2['min_frame'] > f['max_frame'] or f2['max_frame'] < f['min_frame']:
+                print('skipping j')
                 continue
+            else:
+                print('not skipping j')
 
             # first check if the frames overlap - as the two labelers might have marked
             # frames differently
             a = (f['min_frame'], f['max_frame'])
             b = (f2['min_frame'], f2['max_frame'])
             o = _overlap(a,b)
+            print('overlap: ', o)
             if _overlap(a,b) > FRAME_OVERLAP_THRESHOLD:
+                print('overlap over threshold')
                 # we don't want same frame to be considered when looping over result2
                 # first.
                 cur_overlaps.append(j)
                 # frames overlap, now check if bboxes are close enough.
+                print('bbox dist: ', _bbox_dist(bbox, result2['faceinstance__bbox']))
                 if _bbox_dist(bbox, result2['faceinstance__bbox']) < DIFF_BBOX_THRESHOLD:
                     mistake = False
                 else:
@@ -268,12 +275,17 @@ def _get_face_label_mismatches(result1, result2, mistakes, overlaps=[]):
                     # add it to mistakes
                     mistakes.append((result2, f2))
                     break
+            else:
+                print('overlap less!')
 
         if mistake:
             mistakes.append((result, f))
-        return cur_overlaps
+
+    print('at the end, num mistakes = ', len(mistakes))
+    return cur_overlaps
 
 def search(request):
+    print('python printing!!!!!')
     concept = request.GET.get('concept')
     # TODO(wcrichto): Unify video and face cases?
     # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
@@ -298,18 +310,21 @@ def search(request):
         clips = dict(clips)
 
     elif concept == 'face':
-        # otherwise this list would also include Faces from other labelers.
+        # need to specify labeler, otherwise this list would also include Faces from other labelers.
         min_frame_numbers = _get_face_min_frames(labeler='tinyfaces')
         qs = _get_face_query(min_frame_numbers)
 
-        print qs
         sys.stdout.flush()
         clips = _get_face_clips(zip(qs, min_frame_numbers))
 
     # Mismatched labels.
     elif concept == 'face_diffs':
+        print('***********face diffs*************')
         min_frame_numbers = _get_face_min_frames(labeler='tinyfaces')
         min_frame_numbers2 = _get_face_min_frames(labeler='dummy')
+        print("num min frame1 : ", len(min_frame_numbers))
+        print('******************')
+        print("num min frame2 : ", len(min_frame_numbers2))
 
         qs = _get_face_query(min_frame_numbers)
         qs2 = _get_face_query(min_frame_numbers2)
@@ -317,9 +332,12 @@ def search(request):
         mistakes = []
         overlaps = _get_face_label_mismatches(zip(qs, min_frame_numbers), zip(qs2, min_frame_numbers2),
                     mistakes)
+        print('mistakes after round 1: ', mistakes)
         _ = _get_face_label_mismatches(zip(qs2, min_frame_numbers2), zip(qs, min_frame_numbers),
                 mistakes, overlaps=overlaps)
+
         clips = _get_face_clips(mistakes)
+        print('clips  = ', clips)
 
     videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}
 
