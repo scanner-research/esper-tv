@@ -4,6 +4,7 @@ import {observable} from 'mobx';
 import {observer} from 'mobx-react';
 import axios from 'axios';
 import {Box, BoundingBoxView} from './bbox.jsx';
+import {mediaUrl} from 'utils';
 
 import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Button} from 'react-bootstrap';
 
@@ -180,14 +181,14 @@ class SearchResultView extends React.Component {
            onClick={this._onClick}>
         {this.state.hover
          ? <video autoPlay muted ref={(n) => {this._video = n;}} style={vidStyle}>
-           <source src={`/fs/usr/src/app/${this.props.video.path}`} />
+           <source src={`/media/${this.props.video.path}`} />
          </video>
          : <div />}
         <BoundingBoxView
             bboxes={this.props.clip.bboxes}
             width={this.props.video.width}
             height={this.props.video.height}
-            path={`/static/thumbnails/frame_${this.props.clip.frame}.jpg`}/>
+            path={`/media/assets/thumbnails/frame_${this.props.clip.frame}.jpg`} />
       </div>
     );
   }

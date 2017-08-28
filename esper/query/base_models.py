@@ -1,6 +1,7 @@
 from django.db import models
+from django.db.models.base import ModelBase
 from scannerpy import ProtobufGenerator, Config
-
+import sys
 cfg = Config()
 proto = ProtobufGenerator(cfg)
 MAX_STR_LEN = 256
@@ -34,7 +35,87 @@ def CharField():
     return models.CharField(max_length=MAX_STR_LEN)
 
 
-class VideoBase(models.Model):
+current_dataset = None
+datasets = {}
+
+
+class Dataset(object):
+    def __init__(self, name):
+        self.name = name
+        datasets[name] = self
+
+    def __enter__(self):
+        global current_dataset
+        current_dataset = self
+
+    def __exit__(self, type, val, traceback):
+        global current_dataset
+        current_dataset = None
+
+
+def ForeignKey(model, name, **kwargs):
+    return models.ForeignKey(model, related_query_name=name.lower(), **kwargs)
+
+
+class BaseMeta(ModelBase):
+    def __new__(cls, name, bases, attrs):
+        global current_dataset
+        base = bases[0]
+        is_base_class = base is models.Model
+
+        if is_base_class and not 'Meta' in attrs:
+
+            class Meta:
+                abstract = True
+
+            attrs['Meta'] = Meta
+
+        if not is_base_class:
+            if base.__name__ == 'Frame':
+                attrs['video'] = ForeignKey(current_dataset.Video, name)
+            child_name = '{}_{}'.format(current_dataset.name, name)
+        else:
+            child_name = name
+
+        new_cls = super(BaseMeta, cls).__new__(cls, child_name, bases, attrs)
+
+        if not is_base_class:
+            setattr(current_dataset, name, new_cls)
+            if base.__name__ == 'Concept':
+                register_concept(name)
+
+        return new_cls
+
+
+def register_concept(name):
+    global current_datset
+
+    class Meta:
+        unique_together = ('concept', 'frame')
+
+    cls_name = '{}Instance'.format(name)
+    inst = type(cls_name, (Instance, ), {
+        '__module__': current_dataset.Video.__module__,
+        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
+        'frame': ForeignKey(current_dataset.Frame, cls_name),
+        'concept': ForeignKey(getattr(current_dataset, name), cls_name, null=True),
+        'Meta': Meta
+    })
+
+    class Meta:
+        unique_together = ('labeler', 'instance')
+
+    cls_name = '{}Features'.format(name)
+    type(cls_name, (Features, ), {
+        '__module__': current_dataset.Video.__module__,
+        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
+        'instance': ForeignKey(inst, cls_name),
+        'Meta': Meta
+    })
+
+
+class Video(models.Model):
+    __metaclass__ = BaseMeta
     path = CharField()
     num_frames = models.IntegerField()
     fps = models.FloatField()
@@ -42,63 +123,51 @@ class VideoBase(models.Model):
     height = models.IntegerField()
     timestamp = models.DateTimeField(null=True, blank=True)
 
-    class Meta:
-        abstract = True
+
+class Frame(models.Model):
+    __metaclass__ = BaseMeta
+    number = models.IntegerField()
 
 
-def FrameBase(Video):
-    class FrameBase(models.Model):
-        number = models.IntegerField()
-        video = models.ForeignKey(Video)
-
-        class Meta:
-            abstract = True
-
-    return FrameBase
-
-
-class ConceptBase(models.Model):
-    class Meta:
-        abstract = True
-
-
-def InstanceBase(Frame, Labeler, Concept):
-    class InstanceBase(models.Model):
-        bbox = ProtoField(proto.BoundingBox)
-        frame = models.ForeignKey(Frame)
-        labeler = models.ForeignKey(Labeler)
-        concept = models.ForeignKey(Concept, null=True, blank=True, on_delete=models.SET_NULL)
-
-        class Meta:
-            abstract = True
-            unique_together = ("concept", "frame")
-
-        def save(self, *args, **kwargs):
-            self.validate_unique()
-            super(InstanceBase, self).save(*args, **kwargs)
-
-    return InstanceBase
-
-
-def FeaturesBase(Labeler, Instance):
-    class FeaturesBase(models.Model):
-        features = models.BinaryField()
-        labeler = models.ForeignKey(Labeler)
-        instance = models.ForeignKey(Instance)
-
-        class Meta:
-            abstract = True
-            unique_together = ("labeler", "instance")
-
-        def save(self, *args, **kwargs):
-            self.validate_unique()
-            super(InstanceBase, self).save(*args, **kwargs)
-
-    return FeaturesBase
-
-
-class LabelerBase(models.Model):
+class Labeler(models.Model):
+    __metaclass__ = BaseMeta
     name = CharField()
 
-    class Meta:
-        abstract = True
+
+class Concept(models.Model):
+    __metaclass__ = BaseMeta
+
+
+class Model(models.Model):
+    __metaclass__ = BaseMeta
+
+
+class Instance(models.Model):
+    __metaclass__ = BaseMeta
+
+    bbox = ProtoField(proto.BoundingBox)
+
+    def save(self, *args, **kwargs):
+        self.validate_unique()
+        super(InstanceBase, self).save(*args, **kwargs)
+
+
+class Features(models.Model):
+    __metaclass__ = BaseMeta
+
+    features = models.BinaryField()
+
+    def save(self, *args, **kwargs):
+        self.validate_unique()
+        super(InstanceBase, self).save(*args, **kwargs)
+
+
+class ModelDelegator:
+    def __init__(self, name):
+        self._dataset = datasets[name]
+
+    def datasets(self):
+        return datasets.keys()
+
+    def __getattr__(self, k):
+        return getattr(self._dataset, k)

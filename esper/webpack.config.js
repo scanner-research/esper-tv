@@ -64,7 +64,8 @@ module.exports = {
     modules: ['node_modules', 'assets'],
     alias: {
       'views': path.resolve('assets/js/views'),
-      'models': path.resolve('assets/js/models')
+      'models': path.resolve('assets/js/models'),
+      'utils': path.resolve('assets/js/utils.jsx'),
     },
     extensions: ['.js', '.jsx', '.scss', '.css']
   }

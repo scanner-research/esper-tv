@@ -1,7 +1,0 @@
-[storage]
-type = "posix"
-db_path = "/usr/src/app/scanner_db"
-
-[network]
-master_port = "5001"
-worker_port = "5002"

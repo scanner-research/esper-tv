@@ -1,17 +1,18 @@
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.forms.models import model_to_dict
-from models import *
+from base_models import ModelDelegator
 from timeit import default_timer as now
 import sys
 from google.protobuf.json_format import MessageToJson
 import json
 from collections import defaultdict
-from scannerpy import Config
+from scannerpy import Config, Database, Job
 from django.db import connection
 import logging
 import time
-import django.db.models as models
+from django.db.models import Min, Max
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,35 @@ logger = logging.getLogger(__name__)
 Config()
 from scanner.types_pb2 import BoundingBox
 
+models = ModelDelegator('krishna')
+Video, Frame, Face = models.Video, models.Frame, models.Face
 
 def index(request):
     return render(request, 'index.html')
+
+def fallback(request):
+    request_path = request.get_full_path().split('/')[3:]
+    filename, _ = os.path.splitext(request_path[-1])
+    [ty, id] = filename.split('_')
+    assert ty == 'frame'
+
+    frame = Frame.objects.get(id=id)
+    with Database() as db:
+        frame = db.table(frame.video.path).as_op().gather([frame.number])
+        resized = db.ops.Resize(frame=frame, width=640, preserve_aspect=True)
+        compressed = db.ops.ImageEncoder(frame=resized)
+        job = Job(columns=[compressed], name='_ignore')
+        output = db.run(
+            job,
+            force=True,
+            show_progress=False,
+            pipeline_instances_per_node=1)
+        _, jpg = next(output.load(['img']))
+        jpg = jpg[0]
+
+        db.config.storage.write(str('/'.join(request_path)), jpg)
+
+    return HttpResponse(jpg, content_type="image/jpeg")
 
 
 def videos(request):
@@ -183,7 +210,7 @@ def search(request):
     # an individual query for every concept, which is a Bad Idea.
     if concept == 'video':
         min_frame_numbers = Video.objects.values('id').annotate(
-            min_frame=models.Min('frame__number'), max_frame=models.Max('frame__number'))
+            min_frame=Min('frame__number'), max_frame=Max('frame__number'))
         qs = [
             Video.objects.filter(id=f['id'], frame__number=f['min_frame']).distinct().values(
                 'id', 'frame__id').get() for f in min_frame_numbers
@@ -200,8 +227,8 @@ def search(request):
 
     elif concept == 'face':
         min_frame_numbers = Face.objects.values('id').annotate(
-            min_frame=models.Min('faceinstance__frame__number'),
-            max_frame=models.Max('faceinstance__frame__number'))
+            min_frame=Min('faceinstance__frame__number'),
+            max_frame=Max('faceinstance__frame__number'))
         qs = [
             Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(
                 'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
