@@ -213,9 +213,9 @@ export default class Home extends React.Component {
         </div>
         <div className='search-results col-md-9'>
           {video_keys.map((key, i) =>
-            <div key={i}>
+            <div className='search-result-video' key={i}>
               <div>{this._result.videos[key].path}</div>
-              <div className='search-result-video'>
+              <div>
                 {this._result.clips[key].map((clip, j) =>
                   <SearchResultView key={j} video={this._result.videos[key]} clip={clip} />
                  )}

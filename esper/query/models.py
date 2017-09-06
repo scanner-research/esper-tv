@@ -39,3 +39,6 @@ with base.Dataset('krishna'):
 
     class Face(base.Concept):
         pass
+
+    class Person(base.Concept):
+        pass

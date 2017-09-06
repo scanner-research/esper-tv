@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models.base import ModelBase
+from django_bulk_update.manager import BulkUpdateManager
 from scannerpy import ProtobufGenerator, Config
 import sys
 cfg = Config()
@@ -31,8 +32,8 @@ class ProtoField(models.BinaryField):
         return name, path, [self._proto] + args, kwargs
 
 
-def CharField():
-    return models.CharField(max_length=MAX_STR_LEN)
+def CharField(*args, **kwargs):
+    return models.CharField(*args, max_length=MAX_STR_LEN, **kwargs)
 
 
 current_dataset = None
@@ -63,19 +64,23 @@ class BaseMeta(ModelBase):
         base = bases[0]
         is_base_class = base is models.Model
 
-        if is_base_class and not 'Meta' in attrs:
+        if is_base_class:
+            if not 'Meta' in attrs:
+                class Meta:
+                    abstract = True
+                attrs['Meta'] = Meta
 
-            class Meta:
-                abstract = True
+            attrs['objects'] = BulkUpdateManager()
+            child_name = name
 
-            attrs['Meta'] = Meta
-
-        if not is_base_class:
+        else:
             if base.__name__ == 'Frame':
                 attrs['video'] = ForeignKey(current_dataset.Video, name)
+                class Meta:
+                    unique_together = ('video', 'number')
+                attrs['Meta'] = Meta
+
             child_name = '{}_{}'.format(current_dataset.name, name)
-        else:
-            child_name = name
 
         new_cls = super(BaseMeta, cls).__new__(cls, child_name, bases, attrs)
 
@@ -116,7 +121,7 @@ def register_concept(name):
 
 class Video(models.Model):
     __metaclass__ = BaseMeta
-    path = CharField()
+    path = CharField(db_index=True)
     num_frames = models.IntegerField()
     fps = models.FloatField()
     width = models.IntegerField()
@@ -126,12 +131,15 @@ class Video(models.Model):
 
 class Frame(models.Model):
     __metaclass__ = BaseMeta
-    number = models.IntegerField()
+    number = models.IntegerField(db_index=True)
 
+    def save(self, *args, **kwargs):
+        self.validate_unique()
+        super(Frame, self).save(*args, **kwargs)
 
 class Labeler(models.Model):
     __metaclass__ = BaseMeta
-    name = CharField()
+    name = CharField(db_index=True)
 
 
 class Concept(models.Model):
@@ -149,7 +157,7 @@ class Instance(models.Model):
 
     def save(self, *args, **kwargs):
         self.validate_unique()
-        super(InstanceBase, self).save(*args, **kwargs)
+        super(Instance, self).save(*args, **kwargs)
 
 
 class Features(models.Model):
@@ -159,7 +167,7 @@ class Features(models.Model):
 
     def save(self, *args, **kwargs):
         self.validate_unique()
-        super(InstanceBase, self).save(*args, **kwargs)
+        super(Features, self).save(*args, **kwargs)
 
 
 class ModelDelegator:

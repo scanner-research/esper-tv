@@ -85,10 +85,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'esper',
         'USER': os.environ.get('DJANGO_DB_USER'),
-        'HOST': os.environ.get('DJANGO_DB_HOST'),
-        'OPTIONS': {
-            'init_command': 'SET GLOBAL max_connections = 100000'
-        }
+        'HOST': 'db',
     }
 }
 

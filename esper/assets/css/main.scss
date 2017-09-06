@@ -76,6 +76,14 @@ body {
     }
 }
 
+.search-result-video {
+    &:after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+}
+
 .search-result {
     float: left;
     position: relative;

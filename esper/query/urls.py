@@ -8,5 +8,6 @@ urlpatterns = [
     url(r'^api/handlabeled', views.handlabeled, name='handlabeled'),
     url(r'^api/search', views.search, name='search'),
     url(r'^fallback', views.fallback, name='fallback'),
+    url(r'^batch_fallback', views.batch_fallback, name='batch_fallback'),
     url(r'^', views.index, name='index')
 ]

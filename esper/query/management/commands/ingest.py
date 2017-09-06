@@ -12,11 +12,13 @@ from concurrent.futures import ThreadPoolExecutor
 import multiprocessing as mp
 from timeit import default_timer as now
 import os
+import requests
 
 GOOGLE = os.environ['ESPER_ENV'] == 'google'
 BUCKET = 'scanner-data'
 models = ModelDelegator('krishna')
 Video, Frame = models.Video, models.Frame
+
 
 def run(s, shell=False, output=False):
     if shell == True:
@@ -67,60 +69,44 @@ def extract_audio(video):
     run(cmd)
 
 
-# def extract_frames(video):
-#     print 'Writing out thumbnails'
-#     base_path = 'assets/thumbnails'
-#     tmpdir = tempfile.mkdtemp()
-#     cmd = 'ffmpeg -y -loglevel error -nostats -i "{}" -vf select="not(mod(n\,24))" -vf scale=640:-1 -vsync vfr {}/{}_frame_%06d.jpg'.format(video.path, tmpdir, video.id)
-#     run(cmd)
-#     video.num_frames = len(glob.glob('{}/{}_frame_*.jpg'.format(base_path, video.id))) * 24
-#     video.save()
+def save_frames(video):
+    ids = [
+        str(f['id'])
+        for f in Frame.objects.filter(video=video, number__in=range(0, video.num_frames, 24))
+        .order_by('number').values('id')
+    ]
+    requests.post('http://localhost:8000/batch_fallback', data={'frames': ','.join(ids)})
 
-#     print 'Making frames'
-#     frames = [Frame(number=i, video=video) for i in range(video.num_frames)]
-#     Frame.objects.bulk_create(frames)
-#     ids = Frame.objects.filter(video=video).order_by('number').values('id')
-
-#     def move(i):
-#         run('mv {}/{}_frame_{:06d}.jpg {}/frame_{}.jpg'.format(
-#             tmpdir, video.id, i / 24 + 1, tmpdir, ids[i]['id']))
-
-#     print 'Renaming frames'
-#     with ThreadPoolExecutor(max_workers=64) as executor:
-#         list(executor.map(move, range(0, video.num_frames, 24)))
-
-#     print 'Copying to cloud'
-#     run('gsutil -m mv "{}/*" gs://scanner-data/assets/'.format(tmpdir))
 
 def ingest(path, num_frames):
     print path
-    if GOOGLE:
-        _, filename = os.path.split(path)
-        local_path = '/tmp/{}'.format(filename)
-        run('gsutil cp gs://{}/{} {}'.format(BUCKET, path, local_path))
-    else:
-        local_path = path
+    try:
+        if GOOGLE:
+            _, filename = os.path.split(path)
+            local_path = '/tmp/{}'.format(filename)
+            run('gsutil cp gs://{}/{} {}'.format(BUCKET, path, local_path))
+        else:
+            local_path = path
 
-    video = Video()
-    video.path = path
-    video.num_frames = num_frames
-    video.fps = get_fps(local_path)
-    width, height = get_dimensions(local_path)
-    video.width = width
-    video.height = height
-    video.save()
+        video = Video()
+        video.path = path
+        video.num_frames = num_frames
+        video.fps = get_fps(local_path)
+        width, height = get_dimensions(local_path)
+        video.width = width
+        video.height = height
+        video.save()
 
-    frames = [Frame(number=i, video=video) for i in range(video.num_frames)]
-    Frame.objects.bulk_create(frames)
+        frames = [Frame(number=i, video=video) for i in range(video.num_frames)]
+        Frame.objects.bulk_create(frames)
 
-    if GOOGLE:
-        run('rm {}'.format(local_path))
+        save_frames(video)
 
-    # # Because bulk_create doesn't return the primary keys for the frames,
-    # # we assume that they're numbered in order starting frame 0.
-    # print 'Extracting frames...'
-    # extract_frames(video)
-    # print 'Extracted!'
+        if GOOGLE:
+            run('rm {}'.format(local_path))
+    except:
+        Video.objects.filter(path=path).delete()
+        raise
 
     # Extract static file
     if False:

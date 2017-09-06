@@ -7,13 +7,19 @@ import sys
 from google.protobuf.json_format import MessageToJson
 import json
 from collections import defaultdict
-from scannerpy import Config, Database, Job
+from scannerpy import Config, Database, Job, DeviceType
 from django.db import connection
 import logging
 import time
 from django.db.models import Min, Max
 import os
+from concurrent.futures import ThreadPoolExecutor
+from django.views.decorators.csrf import csrf_exempt
+import tempfile
+import subprocess as sp
+import shlex
 
+BUCKET = 'scanner-data'
 logger = logging.getLogger(__name__)
 
 # TODO(wcrichto): find a better way to do this
@@ -23,8 +29,51 @@ from scanner.types_pb2 import BoundingBox
 models = ModelDelegator('krishna')
 Video, Frame, Face = models.Video, models.Frame, models.Face
 
+
 def index(request):
     return render(request, 'index.html')
+
+
+def extract(frames):
+    with Database() as db:
+        frame = db.table(frames[0].video.path).as_op().gather([frame.number for frame in frames], task_size=1000)
+        resized = db.ops.Resize(frame=frame, width=640, preserve_aspect=True, device=DeviceType.GPU)
+        compressed = db.ops.ImageEncoder(frame=resized)
+        job = Job(columns=[compressed], name='_ignore')
+
+        start = now()
+        output = db.run(job, force=True)
+        print 'Extract: {:.3f}'.format(now() - start)
+        sys.stdout.flush()
+
+        start = now()
+        jpgs = [(jpg[0], frame) for (_, jpg), frame in zip(output.load(['img']), frames)]
+        print 'Loaded: {:.3f}'.format(now() - start)
+        sys.stdout.flush()
+
+        temp_dir = tempfile.mkdtemp()
+
+        def write_jpg((jpg, frame)):
+            # db.config.storage.write('/assets/thumbnails/frame_{}'.format(frame.id), jpg)
+            with open('{}/frame_{}.jpg'.format(temp_dir, frame.id), 'w') as f:
+                f.write(jpg)
+
+        start = now()
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            list(executor.map(write_jpg, jpgs))
+        sp.check_call(shlex.split('gsutil -m mv "{}/*" gs://{}/assets/thumbnails'.format(temp_dir, BUCKET)))
+        print 'Write: {:.3f}'.format(now() - start)
+        sys.stdout.flush()
+
+        return jpg
+
+@csrf_exempt
+def batch_fallback(request):
+    frames = [int(s) for s in request.POST.get('frames').split(',')]
+    frames = Frame.objects.filter(id__in=frames)
+    extract(frames)
+    return JsonResponse({'success': True})
+
 
 def fallback(request):
     request_path = request.get_full_path().split('/')[3:]
@@ -33,20 +82,7 @@ def fallback(request):
     assert ty == 'frame'
 
     frame = Frame.objects.get(id=id)
-    with Database() as db:
-        frame = db.table(frame.video.path).as_op().gather([frame.number])
-        resized = db.ops.Resize(frame=frame, width=640, preserve_aspect=True)
-        compressed = db.ops.ImageEncoder(frame=resized)
-        job = Job(columns=[compressed], name='_ignore')
-        output = db.run(
-            job,
-            force=True,
-            show_progress=False,
-            pipeline_instances_per_node=1)
-        _, jpg = next(output.load(['img']))
-        jpg = jpg[0]
-
-        db.config.storage.write(str('/'.join(request_path)), jpg)
+    jpg = extract([frame])
 
     return HttpResponse(jpg, content_type="image/jpeg")
 
@@ -209,12 +245,13 @@ def search(request):
     # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
     # an individual query for every concept, which is a Bad Idea.
     if concept == 'video':
-        min_frame_numbers = Video.objects.values('id').annotate(
-            min_frame=Min('frame__number'), max_frame=Max('frame__number'))
+        min_frame_numbers = list(Video.objects.values('id').annotate(
+            min_frame=Min('frame__number'), max_frame=Max('frame__number')).order_by('id')[:10])
         qs = [
             Video.objects.filter(id=f['id'], frame__number=f['min_frame']).distinct().values(
                 'id', 'frame__id').get() for f in min_frame_numbers
         ]
+        sys.stdout.flush()
         clips = defaultdict(list)
         for result, f in zip(qs, min_frame_numbers):
             clips[result['id']].append({
@@ -228,7 +265,7 @@ def search(request):
     elif concept == 'face':
         min_frame_numbers = Face.objects.values('id').annotate(
             min_frame=Min('faceinstance__frame__number'),
-            max_frame=Max('faceinstance__frame__number'))
+            max_frame=Max('faceinstance__frame__number'))[:100]
         qs = [
             Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(
                 'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',

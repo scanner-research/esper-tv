@@ -1,6 +1,8 @@
 import argparse
 import yaml
 import toml
+import subprocess as sp
+import shlex
 
 PROJECT = 'visualdb-1046'
 ZONE = 'us-central1'
@@ -28,6 +30,7 @@ services:
         https_proxy: "${{https_proxy}}"
     image: scannerresearch/esper
     privileged: true
+    depends_on: [db]
     volumes:
       - ./esper:/usr/src/app
       - ${{HOME}}/.bash_history:/root/.bash_history
@@ -41,7 +44,7 @@ image: mysql
 environment:
   - MYSQL_DATABASE=esper
   - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
-volumes: ["./mysql-db:/var/lib/mysql"]
+volumes: ["./mysql-db:/var/lib/mysql", "./mysql.cnf:/etc/mysql/mysql.cnf"]
 ports: ["3306"]
 """)
 
@@ -52,6 +55,7 @@ volumes: ["./visualdb-key.json:/config"]
 ports: ["3306"]
 """.format(project=PROJECT, zone=ZONE, name=NAME))
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cloud-db', action='store_true')
@@ -59,44 +63,33 @@ def main():
     args = parser.parse_args()
 
     if args.cloud_db:
-        config['services']['db-cloud'] = db_cloud
-        config['services']['esper']['depends_on'] = ['db-cloud']
+        config['services']['db'] = db_cloud
         config['services']['esper']['environment'] = [
-            "DJANGO_DB_HOST=db-cloud",
             "DJANGO_DB_USER=will",
         ]
     else:
-        config['services']['db-local'] = db_local
-        config['services']['esper']['depends_on'] = ['db-local']
+        config['services']['db'] = db_local
         config['services']['esper']['environment'] = [
-            "DJANGO_DB_HOST=db-local",
-            "DJANGO_DB_PASSWORD=${MYSQL_PASSWORD}",
             "DJANGO_DB_USER=root",
+            "DJANGO_DB_PASSWORD=${MYSQL_PASSWORD}",
         ]
 
     scanner_config = {}
     if args.cloud_files:
         esper_env = 'google'
-        scanner_config['storage'] = {
-            'type': 'gcs',
-            'bucket': BUCKET,
-            'db_path': 'scanner_db'
-        }
+        scanner_config['storage'] = {'type': 'gcs', 'bucket': BUCKET, 'db_path': 'scanner_db'}
         media_url = 'https://storage.googleapis.com'
         config['services']['esper']['environment'].extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}'
         ])
         config['services']['nginx']['environment'].extend([
-            'BUCKET={}'.format(BUCKET),
-            'OAUTH_TOKEN=${OAUTH_TOKEN}'
+            'BUCKET={}'.format(BUCKET), 'OAUTH_TOKEN={}'.format(
+                sp.check_output(shlex.split('gcloud auth application-default print-access-token')).strip())
         ])
     else:
         esper_env = 'local'
-        scanner_config['storage'] = {
-            'type': 'posix',
-            'db_path': '/usr/src/app/scanner_db'
-        }
+        scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}
         media_url = '/'
 
     config['services']['nginx']['environment'].append('MEDIA_URL={}'.format(media_url))
@@ -106,6 +99,9 @@ def main():
 
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config))
+
+    print 'Successfully configured Esper.'
+
 
 if __name__ == '__main__':
     main()
