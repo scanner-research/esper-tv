@@ -1,6 +1,7 @@
 import argparse
 import yaml
 
+USER = 'pari'
 PROJECT = 'visualdb-1046'
 ZONE = 'us-central1'
 NAME = 'esper'
@@ -8,28 +9,28 @@ NAME = 'esper'
 config = yaml.load("""
 version: '2'
 services:
-  nginx:
+  nginx-{name}:
     build: ./nginx
     image: scannerresearch/esper-nginx
     volumes:
       - ./esper:/usr/src/app
     depends_on:
-      - esper
+      - esper-{name}
     ports:
       - "80:80"
 
-  esper:
+  esper-{name}:
     build:
       context: ./esper
       args:
-        https_proxy: "${https_proxy}"
+        https_proxy: "${{https_proxy}}"
     image: scannerresearch/esper
     volumes:
       - ./esper:/usr/src/app
-      - ${HOME}/.bash_history:/root/.bash_history
+      - ${{HOME}}/.bash_history:/root/.bash_history
     ports:
       - "8000"
-""")
+""".format(name=USER))
 
 db_local = yaml.load("""
 image: mysql
@@ -57,17 +58,17 @@ def main():
     args = parser.parse_args()
 
     if args.cloud:
-        config['services']['db-cloud'] = db_cloud
-        config['services']['esper']['depends_on'] = ['db-cloud']
-        config['services']['esper']['environment'] = [
-            "DJANGO_DB_HOST=db-cloud",
+        config['services']['db-cloud-{name}'.format(name=USER)] = db_cloud
+        config['services']['esper-{name}'.format(name=USER)]['depends_on'] = ['db-cloud-{name}'.format(name=USER)]
+        config['services']['esper-{name}'.format(name=USER)]['environment'] = [
+            "DJANGO_DB_HOST=db-cloud-{name}".format(name=USER),
             "DJANGO_DB_USER=will"
         ]
     else:
-        config['services']['db-local'] = db_local
-        config['services']['esper']['depends_on'] = ['db-local']
-        config['services']['esper']['environment'] = [
-            "DJANGO_DB_HOST=db-local",
+        config['services']['db-local-{name}'.format(name=USER)] = db_local
+        config['services']['esper-{name}'.format(name=USER)]['depends_on'] = ['db-local-{name}'.format(name=USER)]
+        config['services']['esper-{name}'.format(name=USER)]['environment'] = [
+            "DJANGO_DB_HOST=db-local-{name}".format(name=USER),
             "DJANGO_DB_PASSWORD=${MYSQL_PASSWORD}",
             "DJANGO_DB_USER=root"
         ]

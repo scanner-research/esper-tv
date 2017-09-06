@@ -101,6 +101,7 @@ class Command(BaseCommand):
                                     short_seq += len(item[2])
                                     continue
                                 track = Face()
+                                track.labeler = bbox_labeler
                                 track.save()
                                 last_frame = None
                                 for seq_face_id in item[2]:
@@ -119,8 +120,7 @@ class Command(BaseCommand):
                     if curr_dist < best_distance:
                         best_distance = curr_dist
                         best_match = i
-                #if best_match >= 0:
-                #    print best_match, best_distance
+
                 if best_match == -1 or best_distance > threshold:
                     recent_features.append(
                         [curr_frame_id, curr_frame_id, [curr_face_id], curr_feature, curr_feature])
@@ -138,6 +138,7 @@ class Command(BaseCommand):
                     short_seq += len(item[2])
                     continue
                 track = Face()
+                track.labeler = bbox_labeler
                 track.save()
                 last_frame = None
                 for seq_face_id in item[2]:

@@ -4,7 +4,6 @@ import {observable} from 'mobx';
 import {observer} from 'mobx-react';
 import axios from 'axios';
 import {Box, BoundingBoxView} from './bbox.jsx';
-
 import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Button} from 'react-bootstrap';
 
 class SearchResult {
@@ -39,6 +38,9 @@ class SearchInput extends React.Component {
     face: [
       ['id', 'int'],
       ['identity', 'enum']
+    ],
+    face_diffs: [
+      ['id', 'int']
     ]
   }
 
@@ -69,6 +71,7 @@ class SearchInput extends React.Component {
   }
 
   _onAddProperty(e) {
+    console.log("adding property")
     let form = ReactDOM.findDOMNode(this._form);
     let key = form.elements['property-key'].value;
     let value = form.elements['property-value'].value;
@@ -85,6 +88,7 @@ class SearchInput extends React.Component {
           <FormControl componentClass="select" placeholder="Select...">
             <option value="video">Video</option>
             <option value="face">Face</option>
+            <option value="face_diffs">Face Diffs</option>
           </FormControl>
         </FormGroup>
         <FormGroup controlId="active-properties">
@@ -185,8 +189,9 @@ class SearchResultView extends React.Component {
          : <div />}
         <BoundingBoxView
             bboxes={this.props.clip.bboxes}
-            width={this.props.video.width}
-            height={this.props.video.height}
+            color = {this.props.clip.color}
+            width= {this.props.video.width}
+            height= {this.props.video.height}
             path={`/static/thumbnails/frame_${this.props.clip.frame}.jpg`}/>
       </div>
     );

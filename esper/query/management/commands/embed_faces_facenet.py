@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand
 from query.models import *
-import random
 import json
 import tensorflow as tf
 import facenet
@@ -25,6 +24,7 @@ def load_imgs(img_directory):
 
 # TODO(wcrichto): merge this with the other embed faces script
 
+# TODO(pari): for dummy, can just add same labels rather than rerunning script.
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
 

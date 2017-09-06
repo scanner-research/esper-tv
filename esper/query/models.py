@@ -41,7 +41,7 @@ class Gender(models.Model):
 class Face(base.ConceptBase):
     gender = models.ForeignKey(Gender, null=True, blank=True)
     identity = models.ForeignKey(Identity, null=True, blank=True)
-
+    labeler = models.ForeignKey(Labeler, null=True, blank=True)
 
 class FaceInstance(InstanceBase(Face)):
     pass
