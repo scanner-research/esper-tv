@@ -1,3 +1,4 @@
+from __future__ import print_function
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.forms.models import model_to_dict
@@ -18,8 +19,11 @@ from django.views.decorators.csrf import csrf_exempt
 import tempfile
 import subprocess as sp
 import shlex
+import math
+import itertools
 
 BUCKET = 'scanner-data'
+FALLBACK_ENABLED = False
 logger = logging.getLogger(__name__)
 
 # TODO(wcrichto): find a better way to do this
@@ -27,7 +31,18 @@ Config()
 from scanner.types_pb2 import BoundingBox
 
 models = ModelDelegator('krishna')
-Video, Frame, Face = models.Video, models.Frame, models.Face
+Video, Frame, Face, FaceInstance, Labeler = models.Video, models.Frame, models.Face, models.FaceInstance, models.Labeler
+
+DIFF_BBOX_THRESHOLD = 0.35
+# 24 frames/sec - so this requires more than a sec overlap
+FRAME_OVERLAP_THRESHOLD = 25
+
+colors = ['white', 'red', 'blue', 'green', 'cyan', 'black', 'yellow']
+
+
+def _print(*args):
+    print(*args)
+    sys.stdout.flush()
 
 
 def index(request):
@@ -36,19 +51,20 @@ def index(request):
 
 def extract(frames):
     with Database() as db:
-        frame = db.table(frames[0].video.path).as_op().gather([frame.number for frame in frames], task_size=1000)
+        frame = db.table(frames[0].video.path).as_op().gather(
+            [frame.number for frame in frames], task_size=1000)
         resized = db.ops.Resize(frame=frame, width=640, preserve_aspect=True, device=DeviceType.GPU)
         compressed = db.ops.ImageEncoder(frame=resized)
         job = Job(columns=[compressed], name='_ignore')
 
         start = now()
         output = db.run(job, force=True)
-        print 'Extract: {:.3f}'.format(now() - start)
+        print('Extract: {:.3f}'.format(now() - start))
         sys.stdout.flush()
 
         start = now()
         jpgs = [(jpg[0], frame) for (_, jpg), frame in zip(output.load(['img']), frames)]
-        print 'Loaded: {:.3f}'.format(now() - start)
+        print('Loaded: {:.3f}'.format(now() - start))
         sys.stdout.flush()
 
         temp_dir = tempfile.mkdtemp()
@@ -61,11 +77,13 @@ def extract(frames):
         start = now()
         with ThreadPoolExecutor(max_workers=64) as executor:
             list(executor.map(write_jpg, jpgs))
-        sp.check_call(shlex.split('gsutil -m mv "{}/*" gs://{}/assets/thumbnails'.format(temp_dir, BUCKET)))
-        print 'Write: {:.3f}'.format(now() - start)
+        sp.check_call(
+            shlex.split('gsutil -m mv "{}/*" gs://{}/assets/thumbnails'.format(temp_dir, BUCKET)))
+        print('Write: {:.3f}'.format(now() - start))
         sys.stdout.flush()
 
         return jpg
+
 
 @csrf_exempt
 def batch_fallback(request):
@@ -76,6 +94,9 @@ def batch_fallback(request):
 
 
 def fallback(request):
+    if not FALLBACK_ENABLED:
+        return HttpResponse(status=501)
+
     request_path = request.get_full_path().split('/')[3:]
     filename, _ = os.path.splitext(request_path[-1])
     [ty, id] = filename.split('_')
@@ -239,19 +260,145 @@ def handlabeled(request):
     return JsonResponse({'success': True})
 
 
+def _overlap(a, b):
+    '''
+    @a, b: are ranges with start/end as a[0], a[1]
+    '''
+    return max(0, min(a[1], b[1]) - max(a[0], b[0]))
+
+
+def _bbox_dist(bbox1, bbox2):
+    return math.sqrt((bbox2.x1 - bbox1.x1)**2 + (bbox2.x2 - bbox1.x2)**2 + (bbox2.y1 - bbox1.y2)**2 \
+                      + (bbox2.y2 - bbox1.y2)**2)
+
+
+def _get_face_min_frames(labeler='tinyfaces'):
+    '''
+    @labeler: str, name of labeler.
+    There can be multiple Face concepts refering to the same face track - so select the ones from a
+    particular labeler.
+    @ret: dict, with keys id, min_frame, max_frame.
+    '''
+    # TODO: labeler seems to be a wasted db call (?) -> could get rid of it by
+    # converting return value to dict and just adding labeler manually.
+    return Face.objects.filter(faceinstance__labeler__name=labeler) \
+                       .values('id').annotate(min_frame=Min('faceinstance__frame__number'),
+                                              max_frame=Max('faceinstance__frame__number'))
+
+
+def _get_face_query(min_frame_numbers):
+    '''
+    @min_frame_numebers:
+    '''
+    # TODO: can generalize this more by taking in args for each of the values, and labeler etc. But
+    # for now, don't have a use case for that. Maybe we can also use str formating to construct
+    # these queries / and then eval them?
+    return [
+        Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(
+            'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id', 'faceinstance__bbox',
+            'faceinstance__labeler__name').get() for f in min_frame_numbers
+        if f['min_frame'] is not None
+    ]
+
+def get_color(s):
+    return colors[hash(s) % len(colors)]
+
+def _get_face_clips(results):
+    '''
+    @results: zipped value having results, min_frame_numbers (as returned from
+    _get_face_query, and _get_face_min_frames).
+    @ret: dict, with keys:
+        -
+        - color: What color the bounding box around it should be. Essentially mapping each labeler
+          to a color.
+    '''
+    # FIXME(pari): can probably save some sql calls - like for getting frame__video__id, or
+    # labeler_name, if we process it one video at a time? Not sure if its worth saving them though.
+    clips = defaultdict(list)
+    for result, f in results:
+        clips[result['faceinstance__frame__video__id']].append({
+            'concept': result['id'],
+            'frame': result['faceinstance__frame__id'],
+            'start': f['min_frame'],
+            'end': f['max_frame'],
+            'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))],
+            'color': get_color(result['faceinstance__labeler__name']),
+        })  # yapf: disable
+
+    # sort these from frame numbers. This is especially useful when diffing the output.
+    for k in clips:
+        clips[k].sort(key=lambda x: x['start'])
+
+    return dict(clips)
+
+
+def _find_frame_overlaps(cur_labeler, frame, labelers):
+    '''
+    '''
+    overlaps = []
+    for k, v in labelers.iteritems():
+        if k == cur_labeler:
+            continue
+        for (qs, cur_frame) in v:
+            # FIXME: if assuming v is sorted according to min_frames, then we can do this.
+            # if cur_frame['min_frame'] > frame['max_frame']:
+            # # skip the rest of this key.
+            # break
+            a = (frame['min_frame'], frame['max_frame'])
+            b = (cur_frame['min_frame'], cur_frame['max_frame'])
+            if _overlap(a, b) > FRAME_OVERLAP_THRESHOLD:
+                overlaps.append((qs, cur_frame))
+
+    return overlaps
+
+
+def _get_face_label_mismatches(labelers):
+    '''
+    @labelers: dict, with keys as name of labels, and values as zip(qs, min_frame_numbers)
+    TODO: can definitely optimize these loops further.
+    '''
+    # TODO: can keep track of overlaps to skip over some of the faces - especially in 2nd/3rd loop.
+    mistakes = []
+    for k, v in labelers.iteritems():
+        # loop over each track in v.
+        for (qs, min_frames) in v:
+            bbox = qs['faceinstance__bbox']
+            # find all possible frame overlaps between this face and others.
+            overlaps = _find_frame_overlaps(k, min_frames, labelers)
+            # check if any of these overlaps have bbox's within an acceptable threshold. If they
+            # don't then it is a mistake.
+            mistake = True
+            for (o, _) in overlaps:
+                if _bbox_dist(bbox, o['faceinstance__bbox']) < DIFF_BBOX_THRESHOLD:
+                    # within a threshold - so the labelers agree on this.
+                    mistake = False
+                    break
+
+            # TODO: When we find a mistake, not sure if we should also add frames from overlaps
+            # For now, just ignore them as there could be too many of those etc - and as long as we
+            # loop over each labeler keys, then eventually those would get added.
+            if mistake:
+                mistakes.append((qs, min_frames))
+
+    return mistakes
+
+def bboxes_to_json(l):
+    return [json.loads(MessageToJson(b)) for b in l]
+
 def search(request):
     concept = request.GET.get('concept')
     # TODO(wcrichto): Unify video and face cases?
     # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
     # an individual query for every concept, which is a Bad Idea.
+
     if concept == 'video':
-        min_frame_numbers = list(Video.objects.values('id').annotate(
-            min_frame=Min('frame__number'), max_frame=Max('frame__number')).order_by('id')[:10])
+        min_frame_numbers = list(
+            Video.objects.values('id').annotate(
+                min_frame=Min('frame__number'), max_frame=Max('frame__number')).order_by('id')[:10])
         qs = [
             Video.objects.filter(id=f['id'], frame__number=f['min_frame']).distinct().values(
                 'id', 'frame__id').get() for f in min_frame_numbers
         ]
-        sys.stdout.flush()
         clips = defaultdict(list)
         for result, f in zip(qs, min_frame_numbers):
             clips[result['id']].append({
@@ -263,30 +410,83 @@ def search(request):
         clips = dict(clips)
 
     elif concept == 'face':
-        min_frame_numbers = Face.objects.values('id').annotate(
-            min_frame=Min('faceinstance__frame__number'),
-            max_frame=Max('faceinstance__frame__number'))[:100]
-        qs = [
-            Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(
-                'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
-                'faceinstance__bbox').get() for f in min_frame_numbers if f['min_frame'] is not None
-        ]
-        print qs
-        sys.stdout.flush()
+        # need to specify labeler, otherwise this list would also include Faces from other labelers.
+        min_frame_numbers = _get_face_min_frames(labeler='tinyfaces')
+        qs = _get_face_query(min_frame_numbers)
+        clips = _get_face_clips(zip(qs, min_frame_numbers))
+
+    # Mismatched labels.
+    elif concept == 'face_diffs':
+        # figure out the different labelers used
+        labeler_names = FaceInstance.objects.values('labeler__name').distinct()
+        labeler_names = [l['labeler__name'] for l in labeler_names]
+
+        labelers = {}
+        # process each distinct labeler
+        for labeler in labeler_names:
+            min_frame_numbers = _get_face_min_frames(labeler=labeler)[:100]
+
+            # FIXME: sort min_frame_numbers - so then can optimize the loops when finding overlaps.
+            # not sure why its failing if I convert it to a list.
+            qs = _get_face_query(min_frame_numbers)
+
+            # TODO: if similar stuff can be used across other searches, potentially could make
+            # classes instead of using these zips?
+            labelers[labeler] = zip(qs, min_frame_numbers)
+
+        mistakes = _get_face_label_mismatches(labelers)
+        clips = _get_face_clips(mistakes)
+
+    elif concept == 'faceinstance_diffs':
+        # figure out the different labelers used
+        labeler_names = FaceInstance.objects.values('labeler__name').distinct()
+        labeler_names = [l['labeler__name'] for l in labeler_names]
+
+        videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for labeler_name in labeler_names:
+            labeler = Labeler.objects.get(name=labeler_name)
+            faces = FaceInstance.objects.filter(labeler=labeler).values(
+                'id', 'bbox', 'frame__id', 'frame__number', 'frame__video__id', 'labeler__name')
+            for face in faces:
+                videos[face['frame__video__id']][face['frame__id']][labeler_name].append(face)
+
+        mistakes = defaultdict(lambda: defaultdict(tuple))
+        for video, frames in videos.iteritems():
+            for frame, labelers in frames.iteritems():
+                for labeler, bboxes in labelers.iteritems():
+                    for bbox in bboxes:
+                        mistake = True
+                        for other_labeler in labeler_names:
+                            if labeler == other_labeler: continue
+                            other_bboxes = labelers[other_labeler] if other_labeler in labelers else []
+                            for other_bbox in other_bboxes:
+                                if _bbox_dist(bbox['bbox'], other_bbox['bbox']) < DIFF_BBOX_THRESHOLD:
+                                    mistake = False
+                                    break
+
+                            if mistake:
+                                mistakes[video][frame] = (bboxes, other_bboxes, other_labeler)
+                                break
+                        else:
+                            continue
+                        break
+
+
+
         clips = defaultdict(list)
-        for result, f in zip(qs, min_frame_numbers):
-            clips[result['faceinstance__frame__video__id']].append({
-                'concept':
-                result['id'],
-                'frame':
-                result['faceinstance__frame__id'],
-                'start':
-                f['min_frame'],
-                'end':
-                f['max_frame'],
-                'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))]
-            })
-        clips = dict(clips)
+        for video, frames in list(mistakes.iteritems())[:20]:
+            for frame, (bboxes, other_bboxes, other_labeler) in list(frames.iteritems())[::5]:
+                clips[video].append({
+                    'concept': bboxes[0]['id'],
+                    'frame': frame,
+                    'start': bboxes[0]['frame__number'],
+                    'end': bboxes[0]['frame__number'],
+                    'bboxes': bboxes_to_json([b['bbox'] for b in bboxes]),
+                    'color': get_color(bboxes[0]['labeler__name']),
+                    'other_bboxes': bboxes_to_json([b['bbox'] for b in other_bboxes]),
+                    'other_color': get_color(other_labeler)
+                })
 
     videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}
-    return JsonResponse({'clips': clips, 'videos': videos})
+    colors = {l['name']: get_color(l['name']) for l in Labeler.objects.all().values('name')}
+    return JsonResponse({'clips': clips, 'videos': videos, 'colors': colors})

@@ -5,12 +5,14 @@ from scannerpy.stdlib import parsers, pipelines
 import os
 import cv2
 import math
+import random
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
 
     def add_arguments(self, parser):
         parser.add_argument('path')
+        parser.add_argument('bbox_labeler', nargs='?', default='tinyfaces')
 
     def handle(self, *args, **options):
         with open(options['path']) as f:
@@ -18,7 +20,7 @@ class Command(BaseCommand):
 
         with Database() as db:
             filtered = paths
-            labeler, _ = Labeler.objects.get_or_create(name="tinyfaces")
+            labeler, _ = Labeler.objects.get_or_create(name=options['bbox_labeler'])
 
             filtered = []
             for path in paths:
@@ -44,9 +46,18 @@ class Command(BaseCommand):
                 imgs = table.load(['frame'], rows=range(0, table.num_rows(), stride))
 
                 video_faces = video_faces_table.load(['bboxes'], parsers.bboxes)
+
                 for (i, frame_faces), (_, img) in zip(video_faces, imgs):
                     frame = Frame.objects.get(video=video, number=i*stride)
                     for bbox in frame_faces:
+                        if labeler.name == 'dummy' and random.randint(0,10) == 1:
+                           # generate dummy labels, sometimes  
+                           # TODO: add boundary checks, shouldn't matter much thouhg.
+                           bbox.x1 += 50
+                           bbox.x2 += 50
+                           bbox.y1 += 50
+                           bbox.y2 += 50
+
                         f = FaceInstance()
                         f.frame = frame
                         normalized_bbox = db.protobufs.BoundingBox()

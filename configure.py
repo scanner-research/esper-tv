@@ -6,38 +6,42 @@ import shlex
 
 PROJECT = 'visualdb-1046'
 ZONE = 'us-central1'
-NAME = 'esper'
+NAME = None
 NGINX_PORT = '443'
 BUCKET = 'scanner-data'
+SUFFIX = '-{}'.format(NAME) if NAME is not None else ''
+
+def svc(s):
+    return '{}{}'.format(s, SUFFIX)
 
 config = yaml.load("""
 version: '2'
 services:
-  nginx:
+  nginx{suffix}:
     build: ./nginx
     image: scannerresearch/esper-nginx
     volumes:
       - ./esper:/usr/src/app
       - /mnt/gcs:/usr/src/app/gcs
-    depends_on: [esper]
+    depends_on: [esper{suffix}]
     ports: ["{port}:{port}"]
     environment: []
 
-  esper:
+  esper{suffix}:
     build:
       context: ./esper
       args:
         https_proxy: "${{https_proxy}}"
     image: scannerresearch/esper
     privileged: true
-    depends_on: [db]
+    depends_on: [db{suffix}]
     volumes:
       - ./esper:/usr/src/app
       - ${{HOME}}/.bash_history:/root/.bash_history
       - ./visualdb-key.json:/usr/src/app/visualdb-key.json
       - /mnt/gcs:/usr/src/app/gcs
     ports: ["8000"]
-""".format(port=NGINX_PORT))
+""".format(port=NGINX_PORT, suffix=SUFFIX))
 
 db_local = yaml.load("""
 image: mysql
@@ -50,10 +54,10 @@ ports: ["3306"]
 
 db_cloud = yaml.load("""
 image: gcr.io/cloudsql-docker/gce-proxy:1.09
-command: /cloud_sql_proxy -instances={project}:{zone}:{name}=tcp:0.0.0.0:3306 -credential_file=/config
+command: /cloud_sql_proxy -instances={project}:{zone}:esper=tcp:0.0.0.0:3306 -credential_file=/config
 volumes: ["./visualdb-key.json:/config"]
 ports: ["3306"]
-""".format(project=PROJECT, zone=ZONE, name=NAME))
+""".format(project=PROJECT, zone=ZONE))
 
 
 def main():
@@ -63,13 +67,13 @@ def main():
     args = parser.parse_args()
 
     if args.cloud_db:
-        config['services']['db'] = db_cloud
-        config['services']['esper']['environment'] = [
+        config['services'][svc('db')] = db_cloud
+        config['services'][svc('esper')]['environment'] = [
             "DJANGO_DB_USER=will",
         ]
     else:
-        config['services']['db'] = db_local
-        config['services']['esper']['environment'] = [
+        config['services'][svc('db')] = db_local
+        config['services'][svc('esper')]['environment'] = [
             "DJANGO_DB_USER=root",
             "DJANGO_DB_PASSWORD=${MYSQL_PASSWORD}",
         ]
@@ -79,11 +83,12 @@ def main():
         esper_env = 'google'
         scanner_config['storage'] = {'type': 'gcs', 'bucket': BUCKET, 'db_path': 'scanner_db'}
         media_url = 'https://storage.googleapis.com'
-        config['services']['esper']['environment'].extend([
+        config['services'][svc('esper')]['environment'].extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}'
         ])
-        config['services']['nginx']['environment'].extend([
+        # TODO(wcrichto): make oauth tokens last longer?
+        config['services'][svc('nginx')]['environment'].extend([
             'BUCKET={}'.format(BUCKET), 'OAUTH_TOKEN={}'.format(
                 sp.check_output(shlex.split('gcloud auth application-default print-access-token')).strip())
         ])
@@ -92,8 +97,8 @@ def main():
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}
         media_url = '/'
 
-    config['services']['nginx']['environment'].append('MEDIA_URL={}'.format(media_url))
-    config['services']['esper']['environment'].append('ESPER_ENV={}'.format(esper_env))
+    config['services'][svc('nginx')]['environment'].append('MEDIA_URL={}'.format(media_url))
+    config['services'][svc('esper')]['environment'].append('ESPER_ENV={}'.format(esper_env))
     with open('esper/.scanner.toml', 'w') as f:
         f.write(toml.dumps(scanner_config))
 

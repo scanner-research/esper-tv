@@ -4,13 +4,12 @@ import {observable} from 'mobx';
 import {observer} from 'mobx-react';
 import axios from 'axios';
 import {Box, BoundingBoxView} from './bbox.jsx';
-import {mediaUrl} from 'utils';
-
 import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Button} from 'react-bootstrap';
 
 class SearchResult {
   @observable clips = {};
   @observable videos = {};
+  @observable colors = {};
 };
 
 class PropertyInput extends React.Component {
@@ -40,24 +39,31 @@ class SearchInput extends React.Component {
     face: [
       ['id', 'int'],
       ['identity', 'enum']
+    ],
+    faceinstance_diffs: [
+      ['id', 'int']
     ]
   }
 
   state = {
     selectedConcept: 'video',
     selectedProperty: null,
-    properties: []
+    properties: [],
+    searching: false
   }
 
   _onSearch(e) {
     e.preventDefault();
     let concept = e.target.concept.value;
+    this.setState({searching: true});
     axios
       .get('/api/search', {params: {concept: concept}})
       .then(((response) => {
         console.log('Received search results', response.data);
         this.props.result.clips = response.data.clips;
         this.props.result.videos = response.data.videos;
+        this.props.result.colors = response.data.colors;
+        this.setState({searching: false});
       }).bind(this));
   }
 
@@ -70,6 +76,7 @@ class SearchInput extends React.Component {
   }
 
   _onAddProperty(e) {
+    console.log("adding property")
     let form = ReactDOM.findDOMNode(this._form);
     let key = form.elements['property-key'].value;
     let value = form.elements['property-value'].value;
@@ -86,6 +93,7 @@ class SearchInput extends React.Component {
           <FormControl componentClass="select" placeholder="Select...">
             <option value="video">Video</option>
             <option value="face">Face</option>
+            <option value="faceinstance_diffs">Face Diffs</option>
           </FormControl>
         </FormGroup>
         <FormGroup controlId="active-properties">
@@ -118,7 +126,10 @@ class SearchInput extends React.Component {
            </InputGroup>
          </FormGroup>
          : <div />}
-        <Button type="submit">Search</Button>
+        <Button type="submit" disabled={this.state.searching}>Search</Button>
+        {this.state.searching
+         ? <img className='spinner' src="/static/images/spinner.gif" />
+         : <div />}
       </Form>
     );
   }
@@ -174,6 +185,21 @@ class SearchResultView extends React.Component {
 
   render() {
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
+    let path = `/media/assets/thumbnails/frame_${this.props.clip.frame}.jpg`;
+    let my_box = <BoundingBoxView
+                     bboxes={this.props.clip.bboxes}
+                     width={this.props.video.width}
+                     height={this.props.video.height}
+                     color={this.props.clip.color}
+                     path={path} />;
+    let other_box = this.props.clip.other_bboxes
+                  ? <BoundingBoxView
+                        bboxes={this.props.clip.other_bboxes}
+                        width={this.props.video.width}
+                        height={this.props.video.height}
+                        color={this.props.clip.other_color}
+                        path={path} />
+                  : <div />;
     return (
       <div className='search-result'
            onMouseEnter={this._onMouseEnter.bind(this)}
@@ -184,11 +210,9 @@ class SearchResultView extends React.Component {
            <source src={`/media/${this.props.video.path}`} />
          </video>
          : <div />}
-        <BoundingBoxView
-            bboxes={this.props.clip.bboxes}
-            width={this.props.video.width}
-            height={this.props.video.height}
-            path={`/media/assets/thumbnails/frame_${this.props.clip.frame}.jpg`} />
+        {this.props.clip.color == "red"
+         ? <div>{my_box}{other_box}</div>
+         : <div>{other_box}{my_box}</div>}
       </div>
     );
   }
@@ -212,6 +236,11 @@ export default class Home extends React.Component {
           <SearchInput result={this._result} />
         </div>
         <div className='search-results col-md-9'>
+          <div className='colors'>
+            {_.keys(this._result.colors).map((name, i) =>
+              <div key={i}>{name}: <div style={{backgroundColor: this._result.colors[name], width: '10px', height: '10px', display: 'inline-box'}} /></div>
+            )}
+          </div>
           {video_keys.map((key, i) =>
             <div className='search-result-video' key={i}>
               <div>{this._result.videos[key].path}</div>
