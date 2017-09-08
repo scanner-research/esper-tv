@@ -17,7 +17,7 @@ export let boundingRect = (div) => {
 // register with the BoxView
 
 @observer
-class BoxView extends React.Component {
+export class BoxView extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -25,7 +25,12 @@ class BoxView extends React.Component {
       clickY: -1,
       clicked: false,
       mouseX: -1,
-      mouseY: -1
+      mouseY: -1,
+      x1: this.props.box.x1,
+      x2: this.props.box.x2,
+      y1: this.props.box.y1,
+      y2: this.props.box.y2,
+      score: this.props.box.score,
     };
   }
 
@@ -105,6 +110,7 @@ class BoxView extends React.Component {
   }
 
   render() {
+    // FIXME: this is just to preserve some options from before like using box.track etc...
     let box = this.props.box;
     let offsetX = 0;
     let offsetY = 0;
@@ -113,12 +119,13 @@ class BoxView extends React.Component {
       offsetY = this.state.mouseY - this.state.clickY;
     }
     let style = {
-      left: box.x1 * this.props.width + offsetX,
-      top: box.y1 * this.props.height + offsetY,
-      width: (box.x2-box.x1) * this.props.width,
-      height: (box.y2-box.y1) * this.props.height,
-      borderColor: this.props.color
-    };
+      left: this.state.x1 * this.props.width + offsetX,
+      top: this.state.y1 * this.props.height + offsetY,
+      width: (this.state.x2-this.state.x1) * this.props.width,
+      height: (this.state.y2-this.state.y1) * this.props.height,
+      borderColor: this.props.color,
+      zIndex: this.props.zIndex || 0,
+    }
 
     return <div onMouseOver={this._onMouseOver}
                 onMouseOut={this._onMouseOut}
@@ -214,12 +221,14 @@ export class BoundingBoxView extends React.Component {
   }
 
   _getDimensions() {
+    // CHECK: (pari) whats 780/100 - default screen values?!
     return {
       width: this.state.fullwidth ? 780 : (this.props.width * (100 / this.props.height)),
       height: this.state.fullwidth ? (this.props.height * (780 / this.props.width)) : 100
     };
   }
 
+  // CHECK: (pari:) what is the use of this? Is it for manually labeling bounding boxes for faces?
   _makeBox() {
     let {width, height} = this._getDimensions();
     return new Face({
@@ -245,10 +254,10 @@ export class BoundingBoxView extends React.Component {
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
         {this.state.startX != -1
-         ? <BoxView box={this._makeBox()} width={width} height={height} />
+         ? <BoxView box={this._makeBox()} width={width} height={height} zIndex={this.props.zIndex} />
          : <div />}
         {this.props.bboxes.map((box, i) =>
-          <BoxView box={box} key={i} i={i} width={width} height={height}
+          <BoxView box={box[0]} key={i} i={i} width={width} height={height} zIndex = {this.props.zIndex}
                    color = {this.props.color}
                    onDelete={this._onDelete}
                    onChange={this._onChange}

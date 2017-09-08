@@ -57,23 +57,6 @@ body {
     img {
         height: 100px;
     }
-
-    .bounding-box {
-        position: absolute;
-        border-width: 2px;
-        border-style: solid;
-        cursor: pointer;
-        color: white;
-        font-size: 12px;
-
-        &:active {
-            cursor: none;
-        }
-
-        &:hover {
-            border-width: 3px;
-        }
-    }
 }
 
 .search-result {
@@ -85,9 +68,25 @@ body {
         z-index: 0;
         height: 100px;
     }
+    
+    // moved this here from .bounding-boxes
+    .bounding-box {
+        position: absolute;
+        border-width: 2px;
+        border-style: solid;
+        cursor: pointer;
+        color: white;
+        font-size: 12px;
+        // will set this up from react as well.
+        z-index: 3;
 
-    .bounding-boxes {
-        z-index: 1;
+        &:active {
+            cursor: none;
+        }
+
+        &:hover {
+            border-width: 3px;
+        }
     }
 }
 

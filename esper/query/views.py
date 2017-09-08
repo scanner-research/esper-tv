@@ -226,10 +226,17 @@ def _get_face_clips(results):
         - color: What color the bounding box around it should be. Essentially mapping each labeler
           to a color.
     '''
-    # FIXME(pari): can probably save some sql calls - like for getting frame__video__id, or
-    # labeler_name, if we process it one video at a time? Not sure if its worth saving them though.
     clips = defaultdict(list)
     for result, f in results:
+
+        # FIXME: extremely inefficient - making sql calls to get bounding boxes for each instance....
+        bbs = Face.objects.filter(id = result['id']).values('faceinstance__bbox',
+        'faceinstance__frame__number')
+        # convert it to json serializable list of dicts
+        bbs = list(bbs)
+        for i, bb in enumerate(bbs):
+            bbs[i] = json.loads(MessageToJson(bb['faceinstance__bbox']))
+
         clips[result['faceinstance__frame__video__id']].append({
             'concept':
             result['id'],
@@ -239,11 +246,12 @@ def _get_face_clips(results):
             f['min_frame'],
             'end':
             f['max_frame'],
-            'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))],
+            # 'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))],
+            'bboxes': [bbs],
             'color' : colors[hash(result['labeler__name']) % len(colors)]
         })
 
-    # sort these from frame numbers. This is especially useful when diffing the output.
+    # sort these from frame numbers. This is especially useful when diffing two labelers.
     for k in clips:
         clips[k].sort(key = lambda x: x['start'])
 

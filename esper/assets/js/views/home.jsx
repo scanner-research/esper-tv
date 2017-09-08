@@ -3,13 +3,17 @@ import ReactDOM from 'react-dom';
 import {observable} from 'mobx';
 import {observer} from 'mobx-react';
 import axios from 'axios';
-import {Box, BoundingBoxView} from './bbox.jsx';
+import {BoundingBoxView, BoxView} from './bbox.jsx';
 import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Button} from 'react-bootstrap';
 
 class SearchResult {
   @observable clips = {};
   @observable videos = {};
 };
+
+// FIXME: this should depend on the detection rate used when ingesting video /
+// detecting bboxes ...
+let DETECTION_FPS = 24;
 
 class PropertyInput extends React.Component {
   render() {
@@ -130,7 +134,8 @@ class SearchInput extends React.Component {
 class SearchResultView extends React.Component {
   state = {
     hover: false,
-    showVideo: false
+    showVideo: false,
+    needsUpdate: false
   }
 
   _onMouseEnter() {
@@ -152,6 +157,11 @@ class SearchResultView extends React.Component {
     return frame / this.props.video.fps;
   }
 
+  // CHECK(pari): need to round down right?
+  _toFrame(seconds) {
+    return Math.floor(seconds * this.props.video.fps);
+  }
+
   _onSeeked = () => {
     this.setState({showVideo: true});
   }
@@ -161,10 +171,40 @@ class SearchResultView extends React.Component {
     this._video.currentTime = this._toSeconds(this.props.clip.start);
   }
 
+  // FIXME: slightly hacky because set this up to fire whenever video is paused - the way we're
+  // using it, it seems fine because after pause = mouse leaving video - and video restarts after.
+  _onEnd = () => {
+    // set _test_box state to the 0th frame.
+    let curBox = this.props.clip.bboxes[0][0];
+    this._test_box.setState({x1: curBox.x1, x2: curBox.x2, y1: curBox.y1, y2: curBox.y2});
+  }
+
+  // Will fire only when video time is updated.
   _onTimeUpdate = () => {
     if (this._video.currentTime >= this._toSeconds(this.props.clip.end)) {
       this._video.currentTime = this._toSeconds(this.props.clip.start);
     }
+    // FIXME: these things would start failing if we were trying to display multiple faces
+
+    /* Here, we want to update the x1,y1,x2,y2 values in the face_box based on apprx the
+     time->frame conversion. */
+
+    // Find the frame (approx) corresponding to current time
+    let cur_frame = this._toFrame(this._video.currentTime);
+
+    // FIXME: It seems we're off by one here and cur_frame is sometimes -1 of start...
+    console.assert(cur_frame >= this.props.clip.start, 'cur frame lower than start');
+    console.assert(cur_frame < this.props.clip.end, 'cur frame higher than end?');
+
+    let index = Math.floor((cur_frame - this.props.clip.start) / DETECTION_FPS);
+    // deal with negative frames...
+    index = Math.max(0, index);
+    // deal with index being too far beyond end...
+    index = Math.min(index, this.props.clip.bboxes[0].length-1);
+    let curBox = this.props.clip.bboxes[0][index];
+
+    // update state of the face box
+    this._test_box.setState({x1: curBox.x1, x2: curBox.x2, y1: curBox.y1, y2: curBox.y2});
   }
 
   componentDidUpdate() {
@@ -172,27 +212,54 @@ class SearchResultView extends React.Component {
       this._video.addEventListener('seeked', this._onSeeked);
       this._video.addEventListener('loadeddata', this._onLoadedData);
       this._video.addEventListener('timeupdate', this._onTimeUpdate);
+      this._video.addEventListener('pause', this._onEnd);
     }
+  }
+
+  // FIXME: This is being reused with the BoundingBoxes class ...
+  _getDimensions() {
+    return {
+      width: this.state.fullwidth ? 780 : (this.props.video.width * (100 / this.props.video.height)),
+      height: this.state.fullwidth ? (this.props.video.height * (780 / this.props.video.width)) : 100
+    };
   }
 
   render() {
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
+    let {width, height} = this._getDimensions();
+
+    let face_box = <div/>
+    if (this.props.clip.bboxes.length > 0) {
+      /* Generate a face tracking BoxView here if clip.bboxes are there, then embed it into the
+       * search-result div.*/
+      let test_box = this.props.clip.bboxes[0][0];
+      // TODO: add the reference to a list as in the future there can be multiple bbox's
+      face_box = <BoxView box={test_box} key={0} width={width} height={height}
+          color={'blue'} ref={(n) => {this._test_box = n}}
+          zIndex = {3} />
+    }
+
     return (
       <div className='search-result'
            onMouseEnter={this._onMouseEnter.bind(this)}
            onMouseLeave={this._onMouseLeave.bind(this)}
            onClick={this._onClick}>
+        {face_box}
         {this.state.hover
          ? <video autoPlay muted ref={(n) => {this._video = n;}} style={vidStyle}>
            <source src={`/fs/usr/src/app/${this.props.video.path}`} />
-         </video>
+           {/*TODO: Make this work!*/}
+           {/*<track kind="subtitles" label="English subtitles" src="test.vtt" default></track>          */}
+           </video>
          : <div />}
+
         <BoundingBoxView
-            bboxes={this.props.clip.bboxes}
+            bboxes= {this.props.clip.bboxes}
             color = {this.props.clip.color}
-            width= {this.props.video.width}
+            width = {this.props.video.width}
             height= {this.props.video.height}
-            path={`/static/thumbnails/frame_${this.props.clip.frame}.jpg`}/>
+            path={`/static/thumbnails/frame_${this.props.clip.frame}.jpg`}
+            zIndex={1} />
       </div>
     );
   }
