@@ -4,6 +4,7 @@ import toml
 import subprocess as sp
 import shlex
 
+USER = 'pari'
 PROJECT = 'visualdb-1046'
 ZONE = 'us-central1'
 NAME = None
