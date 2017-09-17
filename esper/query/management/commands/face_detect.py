@@ -8,7 +8,7 @@ import math
 import random
 
 models = ModelDelegator('krishna')
-Video, Labeler, FaceInstance = models.Video, models.Labeler, models.FaceInstance
+Video, Labeler, FaceInstance, Frame = models.Video, models.Labeler, models.FaceInstance, models.Frame
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
@@ -42,14 +42,12 @@ class Command(BaseCommand):
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
                 db, c, lambda t: t.strided(stride), 'tmp_faces')
-
-            for path, video_faces_table in zip(filtered, faces_c.tables()):
+            for path, video_faces_table in zip(filtered, faces_c):
                 video = Video.objects.filter(path=path).get()
 
                 table = db.table(path)
                 imgs = table.load(['frame'], rows=range(0, table.num_rows(), stride))
-
-                video_faces = video_faces_table.load(['bboxes'], parsers.bboxes)
+                video_faces = video_faces_table.load(['poses'], lambda lst, db :parsers.bboxes(lst[0], db.protobufs))
 
                 for (i, frame_faces), (_, img) in zip(video_faces, imgs):
                     frame = Frame.objects.get(video=video, number=i*stride)
