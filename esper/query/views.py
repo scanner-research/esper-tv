@@ -37,7 +37,7 @@ DIFF_BBOX_THRESHOLD = 0.35
 # 24 frames/sec - so this requires more than a sec overlap
 FRAME_OVERLAP_THRESHOLD = 25
 
-colors = ['white', 'red', 'blue', 'green', 'cyan', 'black', 'yellow']
+COLORS = ['white', 'red', 'blue', 'green', 'cyan', 'black', 'yellow']
 
 
 def _print(*args):
@@ -318,7 +318,7 @@ def _get_face_clips(results):
             'end':
             f['max_frame'],
             'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))],
-            'color' : colors[hash(result['labeler__name']) % len(colors)]
+            'color' : COLORS[hash(result['labeler__name']) % len(COLORS)]
         })
 
     # sort these from frame numbers. This is especially useful when diffing the output.
@@ -417,7 +417,7 @@ def _get_face_query(min_frame_numbers):
     ]
 
 def get_color(s):
-    return colors[hash(s) % len(colors)]
+    return COLORS[hash(s) % len(COLORS)]
 
 def _get_face_clips(results):
     '''
@@ -521,15 +521,30 @@ def search(request):
                 'frame': result['frame__id'],
                 'bboxes': [],
                 'start': f['min_frame'],
-                'end': f['max_frame']
+                'end': f['max_frame'],
+                'colors': ['red']
             })
         clips = dict(clips)
 
     elif concept == 'face':
         # need to specify labeler, otherwise this list would also include Faces from other labelers.
-        min_frame_numbers = _get_face_min_frames(labeler='tinyfaces')
-        qs = _get_face_query(min_frame_numbers)
-        clips = _get_face_clips(zip(qs, min_frame_numbers))
+        # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
+        # qs = _get_face_query(min_frame_numbers)
+        # clips = _get_face_clips(zip(qs, min_frame_numbers))
+        insts = FaceInstance.objects.all().order_by('frame__video__id', 'frame__number').values('id', 'frame__id', 'frame__video__id', 'bbox', 'labeler__name')[:1000]
+        videos = defaultdict(lambda: defaultdict(list))
+        for inst in insts:
+            videos[inst['frame__video__id']][inst['frame__id']].append((inst['bbox'], inst['labeler__name']))
+
+        clips = defaultdict(list)
+        for video, frames in videos.iteritems():
+            frame_keys = sorted(frames.keys())
+            for frame in frame_keys:
+                clips[video].append({
+                    'frame': frame,
+                    'bboxes': bboxes_to_json([f[0] for f in frames[frame]]),
+                    'colors': [get_color(f[1]) for f in frames[frame]],
+                })
 
     # Mismatched labels.
     elif concept == 'face_diffs':
@@ -571,6 +586,10 @@ def search(request):
             for frame, labelers in frames.iteritems():
                 for labeler, bboxes in labelers.iteritems():
                     for bbox in bboxes:
+                        bb = bbox['bbox']
+                        if (bb.x2 - bb.x1) * (bb.y2 - bb.y1) < 0.01:
+                            continue
+
                         mistake = True
                         for other_labeler in labeler_names:
                             if labeler == other_labeler: continue
@@ -587,20 +606,18 @@ def search(request):
                             continue
                         break
 
-
-
         clips = defaultdict(list)
         for video, frames in list(mistakes.iteritems())[:20]:
-            for frame, (bboxes, other_bboxes, other_labeler) in list(frames.iteritems())[::5]:
+            for frame, (bboxes, other_bboxes, other_labeler) in list(frames.iteritems())[::2]:
                 clips[video].append({
                     'concept': bboxes[0]['id'],
                     'frame': frame,
                     'start': bboxes[0]['frame__number'],
                     'end': bboxes[0]['frame__number'],
                     'bboxes': bboxes_to_json([b['bbox'] for b in bboxes]),
-                    'color': get_color(bboxes[0]['labeler__name']),
+                    'colors': [get_color(bboxes[0]['labeler__name']) for _ in range(len(bboxes))],
                     'other_bboxes': bboxes_to_json([b['bbox'] for b in other_bboxes]),
-                    'other_color': get_color(other_labeler)
+                    'other_colors': [get_color(other_labeler) for _ in range(len(other_bboxes))]
                 })
 
     videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}

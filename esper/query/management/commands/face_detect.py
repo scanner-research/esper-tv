@@ -1,11 +1,14 @@
 from django.core.management.base import BaseCommand
-from query.models import *
+from query.base_models import ModelDelegator
 from scannerpy import Database, DeviceType, Job
 from scannerpy.stdlib import parsers, pipelines
 import os
 import cv2
 import math
 import random
+
+models = ModelDelegator('krishna')
+Video, Labeler, FaceInstance = models.Video, models.Labeler, models.FaceInstance
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
@@ -39,6 +42,7 @@ class Command(BaseCommand):
             c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
                 db, c, lambda t: t.strided(stride), 'tmp_faces')
+
             for path, video_faces_table in zip(filtered, faces_c.tables()):
                 video = Video.objects.filter(path=path).get()
 
@@ -51,7 +55,7 @@ class Command(BaseCommand):
                     frame = Frame.objects.get(video=video, number=i*stride)
                     for bbox in frame_faces:
                         if labeler.name == 'dummy' and random.randint(0,10) == 1:
-                           # generate dummy labels, sometimes  
+                           # generate dummy labels, sometimes
                            # TODO: add boundary checks, shouldn't matter much thouhg.
                            bbox.x1 += 50
                            bbox.x2 += 50
