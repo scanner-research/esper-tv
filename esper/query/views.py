@@ -554,7 +554,7 @@ def search(request):
         # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
         # qs = _get_face_query(min_frame_numbers)
         # clips = _get_face_clips(zip(qs, min_frame_numbers))
-        insts = FaceFeatures.objects.all().values('instance__id', 'instance__frame__id', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features')
+        insts = FaceFeatures.objects.all().values('instance__id', 'instance__frame__id', 'instance__frame__number', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features')
         host = insts[45]
         host_feature = np.array(json.loads(host['features']))
         for inst in insts:
@@ -566,7 +566,7 @@ def search(request):
 
         videos = defaultdict(list)
         for inst in insts:
-            videos[inst['instance__frame__video__id']].append((inst['instance__frame__id'], inst['instance__bbox'], inst['instance__labeler__name']))
+            videos[inst['instance__frame__video__id']].append((inst['instance__frame__id'], inst['instance__bbox'], inst['instance__labeler__name'], inst['instance__frame__number']))
 
         clips = defaultdict(list)
         for video, frames in videos.iteritems():
@@ -575,6 +575,7 @@ def search(request):
                     'frame': frame[0],
                     'bboxes': bboxes_to_json([frame[1]]),
                     'colors': [get_color(frame[2])],
+                    'start': frame[3],
                 })
 
     elif concept == 'faceinstance_diffs':
