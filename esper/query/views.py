@@ -21,6 +21,7 @@ import subprocess as sp
 import shlex
 import math
 import itertools
+import numpy as np
 
 BUCKET = 'scanner-data'
 FALLBACK_ENABLED = False
@@ -31,7 +32,7 @@ Config()
 from scanner.types_pb2 import BoundingBox
 
 models = ModelDelegator('krishna')
-Video, Frame, Face, FaceInstance, Labeler = models.Video, models.Frame, models.Face, models.FaceInstance, models.Labeler
+Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = models.Video, models.Frame, models.Face, models.FaceInstance, models.FaceFeatures, models.Labeler
 
 DIFF_BBOX_THRESHOLD = 0.35
 # 24 frames/sec - so this requires more than a sec overlap
@@ -547,26 +548,34 @@ def search(request):
                 })
 
     # Mismatched labels.
-    elif concept == 'face_diffs':
-        # figure out the different labelers used
-        labeler_names = FaceInstance.objects.values('labeler__name').distinct()
-        labeler_names = [l['labeler__name'] for l in labeler_names]
+    elif concept == 'face_ordered':
 
-        labelers = {}
-        # process each distinct labeler
-        for labeler in labeler_names:
-            min_frame_numbers = _get_face_min_frames(labeler=labeler)[:100]
+        # need to specify labeler, otherwise this list would also include Faces from other labelers.
+        # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
+        # qs = _get_face_query(min_frame_numbers)
+        # clips = _get_face_clips(zip(qs, min_frame_numbers))
+        insts = FaceFeatures.objects.all().values('instance__id', 'instance__frame__id', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features')
+        host = insts[45]
+        host_feature = np.array(json.loads(host['features']))
+        for inst in insts:
+            curr_feature = np.array(json.loads(inst['features']))
+            inst['dist'] = np.sum(np.square(host_feature- curr_feature))
+        insts = sorted(insts, key= lambda x:x['dist'])
+        for inst in insts:
+            logger.error(str(inst['instance__frame__id']) + ':'+str(inst['instance__id']) + ":" +str(inst['dist']))
 
-            # FIXME: sort min_frame_numbers - so then can optimize the loops when finding overlaps.
-            # not sure why its failing if I convert it to a list.
-            qs = _get_face_query(min_frame_numbers)
+        videos = defaultdict(list)
+        for inst in insts:
+            videos[inst['instance__frame__video__id']].append((inst['instance__frame__id'], inst['instance__bbox'], inst['instance__labeler__name']))
 
-            # TODO: if similar stuff can be used across other searches, potentially could make
-            # classes instead of using these zips?
-            labelers[labeler] = zip(qs, min_frame_numbers)
-
-        mistakes = _get_face_label_mismatches(labelers)
-        clips = _get_face_clips(mistakes)
+        clips = defaultdict(list)
+        for video, frames in videos.iteritems():
+            for frame in frames:
+                clips[video].append({
+                    'frame': frame[0],
+                    'bboxes': bboxes_to_json([frame[1]]),
+                    'colors': [get_color(frame[2])],
+                })
 
     elif concept == 'faceinstance_diffs':
         # figure out the different labelers used

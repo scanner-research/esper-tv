@@ -40,6 +40,10 @@ class SearchInput extends React.Component {
       ['id', 'int'],
       ['identity', 'enum']
     ],
+    face_ordered: [
+      ['id', 'int'],
+      ['identity', 'enum']
+    ],
     faceinstance_diffs: [
       ['id', 'int']
     ]
@@ -93,6 +97,7 @@ class SearchInput extends React.Component {
           <FormControl componentClass="select" placeholder="Select...">
             <option value="video">Video</option>
             <option value="face">Face</option>
+            <option value="face_ordered">Face Order</option>
             <option value="faceinstance_diffs">Face Diffs</option>
           </FormControl>
         </FormGroup>

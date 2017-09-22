@@ -1,30 +1,19 @@
 from django.core.management.base import BaseCommand
-from query.models import *
+from query.base_models import ModelDelegator
 import json
 import tensorflow as tf
 import facenet
 import cv2
 import os
 
-
-def load_imgs(img_directory):
-    imgs = []
-    for root, subdirs, files in os.walk(img_directory):
-        for file in files:
-            if os.path.splitext(file)[1].lower() in ('.jpg', '.jpeg'):
-                path = os.path.join(root, file)
-                imgs.append(path)
-
-    return imgs
-
-
-# FIXME: Exit gracefully if same images being sent to clustering algorithm a
-# second time...
-
-
 # TODO(wcrichto): merge this with the other embed faces script
 
 # TODO(pari): for dummy, can just add same labels rather than rerunning script.
+
+# TODO(matt): make this a python module in Scanner
+models = ModelDelegator('tvnews')
+Video, Labeler, FaceInstance, Frame, FaceFeatures = models.Video, models.Labeler, models.FaceInstance, models.Frame, models.FaceFeatures
+
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
 
