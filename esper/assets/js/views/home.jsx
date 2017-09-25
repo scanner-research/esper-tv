@@ -46,26 +46,47 @@ class SearchInput extends React.Component {
     ],
     faceinstance_diffs: [
       ['id', 'int']
+    ],
+    query: [
     ]
   }
 
+
+
   state = {
-    selectedConcept: 'video',
+    selectedConcept: 'query',
     selectedProperty: null,
+    selectedFilter: null,
     properties: [],
-    searching: false
+    filters: [['instance__frame__number', 'lte', '100']],
+    searching: false,
+    currFilterField: '',
+    currFilterType: 'eq',
+    currFilterValue: '',
+  }
+
+  filterTypeMap = {
+      'like': 'LIKE',
+      'nlike': 'NOT LIKE',
+      'eq': '=',
+      'neq': '!=',
+      'gt': '>',
+      'gte': '>=',
+      'lt': '<',
+      'lte': '<='
   }
 
   _onSearch(e) {
     e.preventDefault();
     let concept = e.target.concept.value;
+    let filters = JSON.stringify(this.state.filters);
     this.setState({searching: true});
     axios
-      .get('/api/search', {params: {concept: concept}})
+      .get('/api/search', {params: {concept: concept, filters: filters}})
       .then(((response) => {
         console.log('Received search results', response.data);
-        this.props.result.clips = response.data.clips;
         this.props.result.videos = response.data.videos;
+        this.props.result.clips = response.data.clips;
         this.props.result.colors = response.data.colors;
         this.setState({searching: false});
       }).bind(this));
@@ -88,19 +109,53 @@ class SearchInput extends React.Component {
     this.setState({selectedProperty: null});
   }
 
+  _onSelectFilter(e){
+    this.setState({selectedFilter: e.target.value});
+  }
+  
+  _onRemoveFilter(e){
+    let rem_idx = this.state.selectedFilter;
+    if (rem_idx >= 0){
+      this.state.filters.splice(rem_idx, 1);
+      this.setState({selectedFilter: -1});
+    }
+  } 
+
+
+  _onChangeFilterField(e){
+    this.setState({currFilterField: e.target.value});
+  }
+
+  _onChangeFilterType(e){
+    this.setState({currFilterType: e.target.value});
+  }
+
+  _onChangeFilterValue(e){
+    this.setState({currFilterValue: e.target.value});
+  }
+
+  _onAddFilter(e){
+    if(this.state.currFilterField.trim().length > 0 && this.state.currFilterValue.trim().length > 0){
+    this.state.filters.push([this.state.currFilterField.trim(), this.state.currFilterType, this.state.currFilterValue.trim()])
+    }
+    this.setState({currFilterValue: '', currFilterType: 'eq', currFilterField:''});
+  }
+
   render() {
     let selectSize = (n) => Math.max(Math.min(n, 5), 2)
     return (
       <Form className='search-input' onSubmit={this._onSearch.bind(this)} ref={(n) => {this._form = n;}}>
         <FormGroup controlId="concept" onChange={this._onSelectConcept.bind(this)}>
           <ControlLabel>Concept:</ControlLabel>
-          <FormControl componentClass="select" placeholder="Select...">
+          <FormControl componentClass="select" placeholder="Select..." value={this.state.selectedConcept}>
             <option value="video">Video</option>
             <option value="face">Face</option>
             <option value="face_ordered">Face Order</option>
             <option value="faceinstance_diffs">Face Diffs</option>
+            <option value="query">Query</option>
           </FormControl>
         </FormGroup>
+        {/*
         <FormGroup controlId="active-properties">
           <ControlLabel>Constraints:</ControlLabel>
           <FormControl componentClass="select"
@@ -119,6 +174,47 @@ class SearchInput extends React.Component {
                return <option key={keys[0]} value={keys[0]}>{keys[0]}</option>;
              })}
           </FormControl>
+        </FormGroup>
+        */}
+        <FormGroup id="filter-key">
+          <ControlLabel>Filters:</ControlLabel>
+          <FormControl componentClass="select"
+                       size={selectSize(this.state.filters.length)}
+                       value={this.state.filters.selectedFilter}
+                       onChange={this._onSelectFilter.bind(this)}>
+            {this.state.filters.map((keys, i) => {
+               return <option key={i} value={i}>{keys[0]+' '+this.filterTypeMap[keys[1]]+' '+keys[2]}</option>;
+             })}
+          </FormControl>
+          <Button id='rem-filter-button' onClick={this._onRemoveFilter.bind(this)}>Remove Filter</Button>
+        </FormGroup>
+        <FormGroup id="add-filter">
+          <ControlLabel>Add Filter:</ControlLabel>
+          <FormControl id='filter-field'
+                       type="text"
+                       value={this.state.currFilterField}
+                       placeholder="Filter field"
+                       onChange={this._onChangeFilterField.bind(this)} />
+                       
+          <FormControl id="filter-type"
+                       componentClass="select"
+                       value={this.state.currFilterType}
+                       onChange={this._onChangeFilterType.bind(this)}>
+            <option key='eq' value='eq'>{'='}</option>
+            <option key='neq' value='neq'>{'!='}</option>
+            <option key='gt' value='gt'>{'>'}</option>
+            <option key='gte' value='gte'>{'>='}</option>
+            <option key='lt' value='lt'>{'<'}</option>
+            <option key='lte' value='lte'>{'<='}</option>
+            <option key='like' value='like'>{'LIKE'}</option>
+            <option key='nlike' value='nlike'>{'NOT LIKE'}</option>
+          </FormControl> 
+          <FormControl id='filter-value'
+                       type="text"
+                       value={this.state.currFilterValue}
+                       placeholder="Filter value"
+                       onChange={this._onChangeFilterValue.bind(this)}/>
+          <Button id='add-filter' onClick={this._onAddFilter.bind(this)}>Add Filter</Button>
         </FormGroup>
         {this.state.selectedProperty != null
          ? <FormGroup controlId="property-value">
@@ -232,8 +328,8 @@ export default class Home extends React.Component {
 
 
   render() {
-    let video_keys = _.keys(this._result.videos);
-    video_keys.sort();
+    let orderby_keys = _.keys(this._result.clips);
+    orderby_keys.sort();
 
     return (
       <div className='row'>
@@ -246,12 +342,12 @@ export default class Home extends React.Component {
               <div key={i}>{name}: <div style={{backgroundColor: this._result.colors[name], width: '10px', height: '10px', display: 'inline-box'}} /></div>
             )}
           </div>
-          {video_keys.map((key, i) =>
+          {orderby_keys.map((key, i) =>
             <div className='search-result-video' key={i}>
-              <div>{this._result.videos[key].path}</div>
+              <div>{key}</div>
               <div>
                 {this._result.clips[key].map((clip, j) =>
-                  <SearchResultView key={j} video={this._result.videos[key]} clip={clip} />
+                  <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} />
                  )}
               </div>
             </div>

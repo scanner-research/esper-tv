@@ -12,10 +12,11 @@ from scannerpy import Config, Database, Job, DeviceType
 from django.db import connection
 import logging
 import time
-from django.db.models import Min, Max
+from django.db.models import Min, Max, Q
 import os
 from concurrent.futures import ThreadPoolExecutor
 from django.views.decorators.csrf import csrf_exempt
+from sets import Set
 import tempfile
 import subprocess as sp
 import shlex
@@ -504,21 +505,25 @@ def bboxes_to_json(l):
 
 def search(request):
     concept = request.GET.get('concept')
+    filters = json.loads(request.GET.get('filters'))
     # TODO(wcrichto): Unify video and face cases?
     # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
     # an individual query for every concept, which is a Bad Idea.
+
 
     if concept == 'video':
         min_frame_numbers = list(
             Video.objects.values('id').annotate(
                 min_frame=Min('frame__number'), max_frame=Max('frame__number')).order_by('id')[:10])
         qs = [
-            Video.objects.filter(id=f['id'], frame__number=f['min_frame']).distinct().values(
-                'id', 'frame__id').get() for f in min_frame_numbers
+            Video.objects.filter(id=f['id']).filter(frame__number=f['min_frame']).distinct().values(
+                'id', 'path', 'frame__id').get() for f in min_frame_numbers
         ]
+        video_keys = [res['id'] for res in qs]
         clips = defaultdict(list)
         for result, f in zip(qs, min_frame_numbers):
-            clips[result['id']].append({
+            clips[result['path']].append({
+                'video_id': result['id'],
                 'frame': result['frame__id'],
                 'bboxes': [],
                 'start': f['min_frame'],
@@ -532,20 +537,82 @@ def search(request):
         # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
         # qs = _get_face_query(min_frame_numbers)
         # clips = _get_face_clips(zip(qs, min_frame_numbers))
-        insts = FaceInstance.objects.all().order_by('frame__video__id', 'frame__number').values('id', 'frame__id', 'frame__video__id', 'bbox', 'labeler__name')[:1000]
+        insts = FaceInstance.objects.all().order_by('frame__video__id', 'frame__number').values('id', 'frame__id', 'frame__video__id', 'frame__video__path', 'bbox', 'labeler__name')
         videos = defaultdict(lambda: defaultdict(list))
+        video_keys = Set()
         for inst in insts:
-            videos[inst['frame__video__id']][inst['frame__id']].append((inst['bbox'], inst['labeler__name']))
-
+            videos[inst['frame__video__path']][inst['frame__id']].append((inst['bbox'], inst['labeler__name'], inst['frame__video__id']))
+            video_keys.add(inst['frame__video__id'])
         clips = defaultdict(list)
         for video, frames in videos.iteritems():
             frame_keys = sorted(frames.keys())
             for frame in frame_keys:
                 clips[video].append({
+                    'video_id': frames[frame][0][2],
                     'frame': frame,
                     'bboxes': bboxes_to_json([f[0] for f in frames[frame]]),
                     'colors': [get_color(f[1]) for f in frames[frame]],
                 })
+
+    # Mismatched labels.
+    elif concept == 'query':
+
+        # need to specify labeler, otherwise this list would also include Faces from other labelers.
+        # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
+        # qs = _get_face_query(min_frame_numbers)
+        # clips = _get_face_clips(zip(qs, min_frame_numbers))
+        Qargs = Q()
+        bbox_filters = []
+        feature_filters = []
+        for filt in filters:
+            field = filt[0]
+            if field == 'width' or field == 'height' or field == 'confidence':
+                bbox_filters.append(filt)
+                continue
+            elif field[:7] == 'distto_':
+                feature_filters.append(filt)
+                continue
+            op = filt[1]
+            negate = False
+            if op == 'neq':
+                negate = True
+            elif op == 'gt':
+                field = field+'__gt'
+            elif op == 'gte':
+                field = field+'__gte'
+            elif op == 'lt':
+                field = field+'__lgt'
+            elif op == 'lte':
+                field = field+'__lte'
+            elif op == 'like':
+                field = field+'__contains'
+            elif op == 'nlike':
+                field = field+'__contains'
+                negate=True
+            else:
+                continue    
+            currQ = Q(**{field : filt[2]})
+            if negate:
+                currQ = ~currQ
+            Qargs = Qargs & currQ
+
+        insts = FaceFeatures.objects.filter(Qargs).values('instance__id', 'instance__frame__id', 'instance__frame__number', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features', 'instance__frame__video__path')
+
+
+        logger.error(str(len(insts)))
+        video_keys = Set()
+
+        clips = defaultdict(list)
+        for inst in insts:
+            video_keys.add(inst['instance__frame__video__id'])
+            clips[inst['instance__frame__video__path']].append({
+                'frame': inst['instance__frame__id'],
+                'video_id': inst['instance__frame__video__id'],
+                'bboxes': bboxes_to_json([inst['instance__bbox']]),
+                'colors': [get_color(inst['instance__labeler__name'])],
+                'start': inst['instance__frame__number']
+                })
+
 
     # Mismatched labels.
     elif concept == 'face_ordered':
@@ -619,8 +686,9 @@ def search(request):
         clips = defaultdict(list)
         for video, frames in list(mistakes.iteritems())[:20]:
             for frame, (bboxes, other_bboxes, other_labeler) in list(frames.iteritems())[::2]:
-                clips[video].append({
+                clips[video.path].append({
                     'concept': bboxes[0]['id'],
+                    'video': video.id, 
                     'frame': frame,
                     'start': bboxes[0]['frame__number'],
                     'end': bboxes[0]['frame__number'],
@@ -630,6 +698,6 @@ def search(request):
                     'other_colors': [get_color(other_labeler) for _ in range(len(other_bboxes))]
                 })
 
-    videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=clips.keys())}
+    videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=video_keys)}
     colors = {l['name']: get_color(l['name']) for l in Labeler.objects.all().values('name')}
     return JsonResponse({'clips': clips, 'videos': videos, 'colors': colors})
