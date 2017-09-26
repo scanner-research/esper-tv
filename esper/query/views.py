@@ -598,6 +598,61 @@ def search(request):
 
         insts = FaceFeatures.objects.filter(Qargs).values('instance__id', 'instance__frame__id', 'instance__frame__number', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features', 'instance__frame__video__path')
 
+        # get features for requested distances:
+        features = defaultdict()
+        dist_feature_ids = []
+        for feat in feature_filters:
+            fetch_id = int(feat[0][7:])
+            dist_feature_ids.append(fetch_id)
+        found_features = FaceFeatures.objects.filter(instance__id__in=dist_feature_ids).select_related('instance')
+        for feat in found_features:
+            features[feat.instance.id] = np.array(json.loads(feat.features))
+            
+        filtered_insts = []
+        # deserialize bboxes, add distances to features of interest
+        for inst in insts:
+            inst_feature = np.array(json.loads(inst['features']))
+            for feature in features.keys():
+                inst['distto_'+str(feature)] = np.sum(np.square(inst_feature-features[feature]))
+            bbox = inst['instance__bbox']
+            inst['width'] = bbox.x2 - bbox.x1
+            inst['height'] = bbox.y2 - bbox.y1
+            inst['confidence'] = bbox.score
+            filtered = True
+            for filt in bbox_filters:
+                inst_value = None
+                filter_value = float(filt[2])
+                if filt[0] == 'width':
+                    inst_value = inst['width']
+                elif filt[0] == 'height':
+                    inst_value = inst['height']
+                elif filt[0] == 'confidence':
+                    inst_value = inst['confidence']
+                elif filt[0][:7] == 'distto_':
+                    inst_value = inst[filt[0]]
+                else:
+                    continue
+                comp = filt[1]
+                if comp == 'eq':
+                    filtered = inst_value == filter_value
+                elif comp == 'neq':
+                    filtered = inst_value != filter_value
+                elif comp == 'lt':
+                    filtered = inst_value < filter_value
+                elif comp == 'lte':
+                    filtered = inst_value <= filter_value
+                elif comp == 'gt':
+                    filtered = inst_value > filter_value
+                elif comp == 'gte':
+                    filtered = inst_value >= filter_value
+            if filtered:
+                filtered_insts.append(inst)
+        insts = filtered_insts
+
+
+
+        # TODO: order by
+
 
         logger.error(str(len(insts)))
         video_keys = Set()

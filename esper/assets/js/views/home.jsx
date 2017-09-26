@@ -58,7 +58,7 @@ class SearchInput extends React.Component {
     selectedProperty: null,
     selectedFilter: null,
     properties: [],
-    filters: [['instance__frame__number', 'lte', '100']],
+    filters: [['width', 'gte', '.1']],
     searching: false,
     currFilterField: '',
     currFilterType: 'eq',
@@ -200,6 +200,9 @@ class SearchInput extends React.Component {
                        componentClass="select"
                        value={this.state.currFilterType}
                        onChange={this._onChangeFilterType.bind(this)}>
+            {_.map(this.filterTypeMap, (value, key) => {
+                    return <option key={key} value={key}>{value}</option>;})}
+                       {/*
             <option key='eq' value='eq'>{'='}</option>
             <option key='neq' value='neq'>{'!='}</option>
             <option key='gt' value='gt'>{'>'}</option>
@@ -208,6 +211,7 @@ class SearchInput extends React.Component {
             <option key='lte' value='lte'>{'<='}</option>
             <option key='like' value='like'>{'LIKE'}</option>
             <option key='nlike' value='nlike'>{'NOT LIKE'}</option>
+            */}
           </FormControl> 
           <FormControl id='filter-value'
                        type="text"
