@@ -59,6 +59,7 @@ class SearchInput extends React.Component {
     selectedFilter: null,
     properties: [],
     filters: [['width', 'gte', '.1']],
+    orderby: ['instance__frame__number', 'instance__frame__video__path'],
     searching: false,
     currFilterField: '',
     currFilterType: 'eq',
@@ -80,9 +81,10 @@ class SearchInput extends React.Component {
     e.preventDefault();
     let concept = e.target.concept.value;
     let filters = JSON.stringify(this.state.filters);
+    let orderby = JSON.stringify(this.state.orderby);
     this.setState({searching: true});
     axios
-      .get('/api/search', {params: {concept: concept, filters: filters}})
+      .get('/api/search', {params: {concept: concept, filters: filters, orderby: orderby}})
       .then(((response) => {
         console.log('Received search results', response.data);
         this.props.result.videos = response.data.videos;

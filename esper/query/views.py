@@ -23,6 +23,7 @@ import shlex
 import math
 import itertools
 import numpy as np
+from operator import itemgetter
 
 BUCKET = 'scanner-data'
 FALLBACK_ENABLED = False
@@ -506,6 +507,7 @@ def bboxes_to_json(l):
 def search(request):
     concept = request.GET.get('concept')
     filters = json.loads(request.GET.get('filters'))
+    orderby = json.loads(request.GET.get('orderby'))
     # TODO(wcrichto): Unify video and face cases?
     # TODO(wcrichto): figure out stupid fucking groupwise aggregation issue. Right now we're
     # an individual query for every concept, which is a Bad Idea.
@@ -561,12 +563,13 @@ def search(request):
         # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
         # qs = _get_face_query(min_frame_numbers)
         # clips = _get_face_clips(zip(qs, min_frame_numbers))
+        bbox_keywords = ['width', 'height', 'confidence']
         Qargs = Q()
         bbox_filters = []
         feature_filters = []
         for filt in filters:
             field = filt[0]
-            if field == 'width' or field == 'height' or field == 'confidence':
+            if field in bbox_keywords: 
                 bbox_filters.append(filt)
                 continue
             elif field[:7] == 'distto_':
@@ -596,7 +599,14 @@ def search(request):
                 currQ = ~currQ
             Qargs = Qargs & currQ
 
-        insts = FaceFeatures.objects.filter(Qargs).values('instance__id', 'instance__frame__id', 'instance__frame__number', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features', 'instance__frame__video__path')
+        values = ['instance__id', 'instance__frame__id', 'instance__frame__number', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features', 'instance__frame__video__path']
+        for val in orderby:
+            if val[:7] != 'distto_' and val not in bbox_keywords and val not in values:
+                values.append(val)
+
+
+
+        insts = FaceFeatures.objects.filter(Qargs).values(*values)
 
         # get features for requested distances:
         features = defaultdict()
@@ -604,6 +614,11 @@ def search(request):
         for feat in feature_filters:
             fetch_id = int(feat[0][7:])
             dist_feature_ids.append(fetch_id)
+        for feat in orderby:
+            if feat[7:] == 'distto_':
+                fetch_id = int(feat[7:])
+                dist_feature_ids.append(fetch_id)
+
         found_features = FaceFeatures.objects.filter(instance__id__in=dist_feature_ids).select_related('instance')
         for feat in found_features:
             features[feat.instance.id] = np.array(json.loads(feat.features))
@@ -619,7 +634,7 @@ def search(request):
             inst['height'] = bbox.y2 - bbox.y1
             inst['confidence'] = bbox.score
             filtered = True
-            for filt in bbox_filters:
+            for filt in bbox_filters+feature_filters:
                 inst_value = None
                 filter_value = float(filt[2])
                 if filt[0] == 'width':
@@ -649,18 +664,18 @@ def search(request):
                 filtered_insts.append(inst)
         insts = filtered_insts
 
-
-
         # TODO: order by
-
+        if len(orderby)>0:
+            insts = sorted(insts, key = itemgetter(*orderby)) 
 
         logger.error(str(len(insts)))
         video_keys = Set()
 
         clips = defaultdict(list)
+        
         for inst in insts:
             video_keys.add(inst['instance__frame__video__id'])
-            clips[inst['instance__frame__video__path']].append({
+            clips[inst[orderby[0]] if len(orderby)> 0 and type(inst[orderby[0]]) in [str, unicode] else ''].append({
                 'frame': inst['instance__frame__id'],
                 'video_id': inst['instance__frame__video__id'],
                 'bboxes': bboxes_to_json([inst['instance__bbox']]),
