@@ -567,6 +567,7 @@ def search(request):
         Qargs = Q()
         bbox_filters = []
         feature_filters = []
+        other_filters = []
         for filt in filters:
             field = filt[0]
             if field in bbox_keywords: 
@@ -577,7 +578,9 @@ def search(request):
                 continue
             op = filt[1]
             negate = False
-            if op == 'neq':
+            if op == 'eq':
+                pass
+            elif op == 'neq':
                 negate = True
             elif op == 'gt':
                 field = field+'__gt'
@@ -615,10 +618,9 @@ def search(request):
             fetch_id = int(feat[0][7:])
             dist_feature_ids.append(fetch_id)
         for feat in orderby:
-            if feat[7:] == 'distto_':
+            if feat[:7] == 'distto_':
                 fetch_id = int(feat[7:])
                 dist_feature_ids.append(fetch_id)
-
         found_features = FaceFeatures.objects.filter(instance__id__in=dist_feature_ids).select_related('instance')
         for feat in found_features:
             features[feat.instance.id] = np.array(json.loads(feat.features))
@@ -668,7 +670,6 @@ def search(request):
         if len(orderby)>0:
             insts = sorted(insts, key = itemgetter(*orderby)) 
 
-        logger.error(str(len(insts)))
         video_keys = Set()
 
         clips = defaultdict(list)
@@ -682,39 +683,6 @@ def search(request):
                 'colors': [get_color(inst['instance__labeler__name'])],
                 'start': inst['instance__frame__number']
                 })
-
-
-    # Mismatched labels.
-    elif concept == 'face_ordered':
-
-        # need to specify labeler, otherwise this list would also include Faces from other labelers.
-        # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
-        # qs = _get_face_query(min_frame_numbers)
-        # clips = _get_face_clips(zip(qs, min_frame_numbers))
-        insts = FaceFeatures.objects.all().values('instance__id', 'instance__frame__id', 'instance__frame__number', 'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features')
-        host = insts[45]
-        host_feature = np.array(json.loads(host['features']))
-        for inst in insts:
-            curr_feature = np.array(json.loads(inst['features']))
-            inst['dist'] = np.sum(np.square(host_feature- curr_feature))
-        insts = sorted(insts, key= lambda x:x['dist'])
-        for inst in insts:
-            logger.error(str(inst['instance__frame__id']) + ':'+str(inst['instance__id']) + ":" +str(inst['dist']))
-
-        videos = defaultdict(list)
-        for inst in insts:
-            videos[inst['instance__frame__video__id']].append((inst['instance__frame__id'], inst['instance__bbox'], inst['instance__labeler__name'], inst['instance__frame__number']))
-
-        clips = defaultdict(list)
-        for video, frames in videos.iteritems():
-            for frame in frames:
-                clips[video].append({
-                    'frame': frame[0],
-                    'bboxes': bboxes_to_json([frame[1]]),
-                    'colors': [get_color(frame[2])],
-                    'start': frame[3],
-                })
-
     elif concept == 'faceinstance_diffs':
         # figure out the different labelers used
         labeler_names = FaceInstance.objects.values('labeler__name').distinct()

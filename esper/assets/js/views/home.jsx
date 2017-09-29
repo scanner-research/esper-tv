@@ -57,13 +57,15 @@ class SearchInput extends React.Component {
     selectedConcept: 'query',
     selectedProperty: null,
     selectedFilter: null,
+    selectedOrderBy: null,
     properties: [],
-    filters: [['width', 'gte', '.1']],
-    orderby: ['instance__frame__number', 'instance__frame__video__path'],
+    filters: [],
+    orderby: [],
     searching: false,
     currFilterField: '',
     currFilterType: 'eq',
     currFilterValue: '',
+    currOrderBy: ''
   }
 
   filterTypeMap = {
@@ -143,6 +145,30 @@ class SearchInput extends React.Component {
     this.setState({currFilterValue: '', currFilterType: 'eq', currFilterField:''});
   }
 
+  _onChangeOrderBy(e){
+    this.setState({currOrderBy : e.target.value})
+  }
+
+  _onAddOrderBy(e){
+    let orderByStr = this.state.currOrderBy.trim()
+    if (orderByStr.length > 0){
+      this.state.orderby.push(orderByStr);
+    }
+    this.setState({orderby: this.state.orderby, currOrderBy: ''})
+  }
+
+  _onSelectOrderBy(e){
+    this.setState({selectedOrderBy : e.target.value});
+  }
+
+  _onRemoveOrderBy(e){
+    let rem_idx = this.state.selectedOrderBy;
+    if (rem_idx >= 0){
+      this.state.orderby.splice(rem_idx, 1);
+      this.setState({selectedOrderBy: -1});
+    }
+  }
+
   render() {
     let selectSize = (n) => Math.max(Math.min(n, 5), 2)
     return (
@@ -152,12 +178,70 @@ class SearchInput extends React.Component {
           <FormControl componentClass="select" placeholder="Select..." value={this.state.selectedConcept}>
             <option value="video">Video</option>
             <option value="face">Face</option>
-            <option value="face_ordered">Face Order</option>
             <option value="faceinstance_diffs">Face Diffs</option>
             <option value="query">Query</option>
           </FormControl>
         </FormGroup>
-        {/*
+        {this.state.selectedConcept == "query" ?
+        <div>
+        <FormGroup id="filter-key">
+          <ControlLabel>Filters:</ControlLabel>
+          <FormControl componentClass="select"
+                       size={selectSize(this.state.filters.length)}
+                       value={this.state.filters.selectedFilter}
+                       onChange={this._onSelectFilter.bind(this)}>
+            {this.state.filters.map((keys, i) => {
+               return <option key={i} value={i}>{keys[0]+' '+this.filterTypeMap[keys[1]]+' '+keys[2]}</option>;
+             })}
+          </FormControl>
+          <Button id='rem-filter-button' onClick={this._onRemoveFilter.bind(this)}>Remove Filter</Button>
+<div>
+          <ControlLabel>Order By:</ControlLabel>
+          <FormControl componentClass="select"
+                       size={selectSize(this.state.orderby.length)}
+                       value={this.state.filters.selectedOrderBy}
+                       onChange={this._onSelectOrderBy.bind(this)}>
+            {this.state.orderby.map((keys, i) => {
+               return <option key={i} value={i}>{keys}</option>;
+             })}
+          </FormControl>
+          <Button id='rem-orderby-button' onClick={this._onRemoveOrderBy.bind(this)}>Remove Order By</Button>
+          </div>
+        </FormGroup>
+        <FormGroup id="add-filter">
+          <ControlLabel>Add Filter:</ControlLabel>
+          <FormControl id='filter-field'
+                       type="text"
+                       value={this.state.currFilterField}
+                       placeholder="Filter field"
+                       onChange={this._onChangeFilterField.bind(this)} />
+                       
+          <FormControl id="filter-type"
+                       componentClass="select"
+                       value={this.state.currFilterType}
+                       onChange={this._onChangeFilterType.bind(this)}>
+            {_.map(this.filterTypeMap, (value, key) => {
+                    return <option key={key} value={key}>{value}</option>;})}
+          </FormControl> 
+          <FormControl id='filter-value'
+                       type="text"
+                       value={this.state.currFilterValue}
+                       placeholder="Filter value"
+                       onChange={this._onChangeFilterValue.bind(this)}/>
+          <Button id='add-filter' onClick={this._onAddFilter.bind(this)}>Add Filter</Button>
+        </FormGroup>
+        <FormGroup controlId="orderby-add">
+          <ControlLabel>Add Order By:</ControlLabel>
+          <FormControl id='orderby-input'
+                       type="text"
+                       value={this.state.currOrderBy}
+                       placeholder="Order By Value"
+                       onChange={this._onChangeOrderBy.bind(this)}/>
+          <Button id='add-orderby' onClick={this._onAddOrderBy.bind(this)}>Add Filter</Button>
+        </FormGroup>
+        </div>
+        :
+        <div>
         <FormGroup controlId="active-properties">
           <ControlLabel>Constraints:</ControlLabel>
           <FormControl componentClass="select"
@@ -177,51 +261,6 @@ class SearchInput extends React.Component {
              })}
           </FormControl>
         </FormGroup>
-        */}
-        <FormGroup id="filter-key">
-          <ControlLabel>Filters:</ControlLabel>
-          <FormControl componentClass="select"
-                       size={selectSize(this.state.filters.length)}
-                       value={this.state.filters.selectedFilter}
-                       onChange={this._onSelectFilter.bind(this)}>
-            {this.state.filters.map((keys, i) => {
-               return <option key={i} value={i}>{keys[0]+' '+this.filterTypeMap[keys[1]]+' '+keys[2]}</option>;
-             })}
-          </FormControl>
-          <Button id='rem-filter-button' onClick={this._onRemoveFilter.bind(this)}>Remove Filter</Button>
-        </FormGroup>
-        <FormGroup id="add-filter">
-          <ControlLabel>Add Filter:</ControlLabel>
-          <FormControl id='filter-field'
-                       type="text"
-                       value={this.state.currFilterField}
-                       placeholder="Filter field"
-                       onChange={this._onChangeFilterField.bind(this)} />
-                       
-          <FormControl id="filter-type"
-                       componentClass="select"
-                       value={this.state.currFilterType}
-                       onChange={this._onChangeFilterType.bind(this)}>
-            {_.map(this.filterTypeMap, (value, key) => {
-                    return <option key={key} value={key}>{value}</option>;})}
-                       {/*
-            <option key='eq' value='eq'>{'='}</option>
-            <option key='neq' value='neq'>{'!='}</option>
-            <option key='gt' value='gt'>{'>'}</option>
-            <option key='gte' value='gte'>{'>='}</option>
-            <option key='lt' value='lt'>{'<'}</option>
-            <option key='lte' value='lte'>{'<='}</option>
-            <option key='like' value='like'>{'LIKE'}</option>
-            <option key='nlike' value='nlike'>{'NOT LIKE'}</option>
-            */}
-          </FormControl> 
-          <FormControl id='filter-value'
-                       type="text"
-                       value={this.state.currFilterValue}
-                       placeholder="Filter value"
-                       onChange={this._onChangeFilterValue.bind(this)}/>
-          <Button id='add-filter' onClick={this._onAddFilter.bind(this)}>Add Filter</Button>
-        </FormGroup>
         {this.state.selectedProperty != null
          ? <FormGroup controlId="property-value">
            <ControlLabel>Value:</ControlLabel>
@@ -233,6 +272,7 @@ class SearchInput extends React.Component {
            </InputGroup>
          </FormGroup>
          : <div />}
+          </div>}
         <Button type="submit" disabled={this.state.searching}>Search</Button>
         {this.state.searching
          ? <img className='spinner' src="/static/images/spinner.gif" />
