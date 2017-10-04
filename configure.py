@@ -8,12 +8,14 @@ USER = 'pari'
 PROJECT = 'visualdb-1046'
 ZONE = 'us-central1'
 NAME = None
-NGINX_PORT = '443'
+NGINX_PORT = '80'
 BUCKET = 'scanner-data'
 SUFFIX = '-{}'.format(NAME) if NAME is not None else ''
 
+
 def svc(s):
     return '{}{}'.format(s, SUFFIX)
+
 
 config = yaml.load("""
 version: '2'
@@ -83,16 +85,13 @@ def main():
     if args.cloud_files:
         esper_env = 'google'
         scanner_config['storage'] = {'type': 'gcs', 'bucket': BUCKET, 'db_path': 'scanner_db'}
-        media_url = 'https://storage.googleapis.com'
+        media_url = 'https://storage.cloud.google.com'
         config['services'][svc('esper')]['environment'].extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}'
         ])
         # TODO(wcrichto): make oauth tokens last longer?
-        config['services'][svc('nginx')]['environment'].extend([
-            'BUCKET={}'.format(BUCKET), 'OAUTH_TOKEN={}'.format(
-                sp.check_output(shlex.split('gcloud auth application-default print-access-token')).strip())
-        ])
+        config['services'][svc('nginx')]['environment'].extend(['BUCKET={}'.format(BUCKET)])
     else:
         esper_env = 'local'
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}

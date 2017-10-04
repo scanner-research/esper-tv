@@ -8,8 +8,8 @@ import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Butt
 
 class SearchResult {
   @observable clips = {};
-  @observable videos = {};
-  @observable colors = {};
+  videos = {};
+  colors = {};
 };
 
 class PropertyInput extends React.Component {
@@ -54,7 +54,7 @@ class SearchInput extends React.Component {
 
 
   state = {
-    selectedConcept: 'query',
+    selectedConcept: 'video',
     selectedProperty: null,
     selectedFilter: null,
     selectedOrderBy: null,
@@ -90,10 +90,17 @@ class SearchInput extends React.Component {
       .then(((response) => {
         console.log('Received search results', response.data);
         this.props.result.videos = response.data.videos;
-        this.props.result.clips = response.data.clips;
         this.props.result.colors = response.data.colors;
+        // We have to set clips last, because when we set it that triggers a re-render.
+        // If we don't set it last, then the views will see inconsistent state in the search results.
+        this.props.result.clips = response.data.clips;
         this.setState({searching: false});
-      }).bind(this));
+      }).bind(this))
+    /* .catch(((error) => {
+     *   // TODO(wcrichto): show error on frontend
+     *   console.log(error);
+     *   this.setState({searching: false});
+     * }).bind(this));*/
   }
 
   _onSelectConcept(e) {
@@ -116,14 +123,14 @@ class SearchInput extends React.Component {
   _onSelectFilter(e){
     this.setState({selectedFilter: e.target.value});
   }
-  
+
   _onRemoveFilter(e){
     let rem_idx = this.state.selectedFilter;
     if (rem_idx >= 0){
       this.state.filters.splice(rem_idx, 1);
       this.setState({selectedFilter: -1});
     }
-  } 
+  }
 
 
   _onChangeFilterField(e){
@@ -175,7 +182,7 @@ class SearchInput extends React.Component {
       <Form className='search-input' onSubmit={this._onSearch.bind(this)} ref={(n) => {this._form = n;}}>
         <FormGroup controlId="concept" onChange={this._onSelectConcept.bind(this)}>
           <ControlLabel>Concept:</ControlLabel>
-          <FormControl componentClass="select" placeholder="Select..." value={this.state.selectedConcept}>
+          <FormControl componentClass="select" placeholder="Select..." defaultValue={this.state.selectedConcept}>
             <option value="video">Video</option>
             <option value="face">Face</option>
             <option value="faceinstance_diffs">Face Diffs</option>
@@ -215,14 +222,14 @@ class SearchInput extends React.Component {
                        value={this.state.currFilterField}
                        placeholder="Filter field"
                        onChange={this._onChangeFilterField.bind(this)} />
-                       
+
           <FormControl id="filter-type"
                        componentClass="select"
                        value={this.state.currFilterType}
                        onChange={this._onChangeFilterType.bind(this)}>
             {_.map(this.filterTypeMap, (value, key) => {
                     return <option key={key} value={key}>{value}</option>;})}
-          </FormControl> 
+          </FormControl>
           <FormControl id='filter-value'
                        type="text"
                        value={this.state.currFilterValue}
@@ -312,8 +319,9 @@ class SearchResultView extends React.Component {
   }
 
   _onLoadedData = () => {
-    console.log(this.props.clip.start, this.props.video.fps, this.props.video.num_frames);
-    this._video.currentTime = this._toSeconds(this.props.clip.start);
+    if (this.props.clip.start) {
+      this._video.currentTime = this._toSeconds(this.props.clip.start);
+    }
   }
 
   _onTimeUpdate = () => {
@@ -333,18 +341,19 @@ class SearchResultView extends React.Component {
   render() {
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let path = `/media/assets/thumbnails/frame_${this.props.clip.frame}.jpg`;
+    console.log(this.props);
     let my_box = <BoundingBoxView
                      bboxes={this.props.clip.bboxes}
                      width={this.props.video.width}
                      height={this.props.video.height}
-                     color={this.props.clip.color}
+                     colors={this.props.clip.colors}
                      path={path} />;
     let other_box = this.props.clip.other_bboxes
                   ? <BoundingBoxView
                         bboxes={this.props.clip.other_bboxes}
                         width={this.props.video.width}
                         height={this.props.video.height}
-                        color={this.props.clip.other_color}
+                        colors={this.props.clip.other_colors}
                         path={path} />
                   : <div />;
     return (
@@ -357,7 +366,7 @@ class SearchResultView extends React.Component {
            <source src={`/media/${this.props.video.path}`} />
          </video>
          : <div />}
-        {this.props.clip.color == "red"
+        {this.props.clip.colors[0] == "red"
          ? <div>{my_box}{other_box}</div>
          : <div>{other_box}{my_box}</div>}
       </div>
@@ -392,9 +401,9 @@ export default class Home extends React.Component {
             <div className='search-result-video' key={i}>
               <div>{key}</div>
               <div>
-                {this._result.clips[key].map((clip, j) =>
-                  <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} />
-                 )}
+                {this._result.clips[key].map((clip, j) => {
+                   return <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} />;
+                 })}
               </div>
             </div>
            )}
@@ -403,5 +412,4 @@ export default class Home extends React.Component {
     );
   }
 
-// return <BoundingBoxView src={`/static/thumbnails/frame_${frame.frame}.jpg`} />;
 };

@@ -542,7 +542,7 @@ def search(request):
         insts = FaceInstance.objects.all().order_by('frame__video__id', 'frame__number').values('id', 'frame__id', 'frame__video__id', 'frame__video__path', 'bbox', 'labeler__name')
         videos = defaultdict(lambda: defaultdict(list))
         video_keys = Set()
-        for inst in insts:
+        for inst in insts[:100]:
             videos[inst['frame__video__path']][inst['frame__id']].append((inst['bbox'], inst['labeler__name'], inst['frame__video__id']))
             video_keys.add(inst['frame__video__id'])
         clips = defaultdict(list)
@@ -570,7 +570,7 @@ def search(request):
         other_filters = []
         for filt in filters:
             field = filt[0]
-            if field in bbox_keywords: 
+            if field in bbox_keywords:
                 bbox_filters.append(filt)
                 continue
             elif field[:7] == 'distto_':
@@ -596,7 +596,7 @@ def search(request):
                 field = field+'__contains'
                 negate=True
             else:
-                continue    
+                continue
             currQ = Q(**{field : filt[2]})
             if negate:
                 currQ = ~currQ
@@ -624,7 +624,7 @@ def search(request):
         found_features = FaceFeatures.objects.filter(instance__id__in=dist_feature_ids).select_related('instance')
         for feat in found_features:
             features[feat.instance.id] = np.array(json.loads(feat.features))
-            
+
         filtered_insts = []
         # deserialize bboxes, add distances to features of interest
         for inst in insts:
@@ -668,12 +668,12 @@ def search(request):
 
         # TODO: order by
         if len(orderby)>0:
-            insts = sorted(insts, key = itemgetter(*orderby)) 
+            insts = sorted(insts, key = itemgetter(*orderby))
 
         video_keys = Set()
 
         clips = defaultdict(list)
-        
+
         for inst in insts:
             video_keys.add(inst['instance__frame__video__id'])
             clips[inst[orderby[0]] if len(orderby)> 0 and type(inst[orderby[0]]) in [str, unicode] else ''].append({
@@ -683,6 +683,7 @@ def search(request):
                 'colors': [get_color(inst['instance__labeler__name'])],
                 'start': inst['instance__frame__number']
                 })
+
     elif concept == 'faceinstance_diffs':
         # figure out the different labelers used
         labeler_names = FaceInstance.objects.values('labeler__name').distinct()
@@ -702,7 +703,7 @@ def search(request):
                 for labeler, bboxes in labelers.iteritems():
                     for bbox in bboxes:
                         bb = bbox['bbox']
-                        if (bb.x2 - bb.x1) * (bb.y2 - bb.y1) < 0.01:
+                        if (bb.x2 - bb.x1) * (bb.y2 - bb.y1) < 0.005:
                             continue
 
                         mistake = True
@@ -721,12 +722,14 @@ def search(request):
                             continue
                         break
 
+        video_keys = set()
         clips = defaultdict(list)
         for video, frames in list(mistakes.iteritems())[:20]:
+            video_keys.add(video)
             for frame, (bboxes, other_bboxes, other_labeler) in list(frames.iteritems())[::2]:
-                clips[video.path].append({
+                clips[video].append({
                     'concept': bboxes[0]['id'],
-                    'video': video.id, 
+                    'video_id': video,
                     'frame': frame,
                     'start': bboxes[0]['frame__number'],
                     'end': bboxes[0]['frame__number'],

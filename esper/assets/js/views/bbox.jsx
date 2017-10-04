@@ -130,6 +130,30 @@ class BoxView extends React.Component {
   }
 }
 
+class ProgressiveImage extends React.Component {
+  state = {
+    loaded: false
+  }
+
+  _onLoad = () => {
+    this.setState({loaded: true});
+    if (this.props.onLoad) {
+      this.props.onLoad();
+    }
+  }
+
+  render() {
+    return (
+      <div>
+        {this.state.loaded
+         ? <div />
+         : <img src='/static/images/spinner.gif' />}
+        <img {...this.props} onLoad={this._onLoad} />
+      </div>
+    );
+  }
+}
+
 export class BoundingBoxView extends React.Component {
   state = {
     startX: -1,
@@ -137,7 +161,8 @@ export class BoundingBoxView extends React.Component {
     curX: -1,
     curY: -1,
     fullwidth: false,
-    mouseIn: false
+    mouseIn: false,
+    imageLoaded: false
   }
 
   constructor(props) {
@@ -244,19 +269,22 @@ export class BoundingBoxView extends React.Component {
            onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
+        {this.state.imageLoaded
+         ? <div>
         {this.state.startX != -1
          ? <BoxView box={this._makeBox()} width={width} height={height} />
          : <div />}
         {this.props.bboxes.map((box, i) =>
           <BoxView box={box} key={i} i={i} width={width} height={height}
-                   color = {this.props.color}
+                   color = {this.props.colors[i]}
                    onDelete={this._onDelete}
                    onChange={this._onChange}
                    onTrack={this._onTrack}
                    onSetTrack={this._onSetTrack}
                    onDeleteTrack={this._onDeleteTrack}/>)}
-        <img ref={(n) => {this._img = n;}} src={this.props.path} draggable={false}
-             style={imgStyle} />
+         </div>
+         : <div />}
+        <ProgressiveImage src={this.props.path} draggable={false} style={imgStyle} onLoad={() => this.setState({imageLoaded: true})} />
       </div>
     );
   }

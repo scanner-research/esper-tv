@@ -1,14 +1,15 @@
 from query.scripts.script_util import *
 import cmdutil
-import math
 import json
+import math
+from django.db import transaction
 
 def parse(path):
     with open(path, 'r') as f:
         while True:
             path = f.next()[:-1]  # this will raise StopIteration for us when we reach EOF
-            print path
             num_rows = int(math.ceil(int(f.next()) / 24.0))
+            print path, num_rows
             yield path, [f.next()[:-1] for _ in range(num_rows)]
 
 to_ingest = [
@@ -48,6 +49,13 @@ for fpath, labeler_name in to_ingest:
             Instance(labeler=labeler, frame=frames[j], bbox=bbox)
             for j, frame_boxes in video_boxes.iteritems() for bbox in frame_boxes
         ]
+
+        with transaction.atomic():
+            for face in faces:
+                f = Face()
+                f.save()
+                face.concept = f
+
         Instance.objects.bulk_create(faces)
 
         bar.update(vi)
