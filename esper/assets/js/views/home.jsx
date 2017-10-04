@@ -319,7 +319,7 @@ class SearchResultView extends React.Component {
   }
 
   _onLoadedData = () => {
-    if (this.props.clip.start) {
+    if (this.props.clip.start !== undefined) {
       this._video.currentTime = this._toSeconds(this.props.clip.start);
     }
   }

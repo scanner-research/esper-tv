@@ -67,6 +67,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cloud-db', action='store_true')
     parser.add_argument('--cloud-files', action='store_true')
+    parser.add_argument('--dataset', default='tvnews')
     args = parser.parse_args()
 
     if args.cloud_db:
@@ -88,17 +89,18 @@ def main():
         media_url = 'https://storage.cloud.google.com'
         config['services'][svc('esper')]['environment'].extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
-            'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}'
+            'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}', 'BUCKET={}'.format(BUCKET)
         ])
-        # TODO(wcrichto): make oauth tokens last longer?
-        config['services'][svc('nginx')]['environment'].extend(['BUCKET={}'.format(BUCKET)])
+        config['services'][svc('nginx')]['environment'].append(['BUCKET={}'.format(BUCKET)])
     else:
         esper_env = 'local'
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}
-        media_url = '/'
+        media_url = '/usr/src/app'
 
     config['services'][svc('nginx')]['environment'].append('MEDIA_URL={}'.format(media_url))
-    config['services'][svc('esper')]['environment'].append('ESPER_ENV={}'.format(esper_env))
+    config['services'][svc('esper')]['environment'].extend(
+        ['ESPER_ENV={}'.format(esper_env), 'DATASET={}'.format(args.dataset)])
+
     with open('esper/.scanner.toml', 'w') as f:
         f.write(toml.dumps(scanner_config))
 

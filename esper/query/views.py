@@ -25,7 +25,9 @@ import itertools
 import numpy as np
 from operator import itemgetter
 
-BUCKET = 'scanner-data'
+ESPER_ENV = os.environ.get('ESPER_ENV')
+BUCKET = os.environ.get('BUCKET')
+DATASET = os.environ.get('DATASET')  # TODO(wcrichto): move from config to runtime
 FALLBACK_ENABLED = False
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ logger = logging.getLogger(__name__)
 Config()
 from scanner.types_pb2 import BoundingBox
 
-models = ModelDelegator('krishna')
+models = ModelDelegator(DATASET)
 Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = models.Video, models.Frame, models.Face, models.FaceInstance, models.FaceFeatures, models.Labeler
 
 DIFF_BBOX_THRESHOLD = 0.35
@@ -62,28 +64,35 @@ def extract(frames):
 
         start = now()
         output = db.run(job, force=True)
-        print('Extract: {:.3f}'.format(now() - start))
-        sys.stdout.flush()
+        _print('Extract: {:.3f}'.format(now() - start))
 
         start = now()
         jpgs = [(jpg[0], frame) for (_, jpg), frame in zip(output.load(['img']), frames)]
-        print('Loaded: {:.3f}'.format(now() - start))
-        sys.stdout.flush()
+        _print('Loaded: {:.3f}'.format(now() - start))
 
-        temp_dir = tempfile.mkdtemp()
+        if ESPER_ENV == 'google':
+            temp_dir = tempfile.mkdtemp()
 
-        def write_jpg((jpg, frame)):
-            # db.config.storage.write('/assets/thumbnails/frame_{}'.format(frame.id), jpg)
-            with open('{}/frame_{}.jpg'.format(temp_dir, frame.id), 'w') as f:
-                f.write(jpg)
+            def write_jpg((jpg, frame)):
+                with open('{}/frame_{}.jpg'.format(temp_dir, frame.id), 'w') as f:
+                    f.write(jpg)
 
-        start = now()
-        with ThreadPoolExecutor(max_workers=64) as executor:
-            list(executor.map(write_jpg, jpgs))
-        sp.check_call(
-            shlex.split('gsutil -m mv "{}/*" gs://{}/assets/thumbnails'.format(temp_dir, BUCKET)))
-        print('Write: {:.3f}'.format(now() - start))
-        sys.stdout.flush()
+            start = now()
+            with ThreadPoolExecutor(max_workers=64) as executor:
+                list(executor.map(write_jpg, jpgs))
+            sp.check_call(
+                shlex.split('gsutil -m mv "{}/*" gs://{}/assets/thumbnails'.format(temp_dir, BUCKET)))
+            _print('Write: {:.3f}'.format(now() - start))
+
+        elif ESPER_ENV == 'local':
+            def write_jpg((jpg, frame)):
+                with open('assets/thumbnails/frame_{}.jpg'.format(frame.id), 'w') as f:
+                    f.write(jpg)
+
+            start = now()
+            with ThreadPoolExecutor(max_workers=64) as executor:
+                list(executor.map(write_jpg, jpgs))
+            _print('Write: {:.3f}'.format(now() - start))
 
         return jpg
 
@@ -727,7 +736,7 @@ def search(request):
         for video, frames in list(mistakes.iteritems())[:20]:
             video_keys.add(video)
             for frame, (bboxes, other_bboxes, other_labeler) in list(frames.iteritems())[::2]:
-                clips[video].append({
+                clips[Video.objects.get(id=video).path].append({
                     'concept': bboxes[0]['id'],
                     'video_id': video,
                     'frame': frame,
