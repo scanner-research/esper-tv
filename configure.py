@@ -91,7 +91,7 @@ def main():
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}', 'BUCKET={}'.format(BUCKET)
         ])
-        config['services'][svc('nginx')]['environment'].append(['BUCKET={}'.format(BUCKET)])
+        config['services'][svc('nginx')]['environment'].append('BUCKET={}'.format(BUCKET))
     else:
         esper_env = 'local'
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}

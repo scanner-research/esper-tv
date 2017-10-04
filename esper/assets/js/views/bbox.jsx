@@ -117,7 +117,7 @@ class BoxView extends React.Component {
       top: box.y1 * this.props.height + offsetY,
       width: (box.x2-box.x1) * this.props.width,
       height: (box.y2-box.y1) * this.props.height,
-      borderColor: this.props.color
+      borderColor: window.COLORS[box.labeler]
     };
 
     return <div onMouseOver={this._onMouseOver}
@@ -253,6 +253,7 @@ export class BoundingBoxView extends React.Component {
          y1: this.state.startY/height,
          x2: this.state.curX/width,
          y2: this.state.curY/height,
+         labeler: 'handlabeled'
        },
        track: null,
        gender: '0'
@@ -276,7 +277,6 @@ export class BoundingBoxView extends React.Component {
          : <div />}
         {this.props.bboxes.map((box, i) =>
           <BoxView box={box} key={i} i={i} width={width} height={height}
-                   color = {this.props.colors[i]}
                    onDelete={this._onDelete}
                    onChange={this._onChange}
                    onTrack={this._onTrack}

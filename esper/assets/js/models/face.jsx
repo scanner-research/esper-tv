@@ -13,6 +13,7 @@ export class Face {
     this.y1 = props.bbox.y1;
     this.x2 = props.bbox.x2;
     this.y2 = props.bbox.y2;
+    this.labeler = props.bbox.labeler;
     this.track = props.track;
     this.cls = props.gender;
   }
@@ -23,7 +24,8 @@ export class Face {
         x1: this.x1,
         y1: this.y1,
         x2: this.x2,
-        y2: this.y2
+        y2: this.y2,
+        labeler: this.labeler,
       },
       track: this.track,
       gender: this.cls

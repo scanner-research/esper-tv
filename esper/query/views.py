@@ -511,7 +511,12 @@ def _get_face_label_mismatches(labelers):
     return mistakes
 
 def bboxes_to_json(l):
-    return [json.loads(MessageToJson(b)) for b in l]
+    r = []
+    for b in l:
+        obj = json.loads(MessageToJson(b['bbox']))
+        obj['labeler'] = b['labeler__name']
+        r.append(obj)
+    return r
 
 def search(request):
     concept = request.GET.get('concept')
@@ -552,17 +557,17 @@ def search(request):
         videos = defaultdict(lambda: defaultdict(list))
         video_keys = Set()
         for inst in insts[:100]:
-            videos[inst['frame__video__path']][inst['frame__id']].append((inst['bbox'], inst['labeler__name'], inst['frame__video__id']))
+            videos[inst['frame__video__path']][inst['frame__id']].append(inst)
+            #'bbox': inst['bbox'], inst['labeler__name'], inst['frame__video__id']))
             video_keys.add(inst['frame__video__id'])
         clips = defaultdict(list)
         for video, frames in videos.iteritems():
             frame_keys = sorted(frames.keys())
             for frame in frame_keys:
                 clips[video].append({
-                    'video_id': frames[frame][0][2],
+                    'video_id': frames[frame][0]['frame__video__id'],
                     'frame': frame,
-                    'bboxes': bboxes_to_json([f[0] for f in frames[frame]]),
-                    'colors': [get_color(f[1]) for f in frames[frame]],
+                    'bboxes': bboxes_to_json(frames[frame])
                 })
 
     # Mismatched labels.
@@ -742,11 +747,9 @@ def search(request):
                     'frame': frame,
                     'start': bboxes[0]['frame__number'],
                     'end': bboxes[0]['frame__number'],
-                    'bboxes': bboxes_to_json([b['bbox'] for b in bboxes]),
-                    'colors': [get_color(bboxes[0]['labeler__name']) for _ in range(len(bboxes))],
-                    'other_bboxes': bboxes_to_json([b['bbox'] for b in other_bboxes]),
-                    'other_colors': [get_color(other_labeler) for _ in range(len(other_bboxes))]
-                })
+                    'bboxes': bboxes_to_json(bboxes),
+                    'other_bboxes': bboxes_to_json(other_bboxes),
+                })  # yapf: disable
 
     videos = {v.id: model_to_dict(v) for v in Video.objects.filter(pk__in=video_keys)}
     colors = {l['name']: get_color(l['name']) for l in Labeler.objects.all().values('name')}
