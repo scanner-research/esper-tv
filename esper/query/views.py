@@ -638,16 +638,12 @@ def search(request):
                 currQ = ~currQ
             Qargs = Qargs & currQ
 
-        values = [
-            'instance__id', 'instance__frame__id', 'instance__frame__number',
-            'instance__frame__video__id', 'instance__bbox', 'instance__labeler__name', 'features',
-            'instance__frame__video__path'
-        ]
+        values = ['id', 'frame__id', 'frame__number', 'frame__video__id', 'bbox', 'labeler__name', 'facefeatures__features', 'frame__video__path']
         for val in orderby:
             if val[:7] != 'distto_' and val not in bbox_keywords and val not in values:
                 values.append(val)
 
-        insts = FaceFeatures.objects.filter(Qargs).values(*values)
+        insts = FaceInstance.objects.filter(Qargs).values(*values)
 
         # get features for requested distances:
         features = defaultdict()
@@ -667,10 +663,16 @@ def search(request):
         filtered_insts = []
         # deserialize bboxes, add distances to features of interest
         for inst in insts:
-            inst_feature = np.array(json.loads(str(inst['features'])))
+            inst_feature = None
+            if (len(features)>0):
+                if inst['facefeatures__features'] is None:
+                    continue
+                else:
+                    inst_feature = np.array(json.loads(inst['facefeatures__features']))
+
             for feature in features.keys():
-                inst['distto_' + str(feature)] = np.sum(np.square(inst_feature - features[feature]))
-            bbox = inst['instance__bbox']
+                inst['distto_'+str(feature)] = np.sum(np.square(inst_feature-features[feature]))
+            bbox = inst['bbox']
             inst['width'] = bbox.x2 - bbox.x1
             inst['height'] = bbox.y2 - bbox.y1
             inst['confidence'] = bbox.score
@@ -713,24 +715,19 @@ def search(request):
 
         clips = defaultdict(list)
 
-        for inst in insts[:100]:
-            video_keys.add(inst['instance__frame__video__id'])
-            bbox = json.loads(MessageToJson(inst['instance__bbox']))
-            bbox['labeler'] = inst['instance__labeler__name']
-            bbox['id'] = inst['instance__id']
+        for inst in insts:
+            video_keys.add(inst['frame__video__id'])
+            bbox = json.loads(MessageToJson(inst['bbox']))
+            bbox['labeler'] = inst['labeler__name']
+            bbox['id'] = inst['id']
             bboxes = [bbox]
-            clips[inst[orderby[0]]
-                  if len(orderby) > 0 and type(inst[orderby[0]]) in [str, unicode] else ''].append({
-                      'frame':
-                      inst['instance__frame__id'],
-                      'video_id':
-                      inst['instance__frame__video__id'],
-                      'bboxes':
-                      bboxes,
-                      'colors': [get_color(inst['instance__labeler__name'])],
-                      'start':
-                      inst['instance__frame__number']
-                  })
+            clips[inst[orderby[0]] if len(orderby)> 0 and type(inst[orderby[0]]) in [str, unicode] else ''].append({
+                'frame': inst['frame__id'],
+                'video_id': inst['frame__video__id'],
+                'bboxes': bboxes,
+                'colors': [get_color(inst['labeler__name'])],
+                'start': inst['frame__number']
+                })
 
     elif concept == 'faceinstance_diffs':
         # figure out the different labelers used
