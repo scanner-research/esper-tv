@@ -126,7 +126,7 @@ class BoxView extends React.Component {
                 onMouseDown={this._onMouseDown}
                 className={`bounding-box gender-${box.cls}`}
                 style={style}
-                ref={(n) => {this._div = n}}>{box.track}</div>;
+                ref={(n) => {this._div = n}}>{box.id}</div>;
   }
 }
 

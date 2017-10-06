@@ -16,7 +16,8 @@ import requests
 
 GOOGLE = os.environ['ESPER_ENV'] == 'google'
 BUCKET = 'scanner-data'
-models = ModelDelegator('krishna')
+DATASET = os.environ.get('DATASET')
+models = ModelDelegator(DATASET)
 Video, Frame = models.Video, models.Frame
 
 

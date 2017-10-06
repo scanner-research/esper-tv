@@ -690,10 +690,14 @@ def search(request):
 
         for inst in insts:
             video_keys.add(inst['instance__frame__video__id'])
+            bbox = json.loads(MessageToJson(inst['instance__bbox']))
+            bbox['labeler'] = inst['instance__labeler__name']
+            bbox['id'] = inst['instance__id']
+            bboxes = [bbox]
             clips[inst[orderby[0]] if len(orderby)> 0 and type(inst[orderby[0]]) in [str, unicode] else ''].append({
                 'frame': inst['instance__frame__id'],
                 'video_id': inst['instance__frame__video__id'],
-                'bboxes': bboxes_to_json([inst['instance__bbox']]),
+                'bboxes': bboxes,
                 'colors': [get_color(inst['instance__labeler__name'])],
                 'start': inst['instance__frame__number']
                 })

@@ -7,7 +7,9 @@ import cv2
 import math
 import random
 
-models = ModelDelegator('krishna')
+DATASET = os.environ.get('DATASET')
+
+models = ModelDelegator(DATASET)
 Video, Labeler, FaceInstance, Frame = models.Video, models.Labeler, models.FaceInstance, models.Frame
 
 class Command(BaseCommand):
