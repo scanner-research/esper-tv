@@ -47,6 +47,7 @@ export default class SearchInput extends React.Component {
     selectedProperty: null,
     selectedFilter: null,
     selectedOrderBy: null,
+    selectedQueryType: 'face',
     properties: [],
     filters: [],
     orderby: [],
@@ -68,14 +69,21 @@ export default class SearchInput extends React.Component {
       'lte': '<='
   }
 
+  queryTypeMap = {
+      'face' : 'Face',
+      'frame' : 'Frame',
+      'video' : 'Video'
+  }
+
   _onSearch(e) {
     e.preventDefault();
     let concept = e.target.concept.value;
     let filters = JSON.stringify(this.state.filters);
     let orderby = JSON.stringify(this.state.orderby);
+    let querytype = this.state.selectedQueryType
     this.setState({searching: true});
     axios
-      .get('/api/search', {params: {concept: concept, filters: filters, orderby: orderby}})
+      .get('/api/search', {params: {concept: concept, filters: filters, orderby: orderby, querytype: querytype}})
       .then(((response) => {
         console.log('Received search results', response.data);
         this.props.onSearch(response.data);
@@ -155,6 +163,10 @@ export default class SearchInput extends React.Component {
     }
   }
 
+  _onChangeQueryType(e){
+    this.setState({selectedQueryType : e.target.value});
+  }
+
   render() {
     let selectSize = (n) => Math.max(Math.min(n, 5), 2)
     return (
@@ -170,6 +182,16 @@ export default class SearchInput extends React.Component {
         </FormGroup>
         {this.state.selectedConcept == "query" ?
         <div>
+        <FormGroup id="query-type">
+          <ControlLabel>Query Type:</ControlLabel>
+          <FormControl componentClass="select"
+                       value={this.state.currQueryType}
+                       onChange={this._onChangeQueryType.bind(this)}>
+            {_.map(this.queryTypeMap, ( (value, key) => {
+              return <option key={key} value={key}>{value}</option>;
+                                                             }))}
+          </FormControl>
+        </FormGroup>
         <FormGroup id="filter-key">
           <ControlLabel>Filters:</ControlLabel>
           <FormControl componentClass="select"
