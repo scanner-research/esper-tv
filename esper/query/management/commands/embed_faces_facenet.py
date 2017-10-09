@@ -11,7 +11,7 @@ import os
 # TODO(pari): for dummy, can just add same labels rather than rerunning script.
 
 # TODO(matt): make this a python module in Scanner
-BUCKET = os.environ.get('DATASET')
+DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
 Video, Labeler, FaceInstance, Frame, FaceFeatures = models.Video, models.Labeler, models.FaceInstance, models.Frame, models.FaceFeatures
 

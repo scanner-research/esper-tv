@@ -1,0 +1,34 @@
+worker_processes 32;
+
+events {
+    worker_connections   1024;
+    use                  epoll;
+    multi_accept         on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+
+    server {
+        listen ${PORT};
+        server_name server;
+
+        access_log /dev/stdout;
+        error_log /dev/stdout debug;
+
+        location /static {
+            alias /usr/src/app/assets;
+        }
+
+        include /etc/nginx/${ESPER_ENV}.conf;
+
+        location @fallback {
+            rewrite ^(.*)$ /fallback$1;
+            proxy_pass http://esper:8000;
+        }
+
+        location / {
+            proxy_pass http://esper:8000;
+        }
+    }
+}

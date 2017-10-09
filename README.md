@@ -18,12 +18,13 @@ If you have a GPU and are running on Linux:
 * `pip install nvidia-docker-compose`
 * For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.
 
-If you do not have a GPU or are not running Linux: `pip install docker-compose`
 ```
 export MYSQL_PASSWORD=<pick a password, save it to your shell .rc>
 alias dc=docker-compose
+
+pip install -r requirements.txt
 python configure.py
-dc build
+dc pull
 dc up -d nginx
 dc exec esper ./scripts/setup.sh
 ```

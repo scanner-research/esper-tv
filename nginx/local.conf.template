@@ -1,0 +1,6 @@
+# INSECURE - allows reads of any file in your esper directory
+
+location /media {
+    alias /usr/src/app;
+    error_page 403 404 = @fallback;
+}

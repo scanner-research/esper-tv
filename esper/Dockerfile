@@ -19,7 +19,7 @@ RUN git clone https://github.com/torch/distro.git /opt/torch --recursive && \
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql libpq-dev cron python-tk emacs24 sqlite3 \
+    apt-get install -y postgresql libpq-dev cron python-tk sqlite3 \
     npm nodejs vim mysql-client libmysqlclient-dev && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
@@ -33,8 +33,6 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 ADD requirements.txt .
 RUN pip install -r requirements.txt
 
-ADD .scanner.toml /root/.scanner.toml
-
 ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:/usr/src/app/deps/facenet/src:$PYTHONPATH
 ENV GLOG_minloglevel=1
 
@@ -46,4 +44,4 @@ ENV GOOGLE_APPLICATION_CREDENTIALS=/usr/src/app/visualdb-key.json
 RUN gcloud config set project visualdb-1046 && \
     gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
 
-CMD ["gunicorn", "--log-file=-", "-c", "gunicorn_conf.py", "esper.wsgi:application", "--reload"]
+CMD cp .scanner.toml /root/ && gunicorn --log-file=- -c gunicorn_conf.py esper.wsgi:application --reload

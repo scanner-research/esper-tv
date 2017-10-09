@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import *
+from query.base_models import ModelDelegator
 import random
 import json
 import tensorflow as tf
@@ -11,6 +11,9 @@ from django.core.exceptions import ValidationError
 def dist(feat1, feat2):
     return np.sum(np.square(np.subtract(feat1, feat2)))
 
+DATASET = os.environ.get('DATASET')
+models = ModelDelegator(DATASET)
+Video, Labeler, FaceFeatures, FaceInstance, Face = models.Video, models.Labeler, models.FaceFeatures, models.FaceInstance, models.Face
 
 # TODO(matt): clean this up, seems like there's a lot of redundant/commented code
 # The 5-tuple that's stored in "recent_features" should be a dict for human-readable keys

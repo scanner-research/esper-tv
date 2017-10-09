@@ -21,14 +21,14 @@ config = yaml.load("""
 version: '2'
 services:
   nginx{suffix}:
-    build: ./nginx
-    image: scannerresearch/esper-nginx
+    image: nginx
+    command: ["bash", "/tmp/subst.sh"]
     volumes:
       - ./esper:/usr/src/app
-      - /mnt/gcs:/usr/src/app/gcs
+      - ./nginx:/tmp
     depends_on: [esper{suffix}]
     ports: ["{port}:{port}"]
-    environment: []
+    environment: ["PORT={port}"]
 
   esper{suffix}:
     build:
@@ -86,20 +86,19 @@ def main():
     if args.cloud_files:
         esper_env = 'google'
         scanner_config['storage'] = {'type': 'gcs', 'bucket': BUCKET, 'db_path': 'scanner_db'}
-        media_url = 'https://storage.cloud.google.com'
         config['services'][svc('esper')]['environment'].extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
-            'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}', 'BUCKET={}'.format(BUCKET)
+            'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
         ])
-        config['services'][svc('nginx')]['environment'].append('BUCKET={}'.format(BUCKET))
     else:
         esper_env = 'local'
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}
-        media_url = '/usr/src/app'
 
-    config['services'][svc('nginx')]['environment'].append('MEDIA_URL={}'.format(media_url))
-    config['services'][svc('esper')]['environment'].extend(
-        ['ESPER_ENV={}'.format(esper_env), 'DATASET={}'.format(args.dataset)])
+    for service in config['services'].values():
+        service['environment'].extend([
+            'ESPER_ENV={}'.format(esper_env), 'DATASET={}'.format(args.dataset),
+            'BUCKET={}'.format(BUCKET)
+        ])
 
     with open('esper/.scanner.toml', 'w') as f:
         f.write(toml.dumps(scanner_config))

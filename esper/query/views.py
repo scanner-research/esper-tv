@@ -445,6 +445,7 @@ def _get_face_clips(results):
     clips = defaultdict(list)
     for result, f in results:
         clips[result['faceinstance__frame__video__id']].append({
+            'video_id': result['faceinstance__frame__video__id'],
             'concept': result['id'],
             'frame': result['faceinstance__frame__id'],
             'start': f['min_frame'],

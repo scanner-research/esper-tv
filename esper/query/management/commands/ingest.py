@@ -14,8 +14,8 @@ from timeit import default_timer as now
 import os
 import requests
 
-GOOGLE = os.environ['ESPER_ENV'] == 'google'
-BUCKET = 'scanner-data'
+ESPER_ENV = os.environ.get('ESPER_ENV')
+BUCKET = os.environ.get('BUCKET')
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
 Video, Frame = models.Video, models.Frame
@@ -82,7 +82,7 @@ def save_frames(video):
 def ingest(path, num_frames):
     print path
     try:
-        if GOOGLE:
+        if ESPER_ENV == 'google':
             _, filename = os.path.split(path)
             local_path = '/tmp/{}'.format(filename)
             run('gsutil cp gs://{}/{} {}'.format(BUCKET, path, local_path))
@@ -103,7 +103,7 @@ def ingest(path, num_frames):
 
         save_frames(video)
 
-        if GOOGLE:
+        if ESPER_ENV == 'google':
             run('rm {}'.format(local_path))
     except:
         Video.objects.filter(path=path).delete()
@@ -123,7 +123,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         with open(options['path']) as f:
-            paths = set([s.strip() for s in f.readlines()])
+            paths = set([s.strip() for s in f.readlines()][:1])
 
         with Database() as db:
             print 'Ingesting videos into Scanner...'
