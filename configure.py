@@ -3,13 +3,10 @@ import yaml
 import toml
 import subprocess as sp
 import shlex
+from dotmap import DotMap
 
-USER = 'pari'
-PROJECT = 'visualdb-1046'
-ZONE = 'us-central1'
 NAME = None
 NGINX_PORT = '80'
-BUCKET = 'scanner-data'
 SUFFIX = '-{}'.format(NAME) if NAME is not None else ''
 
 
@@ -55,26 +52,41 @@ volumes: ["./mysql-db:/var/lib/mysql", "./mysql.cnf:/etc/mysql/mysql.cnf"]
 ports: ["3306"]
 """)
 
-db_cloud = yaml.load("""
+db_google = yaml.load("""
 image: gcr.io/cloudsql-docker/gce-proxy:1.09
-command: /cloud_sql_proxy -instances={project}:{zone}:esper=tcp:0.0.0.0:3306 -credential_file=/config
 volumes: ["./visualdb-key.json:/config"]
 environment: []
 ports: ["3306"]
-""".format(project=PROJECT, zone=ZONE))
+""")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cloud-db', action='store_true')
-    parser.add_argument('--cloud-files', action='store_true')
+    parser.add_argument('--config', '-c')
     parser.add_argument('--dataset', default='tvnews')
     args = parser.parse_args()
 
-    if args.cloud_db:
-        config['services'][svc('db')] = db_cloud
+    if args.config:
+        # TODO(wcrichto): validate config file
+        base_config = DotMap(toml.load(args.config))
+    else:
+        base_config = DotMap({
+            'storage': {
+                'type': 'local'
+            },
+            'database': {
+                'type': 'local',
+                'name': 'esper'
+            }
+        })
+
+    if base_config.database.type == 'google':
+        config['services'][svc('db')] = db_google
+        config['services'][svc('db')]['command'] = \
+            '/cloud_sql_proxy -instances={project}:{zone}:{name}=tcp:0.0.0.0:3306 -credential_file=/config'.format(
+                project=base_config.google.project, zone=base_config.google.zone, name=base_config.database.name)
         config['services'][svc('esper')]['environment'] = [
-            "DJANGO_DB_USER=will",
+            "DJANGO_DB_USER={}".format(base_config.database.user),
         ]
     else:
         config['services'][svc('db')] = db_local
@@ -84,22 +96,29 @@ def main():
         ]
 
     scanner_config = {}
-    if args.cloud_files:
-        esper_env = 'google'
-        scanner_config['storage'] = {'type': 'gcs', 'bucket': BUCKET, 'db_path': 'scanner_db'}
+    if base_config.storage.type == 'google':
+        scanner_config['storage'] = {
+            'type': 'gcs',
+            'bucket': base_config.storage.bucket,
+            'db_path': '{}/scanner_db'.format(base_config.storage.path)
+        }
         config['services'][svc('esper')]['environment'].extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
         ])
     else:
-        esper_env = 'local'
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}
 
     for service in config['services'].values():
-        service['environment'].extend([
-            'ESPER_ENV={}'.format(esper_env), 'DATASET={}'.format(args.dataset),
-            'BUCKET={}'.format(BUCKET)
-        ])
+        env_vars = [
+            'ESPER_ENV={}'.format(base_config.storage.type), 'DATASET={}'.format(args.dataset),
+            'DATA_PATH={}'.format(base_config.storage.path)
+        ]
+
+        if base_config.storage.type == 'google':
+            env_vars.append('BUCKET={}'.format(base_config.storage.bucket))
+
+        service['environment'].extend(env_vars)
 
     with open('esper/.scanner.toml', 'w') as f:
         f.write(toml.dumps(scanner_config))

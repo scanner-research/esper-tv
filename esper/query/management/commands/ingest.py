@@ -16,6 +16,7 @@ import requests
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
+DATA_PATH = os.environ.get('DATA_PATH')
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
 Video, Frame = models.Video, models.Frame
@@ -85,7 +86,7 @@ def ingest(path, num_frames):
         if ESPER_ENV == 'google':
             _, filename = os.path.split(path)
             local_path = '/tmp/{}'.format(filename)
-            run('gsutil cp gs://{}/{} {}'.format(BUCKET, path, local_path))
+            run('gsutil cp gs://{}/{}/{} {}'.format(BUCKET, DATA_PATH, path, local_path))
         else:
             local_path = path
 

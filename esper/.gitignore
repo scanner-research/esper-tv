@@ -10,3 +10,4 @@ assets/thumbnails
 assets/audio
 webpack-stats.json
 .scanner.toml
+visualdb-key.json

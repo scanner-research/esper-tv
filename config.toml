@@ -1,0 +1,13 @@
+[google]
+project = "visualdb-1046"
+zone = "us-west1-b"
+
+[storage]
+type = "google"
+bucket = "esper"
+path = "public"
+
+[database]
+type = "google"
+name = "esper2"
+user = "will"
