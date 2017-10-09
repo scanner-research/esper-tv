@@ -5,8 +5,9 @@ import sys
 with base.Dataset('tvnews'):
 
     class Video(base.Video):
-        station = base.CharField()
+        channel = base.CharField()
         show = base.CharField()
+        time = models.DateTimeField()
 
     class Frame(base.Frame):
         pass
@@ -28,8 +29,7 @@ with base.Dataset('tvnews'):
 with base.Dataset('krishna'):
 
     class Video(base.Video):
-        station = base.CharField()
-        show = base.CharField()
+        pass
 
     class Frame(base.Frame):
         pass

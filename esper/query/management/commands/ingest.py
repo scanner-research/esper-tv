@@ -13,6 +13,7 @@ import multiprocessing as mp
 from timeit import default_timer as now
 import os
 import requests
+from datetime import datetime
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -89,6 +90,13 @@ def ingest(path, num_frames):
         else:
             local_path = path
 
+        parts = os.path.splitext(os.path.split(path)[1])[0].split('_')
+        [channel, date, time] = parts[:3]
+        dt = datetime.strptime('{} {}'.format(date, time), '%Y%m%d %H%M%S')
+        if channel[-1] == 'W':
+            channel = channel[:-1]
+        show = ' '.join(parts[3:-1])  # -1 for "_segment"
+
         video = Video()
         video.path = path
         video.num_frames = num_frames
@@ -96,6 +104,9 @@ def ingest(path, num_frames):
         width, height = get_dimensions(local_path)
         video.width = width
         video.height = height
+        video.time = dt
+        video.channel = channel
+        video.show = show
         video.save()
 
         frames = [Frame(number=i, video=video) for i in range(video.num_frames)]
@@ -123,14 +134,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         with open(options['path']) as f:
-            paths = set([s.strip() for s in f.readlines()][:1])
+            paths = [s.strip() for s in f.readlines()]
 
         with Database() as db:
-            print 'Ingesting videos into Scanner...'
-            tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
-            for path, _ in failed:
-                paths.remove(path)
-            all_num_frames = [table.num_rows() for table in tables]
+        #     print 'Ingesting videos into Scanner...'
+        #     tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
+        #     for path, _ in failed:
+        #         paths.remove(path)
+        #     all_num_frames = [table.num_rows() for table in tables]
+            all_num_frames = [db.table(p).num_rows() for p in paths]
 
         print 'Creating entries in DB...'
         for path, num_frames in zip(paths, all_num_frames):
