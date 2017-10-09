@@ -14,14 +14,30 @@ const render_component = (Component) => (
 );
 
 export default class App extends React.Component {
+  state = {
+    valid: true
+  }
+
+  constructor() {
+    super();
+
+    let img = new Image();
+    img.onerror = (() => this.setState({valid: false})).bind(this);
+    img.src = "https://storage.cloud.google.com/esper/do_not_delete.jpg";
+  }
+
   render() {
-    return (
-      <Router>
-        <div>
-          <h1><Link to="/">Esper</Link></h1>
-          <Route exact path="/" component={render_component(views.Home)} />
-        </div>
-      </Router>
-    );
+    if (this.state.valid) {
+      return (
+        <Router>
+          <div>
+            <h1><Link to="/">Esper</Link></h1>
+            <Route exact path="/" component={render_component(views.Home)} />
+          </div>
+        </Router>
+      );
+    } else {
+      return <div className='login-error'>You must be logged into a validated Google account to access Esper.</div>
+    }
   }
 };
