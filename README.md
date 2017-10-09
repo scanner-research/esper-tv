@@ -15,7 +15,6 @@ First, [install Docker](https://docs.docker.com/engine/installation/#supported-p
 
 If you have a GPU and are running on Linux:
 * [Install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start)
-* `pip install nvidia-docker-compose`
 * For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.
 
 ```
@@ -25,7 +24,7 @@ alias dc=docker-compose
 pip install -r requirements.txt
 python configure.py
 dc pull
-dc up -d nginx
+dc up -d
 dc exec esper ./scripts/setup.sh
 ```
 

@@ -1,4 +1,5 @@
 pyyaml
 toml
 docker-compose
+nvidia-docker-compose
 dotmap
