@@ -52,7 +52,7 @@ export default class SearchResultView extends React.Component {
 
   render() {
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
-    let path = `/media/assets/thumbnails/frame_${this.props.clip.frame}.jpg`;
+    let path = `/server_media/thumbnails/frame_${this.props.clip.frame}.jpg`;
     let my_box = <BoundingBoxView
                      bboxes={this.props.clip.bboxes}
                      width={this.props.video.width}
@@ -72,7 +72,7 @@ export default class SearchResultView extends React.Component {
            onClick={this._onClick}>
         {this.state.hover
          ? <video autoPlay muted ref={(n) => {this._video = n;}} style={vidStyle}>
-           <source src={`/media/${this.props.video.path}`} />
+           <source src={`/system_media/${this.props.video.path}`} />
          </video>
          : <div />}
         {this.props.clip.bboxes.length > 0 && this.props.clip.bboxes[0].labeler == "tinyfaces"
