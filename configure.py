@@ -59,6 +59,7 @@ db_cloud = yaml.load("""
 image: gcr.io/cloudsql-docker/gce-proxy:1.09
 command: /cloud_sql_proxy -instances={project}:{zone}:esper=tcp:0.0.0.0:3306 -credential_file=/config
 volumes: ["./visualdb-key.json:/config"]
+environment: []
 ports: ["3306"]
 """.format(project=PROJECT, zone=ZONE))
 
