@@ -2,7 +2,7 @@
 # a redirect now.
 
 location /server_media {
-    rewrite ^/media/(.*)$ /${BUCKET}/${DATA_PATH}/$1 break;
+    rewrite ^/server_media/(.*)$ /${BUCKET}/${DATA_PATH}/$1 break;
     proxy_pass https://storage.cloud.google.com;
     proxy_pass_request_headers on;
     proxy_intercept_errors on;
@@ -11,7 +11,7 @@ location /server_media {
 }
 
 location /system_media {
-    rewrite ^/media/(.*)$ /${BUCKET}/$1 break;
+    rewrite ^/system_media/(.*)$ /${BUCKET}/$1 break;
     proxy_pass https://storage.cloud.google.com;
     proxy_pass_request_headers on;
     proxy_intercept_errors on;
