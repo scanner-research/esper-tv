@@ -28,6 +28,7 @@ from operator import itemgetter
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
 DATASET = os.environ.get('DATASET')  # TODO(wcrichto): move from config to runtime
+DATA_PATH = os.environ.get('DATA_PATH')
 FALLBACK_ENABLED = False
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ def extract(frames):
             with ThreadPoolExecutor(max_workers=64) as executor:
                 list(executor.map(write_jpg, jpgs))
             sp.check_call(
-                shlex.split('gsutil -m mv "{}/*" gs://{}/assets/thumbnails'.format(temp_dir, BUCKET)))
+                shlex.split('gsutil -m mv "{}/*" gs://{}/{}/assets/thumbnails'.format(temp_dir, BUCKET, DATA_PATH)))
             _print('Write: {:.3f}'.format(now() - start))
 
         elif ESPER_ENV == 'local':
