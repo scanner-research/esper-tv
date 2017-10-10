@@ -12,7 +12,7 @@ from scannerpy import Config, Database, Job, DeviceType
 from django.db import connection
 import logging
 import time
-from django.db.models import Min, Max, Q, Count
+from django.db.models import Min, Max, Q, F, Count
 import os
 from concurrent.futures import ThreadPoolExecutor
 from django.views.decorators.csrf import csrf_exempt
@@ -665,6 +665,10 @@ def search(request):
         annotate_vals_map = {}
         
         filteredby = queryset.objects.annotate()
+
+        if querytype == 'frame':
+            filteredby = queryset.objects.annotate(numbermod=F("number")%24).filter(numbermod=0)
+        
         for field in count_fields:
             filteredby = queryset.objects.annotate(**{field+"_count": Count(field)}).filter(aggQargs[field] & Q(**{'id__in':filteredby}))
 
