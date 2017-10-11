@@ -44,12 +44,13 @@ services:
 """.format(port=NGINX_PORT, suffix=SUFFIX))
 
 db_local = yaml.load("""
-image: mysql
+image: postgres 
 environment:
-  - MYSQL_DATABASE=esper
-  - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
-volumes: ["./mysql-db:/var/lib/mysql", "./mysql.cnf:/etc/mysql/mysql.cnf"]
-ports: ["3306"]
+  - POSTGRES_USER=will
+  - POSTGRES_PASSWORD=foobar
+  - POSTGRES_DB=esper
+volumes: ["./postgres:/var/lib/postgres"]
+ports: ["5432"]
 """)
 
 db_google = yaml.load("""
