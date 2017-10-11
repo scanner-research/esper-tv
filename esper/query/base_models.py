@@ -158,7 +158,12 @@ class Model(models.Model):
 class Instance(models.Model):
     __metaclass__ = BaseMeta
 
-    bbox = ProtoField(proto.BoundingBox)
+    bbox_x1 = models.FloatField(null=True)
+    bbox_x2 = models.FloatField(null=True)
+    bbox_y1 = models.FloatField(null=True)
+    bbox_y2 = models.FloatField(null=True)
+    bbox_score = models.FloatField(null=True)
+
 
     def save(self, *args, **kwargs):
         self.validate_unique()

@@ -53,7 +53,7 @@ class Command(BaseCommand):
             video = Video.objects.get(path=path)
             faces = FaceInstance.objects.filter(frame__video=video, labeler=face_labeler).all()
 
-            faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .04]
+            faces = [f for f in faces if f.bbox_x2 - f.bbox_x1 >= .04]
 
             print len(faces)
             whitened_batch = []

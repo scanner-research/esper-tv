@@ -163,7 +163,7 @@ def frame_and_faces(request):
             faces = frame.faces.all()
             face_list = []
             for face in faces:
-                bbox = json.loads(MessageToJson(face.bbox))
+                bbox = _inst_to_bbox_dict('', face)
                 face_json = model_to_dict(face)
                 del face_json['features']
                 face_json['bbox'] = bbox
@@ -191,7 +191,7 @@ def faces(request):
         bboxes = defaultdict(list)
         faces = Face.objects.filter(frame__labelset=labelset).select_related('frame').all()
         for face in faces:
-            bbox = json.loads(MessageToJson(face.bbox))
+            bbox = _inst_to_bbox('', face)
             face_json = model_to_dict(face)
             del face_json['features']
             face_json['bbox'] = bbox
@@ -253,12 +253,10 @@ def handlabeled(request):
     new_labels = []
     for frame in all_frames:
         for face_params in params['frames'][str(frame.number)]['faces']:
-            bbox = BoundingBox()
-            bbox.x1 = face_params['bbox']['x1']
-            bbox.y1 = face_params['bbox']['y1']
-            bbox.x2 = face_params['bbox']['x2']
-            bbox.y2 = face_params['bbox']['y2']
-            face_params['bbox'] = bbox
+            face_params['bbox_x1'] = face_params['bbox']['x1']
+            face_params['bbox_y1'] = face_params['bbox']['y1']
+            face_params['bbox_x2'] = face_params['bbox']['x2']
+            face_params['bbox_y2'] = face_params['bbox']['y2']
             track_id = face_params['track']
             if track_id is not None:
                 face_params['track'] = id_to_track[track_id]
@@ -273,18 +271,32 @@ def handlabeled(request):
 
     return JsonResponse({'success': True})
 
+def _inst_to_bbox_dict(prefix, inst):
+    if prefix != '':
+        prefix = prefix+"__"
+    return {'x1': inst[prefix+'bbox_x1'],
+            'x2': inst[prefix+'bbox_x2'],
+            'y1': inst[prefix+'bbox_y1'],
+            'y2': inst[prefix+'bbox_y2'],
+            'score': inst[prefix+'bbox_score']}
+
+def _get_bbox_vals(prefix):
+    if prefix != '':
+        prefix = prefix+"__"
+    return [
+            prefix+'bbox_x1',
+            prefix+'bbox_x2',
+            prefix+'bbox_y1',
+            prefix+'bbox_y2',
+            prefix+'bbox_score'
+            ]
+            
 
 def _overlap(a, b):
     '''
     @a, b: are ranges with start/end as a[0], a[1]
     '''
     return max(0, min(a[1], b[1]) - max(a[0], b[0]))
-
-
-def _bbox_dist(bbox1, bbox2):
-    return math.sqrt((bbox2.x1 - bbox1.x1)**2 + (bbox2.x2 - bbox1.x2)**2 + (bbox2.y1 - bbox1.y2)**2 \
-                      + (bbox2.y2 - bbox1.y2)**2)
-
 
 def _get_face_min_frames(labeler='tinyfaces'):
     '''
@@ -307,12 +319,11 @@ def _get_face_query(min_frame_numbers):
     # TODO: can generalize this more by taking in args for each of the values, and labeler etc. But
     # for now, don't have a use case for that. Maybe we can also use str formating to construct
     # these queries / and then eval them?
-    return [
-        Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(
-            'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id', 'faceinstance__bbox',
-            'labeler__name').get() for f in min_frame_numbers if f['min_frame'] is not None
-    ]
-
+    return [Face.objects.filter(id=f['id'],
+            faceinstance__frame__number=f['min_frame']).values(
+            *(['id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
+            'labeler__name']+_get_bbox_vals('faceinstance'))).get() for f in min_frame_numbers if
+            f['min_frame'] is not None]
 
 def _get_face_clips(results):
     '''
@@ -336,9 +347,8 @@ def _get_face_clips(results):
             f['min_frame'],
             'end':
             f['max_frame'],
-            'bboxes': [json.loads(MessageToJson(result['faceinstance__bbox']))],
-            'color':
-            COLORS[hash(result['labeler__name']) % len(COLORS)]
+            'bboxes': [_inst_to_bbox_dict('faceinstance')],
+            'color' : COLORS[hash(result['labeler__name']) % len(COLORS)]
         })
 
     # sort these from frame numbers. This is especially useful when diffing the output.
@@ -378,14 +388,14 @@ def _get_face_label_mismatches(labelers):
     for k, v in labelers.iteritems():
         # loop over each track in v.
         for (qs, min_frames) in v:
-            bbox = qs['faceinstance__bbox']
+            bbox = _inst_to_bbox_dict('faceinstance', qs)
             # find all possible frame overlaps between this face and others.
             overlaps = _find_frame_overlaps(k, min_frames, labelers)
             # check if any of these overlaps have bbox's within an acceptable threshold. If they
             # don't then it is a mistake.
             mistake = True
             for (o, _) in overlaps:
-                if _bbox_dist(bbox, o['faceinstance__bbox']) < DIFF_BBOX_THRESHOLD:
+                if _bbox_dist(bbox, _inst_to_bbox_dict('faceinstance', o)) < DIFF_BBOX_THRESHOLD:
                     # within a threshold - so the labelers agree on this.
                     mistake = False
                     break
@@ -407,8 +417,8 @@ def _overlap(a, b):
 
 
 def _bbox_dist(bbox1, bbox2):
-    return math.sqrt((bbox2.x1 - bbox1.x1)**2 + (bbox2.x2 - bbox1.x2)**2 + (bbox2.y1 - bbox1.y1)**2 \
-                      + (bbox2.y2 - bbox1.y2)**2)
+    return math.sqrt((bbox2['x1'] - bbox1['x1'])**2 + (bbox2['x2'] - bbox1['x2'])**2 + (bbox2['y1'] - bbox1['y2'])**2 \
+                      + (bbox2['y2'] - bbox1['y2'])**2)
 
 
 def _get_face_min_frames(labeler='tinyfaces'):
@@ -433,13 +443,10 @@ def _get_face_query(min_frame_numbers):
     # for now, don't have a use case for that. Maybe we can also use str formating to construct
     # these queries / and then eval them?
     return [
-        Face.objects.filter(
-            id=f['id'],
-            faceinstance__frame__number=f['min_frame'],
-            faceinstance__labeler__name='mtcnn').values(
-                'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
-                'faceinstance__bbox', 'faceinstance__labeler__name').get()
-        for f in min_frame_numbers if f['min_frame'] is not None
+        Face.objects.filter(id=f['id'], faceinstance__frame__number=f['min_frame']).values(*([
+            'id', 'faceinstance__frame__id', 'faceinstance__frame__video__id',
+            'faceinstance__labeler__name']+_get_bbox_vals('faceinstance'))).get() for f in min_frame_numbers
+        if f['min_frame'] is not None
     ]
 
 
@@ -466,8 +473,8 @@ def _get_face_clips(results):
             'frame': result['faceinstance__frame__id'],
             'start': f['min_frame'],
             'end': f['max_frame'],
-            'bboxes': bboxes_to_json([{'bbox': result['faceinstance__bbox'],
-                                       'labeler__name': result['faceinstance__labeler__name']}])
+            'bboxes': [_inst_to_bbox_dict('faceinstance', result)],
+            'color': get_color(result['faceinstance__labeler__name']),
         })  # yapf: disable
 
     # sort these from frame numbers. This is especially useful when diffing the output.
@@ -507,14 +514,14 @@ def _get_face_label_mismatches(labelers):
     for k, v in labelers.iteritems():
         # loop over each track in v.
         for (qs, min_frames) in v:
-            bbox = qs['faceinstance__bbox']
+            bbox = _inst_to_bbox_dict('faceinstance', qs)
             # find all possible frame overlaps between this face and others.
             overlaps = _find_frame_overlaps(k, min_frames, labelers)
             # check if any of these overlaps have bbox's within an acceptable threshold. If they
             # don't then it is a mistake.
             mistake = True
             for (o, _) in overlaps:
-                if _bbox_dist(bbox, o['faceinstance__bbox']) < DIFF_BBOX_THRESHOLD:
+                if _bbox_dist(bbox, _inst_to_bbox_dict('faceinstance', o)) < DIFF_BBOX_THRESHOLD:
                     # within a threshold - so the labelers agree on this.
                     mistake = False
                     break
@@ -531,7 +538,7 @@ def _get_face_label_mismatches(labelers):
 def bboxes_to_json(l):
     r = []
     for b in l:
-        obj = json.loads(MessageToJson(b['bbox']))
+        obj = _inst_to_bbox_dict('', b)
         obj['labeler'] = b['labeler__name']
         r.append(obj)
     return r
@@ -566,51 +573,50 @@ def search(request):
 
     elif concept == 'face':
         # need to specify labeler, otherwise this list would also include Faces from other labelers.
-        min_frame_numbers = _get_face_min_frames(labeler='mtcnn')[:100:5]
-        qs = _get_face_query(min_frame_numbers)
-        clips = _get_face_clips(zip(qs, min_frame_numbers))
-        video_keys = set(clips.keys())
-
-        # insts = FaceInstance.objects.all().order_by('frame__video__id', 'frame__number').values(
-        #     'id', 'frame__id', 'frame__video__id', 'frame__video__path', 'bbox', 'labeler__name')
-        # videos = defaultdict(lambda: defaultdict(list))
-        # video_keys = Set()
-        # for inst in insts[:100]:
-        #     videos[inst['frame__video__path']][inst['frame__id']].append(inst)
-        #     #'bbox': inst['bbox'], inst['labeler__name'], inst['frame__video__id']))
-        #     video_keys.add(inst['frame__video__id'])
-        # clips = defaultdict(list)
-        # for video, frames in videos.iteritems():
-        #     frame_keys = sorted(frames.keys())
-        #     for frame in frame_keys:
-        #         clips[video].append({
-        #             'video_id': frames[frame][0]['frame__video__id'],
-        #             'frame': frame,
-        #             'bboxes': bboxes_to_json(frames[frame])
-        #         })
+        # min_frame_numbers = _get_face_min_frames(labeler='cpm')[:1000:5]
+        # qs = _get_face_query(min_frame_numbers)
+        # clips = _get_face_clips(zip(qs, min_frame_numbers))
+        insts = FaceInstance.objects.all().order_by('frame__video__id', 'frame__number').values(*(['id', 'frame__id', 'frame__video__id', 'frame__video__path', 'labeler__name']+_get_bbox_vals('')))
+        videos = defaultdict(lambda: defaultdict(list))
+        video_keys = Set()
+        for inst in insts[:100]:
+            videos[inst['frame__video__path']][inst['frame__id']].append(inst)
+            #'bbox': inst['bbox'], inst['labeler__name'], inst['frame__video__id']))
+            video_keys.add(inst['frame__video__id'])
+        clips = defaultdict(list)
+        for video, frames in videos.iteritems():
+            frame_keys = sorted(frames.keys())
+            for frame in frame_keys:
+                clips[video].append({
+                    'video_id': frames[frame][0]['frame__video__id'],
+                    'frame': frame,
+                    'bboxes': bboxes_to_json(frames[frame])
+                })
 
     # Mismatched labels.
     elif concept == 'query':
         filters = json.loads(request.GET.get('filters'))
         orderby = json.loads(request.GET.get('orderby'))
         querytype = request.GET.get('querytype')
+        annotate_dict = {}
         queryset = None
-        bbox_keywords = []
         values = []
         if querytype == 'face':
             queryset = FaceInstance
-            bbox_keywords = ['width', 'height', 'confidence']
-            values = ['id', 'frame__id', 'frame__number', 'frame__video__id', 'bbox', 'labeler__name', 'facefeatures__features', 'frame__video__path']
+            annotate_dict['bbox_width'] = F('bbox_x2')-F('bbox_x1')
+            annotate_dict['bbox_height'] = F('bbox_y2')-F('bbox_y1')
+            values = ['id', 'frame__id', 'frame__number', 'frame__video__id', 'labeler__name', 'facefeatures__features', 'frame__video__path']+_get_bbox_vals('')
         elif querytype == 'video':
             queryset = Video
         elif querytype == 'frame':
             queryset = Frame
-            values = ['video__path', 'video__id', 'id', 'faceinstance__bbox', 'faceinstance__labeler__name', 'faceinstance__id', 'number']
+            annotate_dict['faceinstance__bbox_width'] = F('faceinstance__bbox_x2')-F('faceinstance__bbox_x1')
+            annotate_dict['faceinstance__bbox_height'] = F('faceinstance__bbox_y2')-F('faceinstance__bbox_y1')
+            values = ['video__path', 'video__id', 'id', 'faceinstance__labeler__name', 'faceinstance__id', 'number']+_get_bbox_vals('faceinstance')
 
         
         Qargs = Q()
         aggQargs = {}
-        bbox_filters = []
         feature_filters = []
         other_filters = []
         count_fields = []
@@ -618,13 +624,7 @@ def search(request):
             aggregate_field = False
             field = filt[0]
             orig_field = field 
-            if field in bbox_keywords:
-                bbox_filters.append(filt)
-                continue
-            elif querytype == 'face' and field[:7] == 'distto(':
-                feature_filters.append(filt)
-                continue
-            elif field[:6] == 'count(':
+            if field[:6] == 'count(':
                 aggregate_field = True
                 count_field_name = field[6:field.rfind(')')]
                 orig_field = count_field_name
@@ -660,7 +660,7 @@ def search(request):
                 Qargs = Qargs & currQ
 
         for val in orderby:
-            if val[:7] != 'distto(' and val not in bbox_keywords and val not in values:
+            if val not in values:
                 values.append(val)
         annotate_vals_map = {}
         
@@ -672,74 +672,7 @@ def search(request):
         for field in count_fields:
             filteredby = queryset.objects.annotate(**{field+"_count": Count(field)}).filter(aggQargs[field] & Q(**{'id__in':filteredby}))
 
-        insts = queryset.objects.filter(Qargs & Q(**{'id__in':filteredby})).values(*values)
-
-        # get features for requested distances:
-        features = defaultdict()
-        dist_feature_ids = []
-        for feat in feature_filters:
-            fetch_id = int(feat[0][7:feat[0].rfind(')')])
-            dist_feature_ids.append(fetch_id)
-        for feat in orderby:
-            if feat[:7] == 'distto(':
-                fetch_id = int(feat[7:feat.rfind(')')])
-                dist_feature_ids.append(fetch_id)
-        found_features = FaceFeatures.objects.filter(
-            instance__id__in=dist_feature_ids).select_related('instance')
-        for feat in found_features:
-            features[feat.instance.id] = np.array(json.loads(str(feat.features)))
-
-        filtered_insts = []
-        # deserialize bboxes, add distances to features of interest
-        for inst in insts:
-            inst_feature = None
-            if (len(features)>0):
-                if inst['facefeatures__features'] is None:
-                    continue
-                else:
-                    inst_feature = np.array(json.loads(inst['facefeatures__features']))
-
-            for feature in features.keys():
-                inst['distto('+str(feature)+')'] = np.sum(np.square(inst_feature-features[feature]))
-            if querytype == 'face':
-                bbox = inst['bbox']
-                inst['width'] = bbox.x2 - bbox.x1
-                inst['height'] = bbox.y2 - bbox.y1
-                inst['confidence'] = bbox.score
-            filtered = True
-            for filt in bbox_filters + feature_filters:
-                inst_value = None
-                filter_value = float(filt[2])
-                if filt[0] == 'width':
-                    inst_value = inst['width']
-                elif filt[0] == 'height':
-                    inst_value = inst['height']
-                elif filt[0] == 'confidence':
-                    inst_value = inst['confidence']
-                elif filt[0][:7] == 'distto(':
-                    inst_value = inst[filt[0]]
-                else:
-                    continue
-                comp = filt[1]
-                if comp == 'eq':
-                    filtered = inst_value == filter_value
-                elif comp == 'neq':
-                    filtered = inst_value != filter_value
-                elif comp == 'lt':
-                    filtered = inst_value < filter_value
-                elif comp == 'lte':
-                    filtered = inst_value <= filter_value
-                elif comp == 'gt':
-                    filtered = inst_value > filter_value
-                elif comp == 'gte':
-                    filtered = inst_value >= filter_value
-            if filtered:
-                filtered_insts.append(inst)
-        insts = filtered_insts
-
-        # TODO: order by
-        if len(orderby) > 0:
-            insts = sorted(insts, key=itemgetter(*orderby))
+        insts = queryset.objects.annotate(**annotate_dict).filter(Qargs & Q(**{'id__in':filteredby})).order_by(*orderby).values(*values)
 
         video_keys = Set()
 
@@ -747,7 +680,7 @@ def search(request):
         if querytype == 'face':
             for inst in insts:
                 video_keys.add(inst['frame__video__id'])
-                bbox = json.loads(MessageToJson(inst['bbox']))
+                bbox = _inst_to_bbox_dict('', inst)
                 bbox['labeler'] = inst['labeler__name']
                 bbox['id'] = inst['id']
                 bboxes = [bbox]
@@ -762,9 +695,9 @@ def search(request):
             frameset = Set()
             bboxes = defaultdict(list) 
             for inst in insts:
-                if inst['faceinstance__bbox'] is None:
+                if inst['faceinstance__bbox_x1'] is None:
                     continue
-                bbox = json.loads(MessageToJson(inst['faceinstance__bbox']))
+                bbox = _inst_to_bbox_dict('faceinstance', inst)
                 bbox['labeler'] = inst['faceinstance__labeler__name']
                 bbox['id'] = inst['faceinstance__id']
                 bboxes[inst['id']].append(bbox)
@@ -792,8 +725,9 @@ def search(request):
         t = now()
         videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
         for labeler_name in labeler_names:
-            faces = FaceInstance.objects.filter(labeler__name=labeler_name).values(
-                'id', 'bbox', 'frame__id', 'frame__number', 'frame__video__id', 'labeler__name')
+            labeler = Labeler.objects.get(name=labeler_name)
+            faces = FaceInstance.objects.filter(labeler=labeler).values(*([
+                'id', 'frame__id', 'frame__number', 'frame__video__id', 'labeler__name']+_get_bbox_vals('')))
             for face in faces:
                 videos[face['frame__video__id']][face['frame__id']][labeler_name].append(face)
         _print('A: {:.3f}'.format(now() - t))
@@ -804,8 +738,8 @@ def search(request):
             for frame, labelers in frames.iteritems():
                 for labeler, bboxes in labelers.iteritems():
                     for bbox in bboxes:
-                        bb = bbox['bbox']
-                        if (bb.x2 - bb.x1) * (bb.y2 - bb.y1) < 0.005:
+                        bb = bbox
+                        if (bb['x2'] - bb['x1']) * (bb['y2'] - bb['y1']) < 0.005:
                             continue
 
                         mistake = True
@@ -814,8 +748,7 @@ def search(request):
                             other_bboxes = labelers[
                                 other_labeler] if other_labeler in labelers else []
                             for other_bbox in other_bboxes:
-                                if _bbox_dist(bbox['bbox'],
-                                              other_bbox['bbox']) < DIFF_BBOX_THRESHOLD:
+                                if _bbox_dist(_inst_to_bbox_dict('', bbox), _inst_to_bbox_dict('', other_bbox)) < DIFF_BBOX_THRESHOLD:
                                     mistake = False
                                     break
 
