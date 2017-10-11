@@ -10,7 +10,7 @@ with base.Dataset('tvnews'):
         time = models.DateTimeField()
 
     class Frame(base.Frame):
-        pass
+        talking_heads = models.BooleanField(default=False)
 
     class Labeler(base.Labeler):
         pass

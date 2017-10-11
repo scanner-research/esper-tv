@@ -1,7 +1,8 @@
 from django.core.management.base import BaseCommand
 from query.base_models import ModelDelegator
+import os
 
-models = ModelDelegator('krishna')
+models = ModelDelegator(os.environ.get('DATASET'))
 
 class Command(BaseCommand):
     help = 'Remove rows from the database, e.g. python manage.py cleanup Concept'

@@ -4,8 +4,8 @@ from django.db.models import Min, Max
 import os
 
 m = ModelDelegator(os.environ.get('DATASET'))
-Video, Frame, Face, FaceInstance, PersonInstance, Labeler = \
-    m.Video, m.Frame, m.Face, m.FaceInstance, m.PersonInstance, m.Labeler
+Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = \
+    m.Video, m.Frame, m.Face, m.FaceInstance, m.FaceFeatures, m.Labeler
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)

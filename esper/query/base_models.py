@@ -96,14 +96,14 @@ def register_concept(name):
     global current_datset
 
     class Meta:
-        unique_together = ('concept', 'frame')
+        unique_together = ('concept', 'frame', 'labeler')
 
     cls_name = '{}Instance'.format(name)
     inst = type(cls_name, (Instance, ), {
         '__module__': current_dataset.Video.__module__,
-        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
+        'concept': ForeignKey(getattr(current_dataset, name), cls_name),
         'frame': ForeignKey(current_dataset.Frame, cls_name),
-        'concept': ForeignKey(getattr(current_dataset, name), cls_name, null=True),
+        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
         'Meta': Meta
     })
 
@@ -126,7 +126,6 @@ class Video(models.Model):
     fps = models.FloatField()
     width = models.IntegerField()
     height = models.IntegerField()
-    timestamp = models.DateTimeField(null=True, blank=True)
 
 
 class Frame(models.Model):

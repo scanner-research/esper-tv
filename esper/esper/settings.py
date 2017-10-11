@@ -80,9 +80,6 @@ DATABASES = {
         'NAME': 'esper',
         'USER': os.environ.get('DJANGO_DB_USER'),
         'HOST': 'db',
-        'OPTIONS': {
-            'options': '-c search_path=esper'
-        },
     }
 }
 
