@@ -601,6 +601,14 @@ def search(request):
         annotate_dict = {}
         queryset = None
         values = []
+        distto_fields = Set() 
+        fieldstrings = [filt[0] for filt in filters] + orderby
+        for field in fieldstrings:
+            idx = field.find('distto_')
+            if idx > 0:
+                distto_fields.add(int(field[idx+7:]))
+        FaceFeatures.dropTempFeatureModel()
+        FaceFeatures.getTempFeatureModel(distto_fields)
         if querytype == 'face':
             queryset = FaceInstance
             annotate_dict['bbox_width'] = F('bbox_x2')-F('bbox_x1')
@@ -641,7 +649,7 @@ def search(request):
             elif op == 'gte':
                 field = field + '__gte'
             elif op == 'lt':
-                field = field + '__lgt'
+                field = field+'__lt'
             elif op == 'lte':
                 field = field + '__lte'
             elif op == 'like':
@@ -714,6 +722,7 @@ def search(request):
                     'colors': [get_color(inst['faceinstance__labeler__name'])],
                     'start': inst['number']
                 })
+        FaceFeatures.dropTempFeatureModel()
 
 
 

@@ -183,7 +183,8 @@ class Features(models.Model):
         with connection.cursor() as cursor:
             with Dataset(cls._datasetName):
                 col_def = ''.join([', `distto_{}` double precision NULL'.format(inst) for inst in instance_ids])
-                cursor.execute("CREATE TEMPORARY TABLE {} (`id` integer NOT NULL PRIMARY KEY, `features` longblob NOT NULL, `instance_id` int(11) NOT NULL, `labeler_id` int(11) NOT NULL {})".format(cls._meta.db_table+"temp", col_def))
+                #MYSQL can fuck off with its bullshit about not being able to use a temporary table more than once
+                cursor.execute("CREATE TABLE {} (`id` integer NOT NULL PRIMARY KEY, `features` longblob NOT NULL, `instance_id` int(11) NOT NULL, `labeler_id` int(11) NOT NULL {})".format(cls._meta.db_table+"temp", col_def))
                 current_dataset = datasets[cls._datasetName]
                 cls_name = cls._conceptName+"Temp" 
                 model_params = {'__module__' : cls.__module__,
