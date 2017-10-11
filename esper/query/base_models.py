@@ -1,8 +1,11 @@
-from django.db import models
+from django.db import models, connection
 from django.db.models.base import ModelBase
 from django_bulk_update.manager import BulkUpdateManager
 from scannerpy import ProtobufGenerator, Config
 import sys
+import numpy as np
+import json
+import warnings
 cfg = Config()
 proto = ProtobufGenerator(cfg)
 MAX_STR_LEN = 256
@@ -43,11 +46,12 @@ datasets = {}
 class Dataset(object):
     def __init__(self, name):
         self.name = name
-        datasets[name] = self
+        if name not in datasets:
+            datasets[name] = self
 
     def __enter__(self):
         global current_dataset
-        current_dataset = self
+        current_dataset = datasets[self.name]
 
     def __exit__(self, type, val, traceback):
         global current_dataset
@@ -109,13 +113,16 @@ def register_concept(name):
 
     class Meta:
         unique_together = ('labeler', 'instance')
-
+    instance_cls_name = cls_name
     cls_name = '{}Features'.format(name)
     type(cls_name, (Features, ), {
         '__module__': current_dataset.Video.__module__,
         'labeler': ForeignKey(current_dataset.Labeler, cls_name),
         'instance': ForeignKey(inst, cls_name),
-        'Meta': Meta
+        'Meta': Meta,
+        '_datasetName' : current_dataset.name,
+        '_conceptName' : cls_name,
+        '_instanceName' : instance_cls_name
     })
 
 
@@ -148,7 +155,6 @@ class Concept(models.Model):
 class Model(models.Model):
     __metaclass__ = BaseMeta
 
-
 class Instance(models.Model):
     __metaclass__ = BaseMeta
 
@@ -157,7 +163,6 @@ class Instance(models.Model):
     def save(self, *args, **kwargs):
         self.validate_unique()
         super(Instance, self).save(*args, **kwargs)
-
 
 class Features(models.Model):
     __metaclass__ = BaseMeta
@@ -168,6 +173,57 @@ class Features(models.Model):
         self.validate_unique()
         super(Features, self).save(*args, **kwargs)
 
+    @classmethod
+    def getTempFeatureModel(cls, instance_ids):
+        with connection.cursor() as cursor:
+            with Dataset(cls._datasetName):
+                col_def = ''.join([', `distto_{}` double precision NULL'.format(inst) for inst in instance_ids])
+                cursor.execute("CREATE TEMPORARY TABLE {} (`id` integer NOT NULL PRIMARY KEY, `features` longblob NOT NULL, `instance_id` int(11) NOT NULL, `labeler_id` int(11) NOT NULL {})".format(cls._meta.db_table+"temp", col_def))
+                current_dataset = datasets[cls._datasetName]
+                cls_name = cls._conceptName+"Temp" 
+                model_params = {'__module__' : cls.__module__,
+                        #'features': models.BinaryField(),
+                        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
+                        'instance': ForeignKey(getattr(current_dataset,cls._instanceName), cls_name)}
+                for instance_id in instance_ids:
+                    model_params['distto_{}'.format(instance_id)] = models.FloatField(null=True)
+                with warnings.catch_warnings():
+                    # we ignore the warning indicating we are reloading a model
+                    # because it is a temporary table
+                    warnings.simplefilter("ignore")
+                    tempmodel = type(cls_name, (Features, ), model_params)
+                testfeatures = {}
+                for i in cls.objects.filter(instance_id__in=instance_ids).all():
+                    testfeatures[i.instance_id] = np.array(json.loads(i.features))
+                it = cls.objects.all()
+                batch_size = 1000
+                batch = []
+                feature_batch = []
+                for feat in it:
+                    newfeat = tempmodel()
+                    newfeat.id = feat.id
+                    newfeat.features = feat.features
+                    newfeat.labeler_id = feat.labeler_id
+                    newfeat.instance_id = feat.instance_id
+                    #TODO better distance computation
+                    for i in instance_ids:
+                        setattr(newfeat, 'distto_{}'.format(i), np.sum(np.square(np.array(json.loads(feat.features))-testfeatures[i])))
+                    batch.append(newfeat)
+                    if len(batch) == batch_size:
+                        tempmodel.objects.bulk_create(batch)
+                        batch = []
+                tempmodel.objects.bulk_create(batch)
+                return tempmodel
+
+
+                    
+
+    @classmethod
+    def dropTempFeatureModel(cls):
+        with connection.cursor() as cursor:
+            cursor.execute("DROP TABLE IF EXISTS {};".format(cls._meta.db_table+"temp"))
+
+            
 
 class ModelDelegator:
     def __init__(self, name):
