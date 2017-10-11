@@ -115,6 +115,12 @@ body {
         position: absolute;
         z-index: 0;
         height: 100px;
+
+        /* Always show the control panel on search result tiny videos. */
+        &::-webkit-media-controls-panel {
+            display: flex !important;
+            opacity: 1 !important;
+        }
     }
 
     .bounding-boxes {

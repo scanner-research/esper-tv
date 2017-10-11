@@ -4,25 +4,36 @@ import {Box, BoundingBoxView} from './bbox.jsx';
 export default class SearchResultView extends React.Component {
   state = {
     hover: false,
-    showVideo: false
+    showVideo: false,
   }
 
-  _onMouseEnter() {
+  fullScreen = false
+
+  constructor() {
+    super();
+    document.addEventListener('webkitfullscreenchange', this._onFullScreen);
+  }
+
+  _onFullScreen = () => {
+    this.fullScreen = !this.fullScreen;
+  }
+
+  _onMouseEnter = () => {
     this.setState({hover: true, showVideo: false});
   }
 
-  _onMouseLeave() {
+  _onMouseLeave = () => {
     this._video.removeEventListener('seeked', this._onSeeked);
     this._video.removeEventListener('loadeddata', this._onLoadedData);
     this._video.removeEventListener('timeupdate', this._onTimeUpdate);
     this.setState({hover: false, showVideo: false});
   }
 
-  _onClick() {
+  _onClick = () => {
     console.log('Clicked SearchResultView');
   }
 
-  _toSeconds(frame) {
+  _toSeconds = (frame) => {
     return frame / this.props.video.fps;
   }
 
@@ -37,7 +48,7 @@ export default class SearchResultView extends React.Component {
   }
 
   _onTimeUpdate = () => {
-    if (this._video.currentTime >= this._toSeconds(this.props.clip.end)) {
+    if (!this.state.fullScreen && this._video.currentTime >= this._toSeconds(this.props.clip.end)) {
       this._video.currentTime = this._toSeconds(this.props.clip.start);
     }
   }
@@ -67,11 +78,11 @@ export default class SearchResultView extends React.Component {
                   : <div />;
     return (
       <div className='search-result'
-           onMouseEnter={this._onMouseEnter.bind(this)}
-           onMouseLeave={this._onMouseLeave.bind(this)}
+           onMouseEnter={this._onMouseEnter}
+           onMouseLeave={this._onMouseLeave}
            onClick={this._onClick}>
         {this.state.hover
-         ? <video autoPlay muted ref={(n) => {this._video = n;}} style={vidStyle}>
+         ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
            <source src={`/system_media/${this.props.video.path}`} />
          </video>
          : <div />}
