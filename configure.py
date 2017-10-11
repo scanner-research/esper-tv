@@ -56,7 +56,7 @@ db_google = yaml.load("""
 image: gcr.io/cloudsql-docker/gce-proxy:1.09
 volumes: ["./visualdb-key.json:/config"]
 environment: []
-ports: ["3306"]
+ports: ["5432"]
 """)
 
 
@@ -83,17 +83,17 @@ def main():
     if base_config.database.type == 'google':
         config['services'][svc('db')] = db_google
         config['services'][svc('db')]['command'] = \
-            '/cloud_sql_proxy -instances={project}:{zone}:{name}=tcp:0.0.0.0:3306 -credential_file=/config'.format(
+            '/cloud_sql_proxy -instances={project}:{zone}:{name}=tcp:0.0.0.0:5432 -credential_file=/config'.format(
                 project=base_config.google.project, zone=base_config.google.zone, name=base_config.database.name)
-        config['services'][svc('esper')]['environment'] = [
-            "DJANGO_DB_USER={}".format(base_config.database.user),
-        ]
     else:
         config['services'][svc('db')] = db_local
-        config['services'][svc('esper')]['environment'] = [
-            "DJANGO_DB_USER=root",
-            "DJANGO_DB_PASSWORD=${MYSQL_PASSWORD}",
-        ]
+    config['services'][svc('esper')]['environment'] = [
+        'DJANGO_DB_USER={}'.format(base_config.database.user
+                                   if 'user' in base_config.database else 'root'),
+    ]
+    if 'password' in base_config.database:
+        config['services'][svc('esper')]['environment'].append(
+            "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
 
     scanner_config = {}
     if base_config.storage.type == 'google':

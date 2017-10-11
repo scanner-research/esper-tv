@@ -9,5 +9,6 @@ path = "public"
 
 [database]
 type = "google"
-name = "esper2"
+name = "esper-shared"
 user = "will"
+password = "foobar"
