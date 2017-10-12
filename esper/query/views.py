@@ -422,8 +422,8 @@ def _overlap(a, b):
 
 
 def _bbox_dist(bbox1, bbox2):
-    return math.sqrt((bbox2['x1'] - bbox1['x1'])**2 + (bbox2['x2'] - bbox1['x2'])**2 + (bbox2['y1'] - bbox1['y2'])**2 \
-                      + (bbox2['y2'] - bbox1['y2'])**2)
+    return math.sqrt((bbox2['x1'] - bbox1['x1'])**2 + (bbox2['x2'] - bbox1['x2'])**2 + (bbox2['y1'] - bbox1['y1'])**2 \
+                     + (bbox2['y2'] - bbox1['y2'])**2)
 
 
 def _get_face_min_frames(labeler='tinyfaces'):
@@ -642,7 +642,7 @@ def search(request):
 
         for field in fieldstrings:
             idx = field.find('distto_')
-            if idx >= 0:
+            if idx > 0:
                 distto_fields.add(int(field[idx+7:]))
         if len(distto_fields) > 0:
             FaceFeatures.dropTempFeatureModel()
@@ -665,6 +665,7 @@ def search(request):
             queryset = Frame
             annotate_dict['faceinstance__bbox_width'] = F('faceinstance__bbox_x2')-F('faceinstance__bbox_x1')
             annotate_dict['faceinstance__bbox_height'] = F('faceinstance__bbox_y2')-F('faceinstance__bbox_y1')
+            annotate_dict['faceinstance_count'] = Count('faceinstance')
             values = ['video__path', 'video__id', 'id', 'faceinstance__labeler__name', 'faceinstance__id', 'number']+_get_bbox_vals('faceinstance')
 
         Qargs = Q()
@@ -719,10 +720,11 @@ def search(request):
         filteredby = queryset.objects.annotate()
 
         if querytype == 'frame':
-            filteredby = queryset.objects.annotate(numbermod=F("number")%24).filter(numbermod=0)
+            filteredby = queryset.objects.annotate(numbermod=F("number")%240).filter(numbermod=0)
 
+        _print(Qargs, aggQargs)
         for field in count_fields:
-            filteredby = queryset.objects.annotate(**{field+"_count": Count(field)}).filter(aggQargs[field] & Q(**{'id__in':filteredby}))
+            filteredby = queryset.objects.filter(faceinstance__labeler__name='mtcnn').annotate(**{field+"_count": Count(field)}).filter(aggQargs[field] & Q(**{'id__in':filteredby}))
 
         insts = queryset.objects.annotate(**annotate_dict).filter(Qargs & Q(**{'id__in':filteredby})).order_by(*orderby).values(*values)
         _print(insts.query)
@@ -772,7 +774,7 @@ def search(request):
                 bbox['id'] = inst['faceinstance__id']
                 bboxes[inst['id']].append(bbox)
 
-            for inst in insts:
+            for inst in insts[:100]:
                 video_keys.add(inst['video__id'])
                 if inst['id'] in frameset:
                     continue
@@ -808,9 +810,10 @@ def search(request):
         for video, frames in videos.iteritems():
             for frame, labelers in frames.iteritems():
                 for labeler, bboxes in labelers.iteritems():
+                    if labeler != 'handlabeled': continue
                     for bbox in bboxes:
                         bb = bbox
-                        if (bb['bbox_x2'] - bb['bbox_x1']) * (bb['bbox_y2'] - bb['bbox_y1']) < 0.005:
+                        if (bb['bbox_x2'] - bb['bbox_x1']) * (bb['bbox_y2'] - bb['bbox_y1']) < 0.05:
                             continue
 
                         mistake = True

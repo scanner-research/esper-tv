@@ -50,7 +50,7 @@ export default class Home extends React.Component {
           </div>
           {orderby_keys.map((key, i) =>
             <div className='search-result-video' key={i}>
-              <div>{key}</div>
+              <div className='group-header'>{key}</div>
               <div>
                 {this._result.clips[key].map((clip, j) => {
                    return <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} onBoxClick={this._onBoxClick}/>;

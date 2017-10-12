@@ -24,7 +24,7 @@ SECRET_KEY = 'krdjiha6=n73&qlw^*nr8@fis&k#z3m3&phy+h%a^$ry-i)na('
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['halfmoon.graphics.cs.cmu.edu', 'ocean.pdl.local.cmu.edu']
+ALLOWED_HOSTS = ['halfmoon.graphics.cs.cmu.edu', 'ocean.pdl.local.cmu.edu', 'esper']
 
 # Application definition
 

@@ -223,13 +223,12 @@ class Features(models.Model):
                     newfeat.features = feat.features
                     newfeat.labeler_id = feat.labeler_id
                     newfeat.instance_id = feat.instance_id
+                    featarr = np.array(json.loads(str(feat.features)))
                     #TODO better distance computation
                     for i in instance_ids:
-                        setattr(
-                            newfeat, 'distto_{}'.format(i),
-                            np.sum(
-                                np.square(
-                                    np.array(json.loads(str(feat.features))) - testfeatures[i])))
+                        if i not in testfeatures: continue
+                        setattr(newfeat, 'distto_{}'.format(i),
+                                np.sum(np.square(featarr - testfeatures[i])))
                     batch.append(newfeat)
                     if len(batch) == batch_size:
                         tempmodel.objects.bulk_create(batch)

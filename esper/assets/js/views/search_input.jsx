@@ -175,7 +175,7 @@ export default class SearchInput extends React.Component {
 
   componentWillReceiveProps(props) {
     if (props.clickedBox != this.lastOrderby) {
-      this.state.orderby.push('distto_' + props.clickedBox);
+      this.state.orderby.push('facefeaturestemp__distto_' + props.clickedBox);
       this.lastOrderby = props.clickedBox;
     }
   }
@@ -185,7 +185,7 @@ export default class SearchInput extends React.Component {
     return (
       <Form className='search-input' onSubmit={this._onSearch.bind(this)} ref={(n) => {this._form = n;}}>
         <FormGroup controlId="concept" onChange={this._onSelectConcept.bind(this)}>
-          <ControlLabel>Concept:</ControlLabel>
+          <ControlLabel>Query Type:</ControlLabel>
           <FormControl componentClass="select" placeholder="Select..." defaultValue={this.state.selectedConcept}>
             <option value="video">Video</option>
             <option value="face">Face</option>
@@ -196,7 +196,7 @@ export default class SearchInput extends React.Component {
         {this.state.selectedConcept == "query" ?
          <div>
            <FormGroup className="query-type">
-             <ControlLabel>Query Type:</ControlLabel>
+             <ControlLabel>Concept:</ControlLabel>
              <FormControl componentClass="select"
                           value={this.state.selectedQueryType}
                           onChange={this._onChangeQueryType.bind(this)}>
