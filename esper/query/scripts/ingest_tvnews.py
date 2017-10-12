@@ -1,5 +1,5 @@
 from query.scripts.script_util import *
-from django.db import transaction
+from django import db
 import json
 
 # print 'Videos'
@@ -8,7 +8,7 @@ import json
 #     lines = [s.strip().split('\t') for s in f.readlines()[1:]]
 #     for line in lines:
 #         [id, path, num_frames, fps, width, height, timestamp, channel, show, time] = line
-#         videos[id] = Video(path=path, num_frames=int(num_frames), fps=float(fps), width=int(width),
+#         videos[id] = Video(id=id, path=path, num_frames=int(num_frames), fps=float(fps), width=int(width),
 #                            height=int(height), channel=channel, show=show, time=time)
 # Video.objects.bulk_create(videos.values())
 
@@ -18,7 +18,7 @@ import json
 #     lines = [s.strip().split('\t') for s in f.readlines()[1:]]
 #     for line in lines:
 #         [id, number, video_id] = line
-#         frames.append(Frame(video=videos[video_id], number=number))
+#         frames.append(Frame(id=id, video=videos[video_id], number=number))
 # Frame.objects.bulk_create(frames)
 
 handlabeled, _ = Labeler.objects.get_or_create(name='handlabeled')
@@ -66,7 +66,12 @@ for i, line in enumerate(lines):
     video = videos[path]
     frame = frames[video.id][frame_number]
 
-    key = (video.id, frame_number, labelset)
+    if track == 'NULL':
+        face = new_tracks[i]
+    else:
+        face = old_tracks[int(track)]
+
+    key = (video.id, frame_number, labelset, face.id)
     if key in tuples:
         continue
     tuples.add(key)
@@ -75,12 +80,8 @@ for i, line in enumerate(lines):
     bbox_bytes = bytearray.fromhex(bbox)
     bbox = proto.BoundingBox()
     bbox.ParseFromString(bbox_bytes)
-    if track == 'NULL':
-        face = new_tracks[i]
-    else:
-        face = old_tracks[int(track)]
 
-    instances[i] = FaceInstance(frame=frame, bbox=bbox, labeler=labeler, concept=face)
+    instances[i] = FaceInstance(frame=frame, bbox_x1=bbox.x1, bbox_x2=bbox.x2, bbox_y1=bbox.y1, bbox_y2=bbox.y2, labeler=labeler, concept=face)
 
 FaceInstance.objects.bulk_create(instances.values())
 
@@ -90,8 +91,10 @@ for i, line in enumerate(lines):
     if not i in instances: continue
     try:
         [path, frame_number, labelset, track, gender, bbox, features_str] = line.strip().split('\t')[:7]
+
         features.append(FaceFeatures(labeler=facenet, features=features_str, instance=instances[i]))
     except ValueError:
         pass
 
-FaceFeatures.objects.bulk_create(features)
+db.reset_queries()
+FaceFeatures.objects.bulk_create(features, batch_size=1000)
