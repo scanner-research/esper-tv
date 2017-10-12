@@ -60,6 +60,12 @@ class Command(BaseCommand):
                 f.labelset = labelset
                 f.frame = frame_map[frame_id] 
                 f.bbox = normalized_bbox
+                f.bbox_x1 = bb[0]/float(video.width)
+                f.bbox_x2 = bb[2]/float(video.width)
+                f.bbox_y1 = bb[1]/float(video.height)
+                f.bbox_y2 = bb[3]/float(video.height)
+                f.bbox_score = confidence 
+
                 face_obj_batch.append(f)
 
                 cropped = img[bb[1]:bb[3],bb[0]:bb[2],:]

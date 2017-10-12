@@ -105,7 +105,7 @@ def register_concept(name):
     cls_name = '{}Instance'.format(name)
     inst = type(cls_name, (Instance, ), {
         '__module__': current_dataset.Video.__module__,
-        'concept': ForeignKey(getattr(current_dataset, name), cls_name),
+        'concept': ForeignKey(getattr(current_dataset, name), cls_name, null=True),
         'frame': ForeignKey(current_dataset.Frame, cls_name),
         'labeler': ForeignKey(current_dataset.Labeler, cls_name),
         'Meta': Meta
@@ -182,9 +182,9 @@ class Features(models.Model):
     def getTempFeatureModel(cls, instance_ids):
         with connection.cursor() as cursor:
             with Dataset(cls._datasetName):
-                col_def = ''.join([', `distto_{}` double precision NULL'.format(inst) for inst in instance_ids])
+                col_def = ''.join([', distto_{} double precision NULL'.format(inst) for inst in instance_ids])
                 #MYSQL can fuck off with its bullshit about not being able to use a temporary table more than once
-                cursor.execute("CREATE TABLE {} (`id` integer NOT NULL PRIMARY KEY, `features` longblob NOT NULL, `instance_id` int(11) NOT NULL, `labeler_id` int(11) NOT NULL {})".format(cls._meta.db_table+"temp", col_def))
+                cursor.execute("CREATE TEMP TABLE {} (id integer NOT NULL PRIMARY KEY, features bytea NOT NULL, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".format(cls._meta.db_table+"temp", col_def))
                 current_dataset = datasets[cls._datasetName]
                 cls_name = cls._conceptName+"Temp" 
                 model_params = {'__module__' : cls.__module__,

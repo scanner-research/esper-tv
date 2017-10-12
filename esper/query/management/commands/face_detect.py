@@ -67,6 +67,7 @@ class Command(BaseCommand):
                         f.bbox_x2 = bbox.x2/video.width
                         f.bbox_y1 = bbox.y1/video.height
                         f.bbox_y2 = bbox.y2/video.height
+                        f.bbox_score = bbox.score
                         f.labeler = labeler
                         f.save()
 
