@@ -43,7 +43,7 @@ export default class SearchInput extends React.Component {
   }
 
   state = {
-    selectedConcept: 'video',
+    selectedConcept: 'query',
     selectedProperty: null,
     selectedFilter: null,
     selectedOrderBy: null,
@@ -59,20 +59,26 @@ export default class SearchInput extends React.Component {
   }
 
   filterTypeMap = {
-      'like': 'LIKE',
-      'nlike': 'NOT LIKE',
-      'eq': '=',
-      'neq': '!=',
-      'gt': '>',
-      'gte': '>=',
-      'lt': '<',
-      'lte': '<='
+    'like': 'LIKE',
+    'nlike': 'NOT LIKE',
+    'eq': '=',
+    'neq': '!=',
+    'gt': '>',
+    'gte': '>=',
+    'lt': '<',
+    'lte': '<='
   }
 
   queryTypeMap = {
-      'face' : 'Face',
-      'frame' : 'Frame',
-      'video' : 'Video'
+    'faceinstance' : 'FaceInstance',
+    'face': 'Face',
+    'frame' : 'Frame',
+    /* 'video' : 'Video'*/
+  }
+
+  constructor () {
+    super();
+    this.lastOrderby = null;
   }
 
   _onSearch(e) {
@@ -134,7 +140,7 @@ export default class SearchInput extends React.Component {
 
   _onAddFilter(e){
     if(this.state.currFilterField.trim().length > 0 && this.state.currFilterValue.trim().length > 0){
-    this.state.filters.push([this.state.currFilterField.trim(), this.state.currFilterType, this.state.currFilterValue.trim()])
+      this.state.filters.push([this.state.currFilterField.trim(), this.state.currFilterType, this.state.currFilterValue.trim()])
     }
     this.setState({currFilterValue: '', currFilterType: 'eq', currFilterField:''});
   }
@@ -167,6 +173,13 @@ export default class SearchInput extends React.Component {
     this.setState({selectedQueryType : e.target.value});
   }
 
+  componentWillReceiveProps(props) {
+    if (props.clickedBox != this.lastOrderby) {
+      this.state.orderby.push('distto_' + props.clickedBox);
+      this.lastOrderby = props.clickedBox;
+    }
+  }
+
   render() {
     let selectSize = (n) => Math.max(Math.min(n, 5), 2)
     return (
@@ -181,106 +194,106 @@ export default class SearchInput extends React.Component {
           </FormControl>
         </FormGroup>
         {this.state.selectedConcept == "query" ?
-        <div>
-        <FormGroup id="query-type">
-          <ControlLabel>Query Type:</ControlLabel>
-          <FormControl componentClass="select"
-                       value={this.state.currQueryType}
-                       onChange={this._onChangeQueryType.bind(this)}>
-            {_.map(this.queryTypeMap, ( (value, key) => {
-              return <option key={key} value={key}>{value}</option>;
-                                                             }))}
-          </FormControl>
-        </FormGroup>
-        <FormGroup id="filter-key">
-          <ControlLabel>Filters:</ControlLabel>
-          <FormControl componentClass="select"
-                       size={selectSize(this.state.filters.length)}
-                       value={this.state.filters.selectedFilter}
-                       onChange={this._onSelectFilter.bind(this)}>
-            {this.state.filters.map((keys, i) => {
-               return <option key={i} value={i}>{keys[0]+' '+this.filterTypeMap[keys[1]]+' '+keys[2]}</option>;
-             })}
-          </FormControl>
-          <Button id='rem-filter-button' onClick={this._onRemoveFilter.bind(this)}>Remove Filter</Button>
-<div>
-          <ControlLabel>Order By:</ControlLabel>
-          <FormControl componentClass="select"
-                       size={selectSize(this.state.orderby.length)}
-                       value={this.state.filters.selectedOrderBy}
-                       onChange={this._onSelectOrderBy.bind(this)}>
-            {this.state.orderby.map((keys, i) => {
-               return <option key={i} value={i}>{keys}</option>;
-             })}
-          </FormControl>
-          <Button id='rem-orderby-button' onClick={this._onRemoveOrderBy.bind(this)}>Remove Order By</Button>
-          </div>
-        </FormGroup>
-        <FormGroup id="add-filter">
-          <ControlLabel>Add Filter:</ControlLabel>
-          <FormControl id='filter-field'
-                       type="text"
-                       value={this.state.currFilterField}
-                       placeholder="Filter field"
-                       onChange={this._onChangeFilterField.bind(this)} />
+         <div>
+           <FormGroup className="query-type">
+             <ControlLabel>Query Type:</ControlLabel>
+             <FormControl componentClass="select"
+                          value={this.state.selectedQueryType}
+                          onChange={this._onChangeQueryType.bind(this)}>
+               {_.map(this.queryTypeMap, ( (value, key) => {
+                  return <option key={key} value={key}>{value}</option>;
+               }))}
+             </FormControl>
+           </FormGroup>
+           <FormGroup className="filter-key">
+             <ControlLabel>Filters:</ControlLabel>
+             <FormControl componentClass="select"
+                          size={selectSize(this.state.filters.length)}
+                          value={this.state.filters.selectedFilter}
+                          onChange={this._onSelectFilter.bind(this)}>
+               {this.state.filters.map((keys, i) => {
+                  return <option key={i} value={i}>{keys[0]+' '+this.filterTypeMap[keys[1]]+' '+keys[2]}</option>;
+               })}
+             </FormControl>
+             <Button className='rem-filter-button' onClick={this._onRemoveFilter.bind(this)}>Remove Filter</Button>
+             <div>
+               <ControlLabel>Order By:</ControlLabel>
+               <FormControl componentClass="select"
+                            size={selectSize(this.state.orderby.length)}
+                            value={this.state.filters.selectedOrderBy}
+                            onChange={this._onSelectOrderBy.bind(this)}>
+                 {this.state.orderby.map((keys, i) => {
+                    return <option key={i} value={i}>{keys}</option>;
+                 })}
+               </FormControl>
+               <Button className='rem-orderby-button' onClick={this._onRemoveOrderBy.bind(this)}>Remove Order By</Button>
+             </div>
+           </FormGroup>
+           <FormGroup className="add-filter">
+             <ControlLabel>Add Filter:</ControlLabel>
+             <FormControl className='filter-field'
+                          type="text"
+                          value={this.state.currFilterField}
+                          placeholder="Filter field"
+                          onChange={this._onChangeFilterField.bind(this)} />
 
-          <FormControl id="filter-type"
-                       componentClass="select"
-                       value={this.state.currFilterType}
-                       onChange={this._onChangeFilterType.bind(this)}>
-            {_.map(this.filterTypeMap, (value, key) => {
-                    return <option key={key} value={key}>{value}</option>;})}
-          </FormControl>
-          <FormControl id='filter-value'
-                       type="text"
-                       value={this.state.currFilterValue}
-                       placeholder="Filter value"
-                       onChange={this._onChangeFilterValue.bind(this)}/>
-          <Button id='add-filter' onClick={this._onAddFilter.bind(this)}>Add Filter</Button>
-        </FormGroup>
-        <FormGroup controlId="orderby-add">
-          <ControlLabel>Add Order By:</ControlLabel>
-          <FormControl id='orderby-input'
-                       type="text"
-                       value={this.state.currOrderBy}
-                       placeholder="Order By Value"
-                       onChange={this._onChangeOrderBy.bind(this)}/>
-          <Button id='add-orderby' onClick={this._onAddOrderBy.bind(this)}>Add Filter</Button>
-        </FormGroup>
-        </div>
-        :
-        <div>
-        <FormGroup controlId="active-properties">
-          <ControlLabel>Constraints:</ControlLabel>
-          <FormControl componentClass="select"
-                       size={selectSize(this.state.properties.length)}>
-            {this.state.properties.map((prop, i) =>
-              <option value={i} key={i}>{`${prop[0]} = ${prop[1]}`}</option>
-             )}
-          </FormControl>
-        </FormGroup>
-        <FormGroup controlId="property-key">
-          <ControlLabel>Property:</ControlLabel>
-          <FormControl componentClass="select"
-                       size={selectSize(this.properties[this.state.selectedConcept].length)}
-                       onChange={this._onSelectPropertyKey.bind(this)}>
-            {this.properties[this.state.selectedConcept].map((keys) => {
-               return <option key={keys[0]} value={keys[0]}>{keys[0]}</option>;
-             })}
-          </FormControl>
-        </FormGroup>
-        {this.state.selectedProperty != null
-         ? <FormGroup controlId="property-value">
-           <ControlLabel>Value:</ControlLabel>
-           <InputGroup>
-             <PropertyInput type={this.properties[this.state.selectedConcept][this.state.selectedProperty][1]} />
-             <InputGroup.Button>
-               <Button onClick={this._onAddProperty.bind(this)}>Add</Button>
-             </InputGroup.Button>
-           </InputGroup>
-         </FormGroup>
-         : <div />}
-          </div>}
+             <FormControl className="filter-type"
+                          componentClass="select"
+                          value={this.state.currFilterType}
+                          onChange={this._onChangeFilterType.bind(this)}>
+               {_.map(this.filterTypeMap, (value, key) => {
+                  return <option key={key} value={key}>{value}</option>;})}
+             </FormControl>
+             <FormControl className='filter-value'
+                          type="text"
+                          value={this.state.currFilterValue}
+                          placeholder="Filter value"
+                          onChange={this._onChangeFilterValue.bind(this)}/>
+             <Button className='add-filter' onClick={this._onAddFilter.bind(this)}>Add Filter</Button>
+           </FormGroup>
+           <FormGroup controlId="orderby-add">
+             <ControlLabel>Add Order By:</ControlLabel>
+             <FormControl className='orderby-input'
+                          type="text"
+                          value={this.state.currOrderBy}
+                          placeholder="Order By Value"
+                          onChange={this._onChangeOrderBy.bind(this)}/>
+             <Button className='add-orderby' onClick={this._onAddOrderBy.bind(this)}>Add Order By</Button>
+           </FormGroup>
+         </div>
+         :
+         <div>
+           <FormGroup controlId="active-properties">
+             <ControlLabel>Constraints:</ControlLabel>
+             <FormControl componentClass="select"
+                          size={selectSize(this.state.properties.length)}>
+               {this.state.properties.map((prop, i) =>
+                 <option value={i} key={i}>{`${prop[0]} = ${prop[1]}`}</option>
+               )}
+             </FormControl>
+           </FormGroup>
+           <FormGroup controlId="property-key">
+             <ControlLabel>Property:</ControlLabel>
+             <FormControl componentClass="select"
+                          size={selectSize(this.properties[this.state.selectedConcept].length)}
+                          onChange={this._onSelectPropertyKey.bind(this)}>
+               {this.properties[this.state.selectedConcept].map((keys) => {
+                  return <option key={keys[0]} value={keys[0]}>{keys[0]}</option>;
+               })}
+             </FormControl>
+           </FormGroup>
+           {this.state.selectedProperty != null
+            ? <FormGroup controlId="property-value">
+              <ControlLabel>Value:</ControlLabel>
+              <InputGroup>
+                <PropertyInput type={this.properties[this.state.selectedConcept][this.state.selectedProperty][1]} />
+                <InputGroup.Button>
+                  <Button onClick={this._onAddProperty.bind(this)}>Add</Button>
+                </InputGroup.Button>
+              </InputGroup>
+            </FormGroup>
+            : <div />}
+         </div>}
         <Button type="submit" disabled={this.state.searching}>Search</Button>
         {this.state.searching
          ? <img className='spinner' src="/static/images/spinner.gif" />

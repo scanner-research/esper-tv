@@ -39,6 +39,9 @@ class BoxView extends React.Component {
       mouseX: e.pageX,
       mouseY: e.pageY
     });
+    if (this.props.onClick) {
+      this.props.onClick(this.props.box);
+    }
     e.stopPropagation();
   }
 
@@ -126,7 +129,7 @@ class BoxView extends React.Component {
                 onMouseDown={this._onMouseDown}
                 className={`bounding-box gender-${box.cls}`}
                 style={style}
-                ref={(n) => {this._div = n}}>{box.id}</div>;
+                ref={(n) => {this._div = n}} />;
   }
 }
 
@@ -277,6 +280,7 @@ export class BoundingBoxView extends React.Component {
          : <div />}
         {this.props.bboxes.map((box, i) =>
           <BoxView box={box} key={i} i={i} width={width} height={height}
+                   onClick={this.props.onClick}
                    onDelete={this._onDelete}
                    onChange={this._onChange}
                    onTrack={this._onTrack}

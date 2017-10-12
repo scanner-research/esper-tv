@@ -23,9 +23,12 @@ export default class SearchResultView extends React.Component {
   }
 
   _onMouseLeave = () => {
-    this._video.removeEventListener('seeked', this._onSeeked);
-    this._video.removeEventListener('loadeddata', this._onLoadedData);
-    this._video.removeEventListener('timeupdate', this._onTimeUpdate);
+    if (this._video) {
+      this._video.removeEventListener('seeked', this._onSeeked);
+      this._video.removeEventListener('loadeddata', this._onLoadedData);
+      this._video.removeEventListener('timeupdate', this._onTimeUpdate);
+    }
+
     this.setState({hover: false, showVideo: false});
   }
 
@@ -68,6 +71,7 @@ export default class SearchResultView extends React.Component {
                      bboxes={this.props.clip.bboxes}
                      width={this.props.video.width}
                      height={this.props.video.height}
+                     onClick={this.props.onBoxClick}
                      path={path} />;
     let other_box = this.props.clip.other_bboxes
                   ? <BoundingBoxView

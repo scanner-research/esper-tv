@@ -70,8 +70,10 @@ class BaseMeta(ModelBase):
 
         if is_base_class:
             if not 'Meta' in attrs:
+
                 class Meta:
                     abstract = True
+
                 attrs['Meta'] = Meta
 
             attrs['objects'] = BulkUpdateManager()
@@ -80,8 +82,10 @@ class BaseMeta(ModelBase):
         else:
             if base.__name__ == 'Frame':
                 attrs['video'] = ForeignKey(current_dataset.Video, name)
+
                 class Meta:
                     unique_together = ('video', 'number')
+
                 attrs['Meta'] = Meta
 
             child_name = '{}_{}'.format(current_dataset.name, name)
@@ -113,6 +117,7 @@ def register_concept(name):
 
     class Meta:
         unique_together = ('labeler', 'instance')
+
     instance_cls_name = cls_name
     cls_name = '{}Features'.format(name)
     type(cls_name, (Features, ), {
@@ -120,9 +125,9 @@ def register_concept(name):
         'labeler': ForeignKey(current_dataset.Labeler, cls_name),
         'instance': ForeignKey(inst, cls_name),
         'Meta': Meta,
-        '_datasetName' : current_dataset.name,
-        '_conceptName' : cls_name,
-        '_instanceName' : instance_cls_name
+        '_datasetName': current_dataset.name,
+        '_conceptName': cls_name,
+        '_instanceName': instance_cls_name
     })
 
 
@@ -143,6 +148,7 @@ class Frame(models.Model):
         self.validate_unique()
         super(Frame, self).save(*args, **kwargs)
 
+
 class Labeler(models.Model):
     __metaclass__ = BaseMeta
     name = CharField(db_index=True)
@@ -155,6 +161,7 @@ class Concept(models.Model):
 class Model(models.Model):
     __metaclass__ = BaseMeta
 
+
 class Instance(models.Model):
     __metaclass__ = BaseMeta
 
@@ -164,10 +171,10 @@ class Instance(models.Model):
     bbox_y2 = models.FloatField(null=True)
     bbox_score = models.FloatField(null=True)
 
-
     def save(self, *args, **kwargs):
         self.validate_unique()
         super(Instance, self).save(*args, **kwargs)
+
 
 class Features(models.Model):
     __metaclass__ = BaseMeta
@@ -182,15 +189,20 @@ class Features(models.Model):
     def getTempFeatureModel(cls, instance_ids):
         with connection.cursor() as cursor:
             with Dataset(cls._datasetName):
-                col_def = ''.join([', distto_{} double precision NULL'.format(inst) for inst in instance_ids])
+                col_def = ''.join(
+                    [', distto_{} double precision NULL'.format(inst) for inst in instance_ids])
                 #MYSQL can fuck off with its bullshit about not being able to use a temporary table more than once
-                cursor.execute("CREATE TEMP TABLE {} (id integer NOT NULL PRIMARY KEY, features bytea NOT NULL, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".format(cls._meta.db_table+"temp", col_def))
+                cursor.execute(
+                    "CREATE TEMP TABLE {} (id integer NOT NULL PRIMARY KEY, features bytea NOT NULL, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".
+                    format(cls._meta.db_table + "temp", col_def))
                 current_dataset = datasets[cls._datasetName]
-                cls_name = cls._conceptName+"Temp" 
-                model_params = {'__module__' : cls.__module__,
-                        #'features': models.BinaryField(),
-                        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
-                        'instance': ForeignKey(getattr(current_dataset,cls._instanceName), cls_name)}
+                cls_name = cls._conceptName + "Temp"
+                model_params = {
+                    '__module__': cls.__module__,
+                    #'features': models.BinaryField(),
+                    'labeler': ForeignKey(current_dataset.Labeler, cls_name),
+                    'instance': ForeignKey(getattr(current_dataset, cls._instanceName), cls_name)
+                }
                 for instance_id in instance_ids:
                     model_params['distto_{}'.format(instance_id)] = models.FloatField(null=True)
                 with warnings.catch_warnings():
@@ -200,7 +212,7 @@ class Features(models.Model):
                     tempmodel = type(cls_name, (Features, ), model_params)
                 testfeatures = {}
                 for i in cls.objects.filter(instance_id__in=instance_ids).all():
-                    testfeatures[i.instance_id] = np.array(json.loads(i.features))
+                    testfeatures[i.instance_id] = np.array(json.loads(str(i.features)))
                 it = cls.objects.all()
                 batch_size = 1000
                 batch = []
@@ -213,7 +225,11 @@ class Features(models.Model):
                     newfeat.instance_id = feat.instance_id
                     #TODO better distance computation
                     for i in instance_ids:
-                        setattr(newfeat, 'distto_{}'.format(i), np.sum(np.square(np.array(json.loads(feat.features))-testfeatures[i])))
+                        setattr(
+                            newfeat, 'distto_{}'.format(i),
+                            np.sum(
+                                np.square(
+                                    np.array(json.loads(str(feat.features))) - testfeatures[i])))
                     batch.append(newfeat)
                     if len(batch) == batch_size:
                         tempmodel.objects.bulk_create(batch)
@@ -221,15 +237,11 @@ class Features(models.Model):
                 tempmodel.objects.bulk_create(batch)
                 return tempmodel
 
-
-                    
-
     @classmethod
     def dropTempFeatureModel(cls):
         with connection.cursor() as cursor:
-            cursor.execute("DROP TABLE IF EXISTS {};".format(cls._meta.db_table+"temp"))
+            cursor.execute("DROP TABLE IF EXISTS {};".format(cls._meta.db_table + "temp"))
 
-            
 
 class ModelDelegator:
     def __init__(self, name):

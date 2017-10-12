@@ -13,6 +13,8 @@ class SearchResult {
 
 @observer
 export default class Home extends React.Component {
+  state = { clickedBox: null }
+
   constructor(props) {
     super(props);
     this._result = new SearchResult();
@@ -27,6 +29,10 @@ export default class Home extends React.Component {
     this._result.clips = results.clips;
   }
 
+  _onBoxClick = (box) => {
+    this.setState({clickedBox: box.id});
+  }
+
   render() {
     let orderby_keys = _.keys(this._result.clips);
     orderby_keys.sort();
@@ -34,7 +40,7 @@ export default class Home extends React.Component {
     return (
       <div className='row'>
         <div className='col-md-3'>
-          <SearchInput result={this._result} onSearch={this._onSearch} />
+          <SearchInput result={this._result} onSearch={this._onSearch} clickedBox={this.state.clickedBox} />
         </div>
         <div className='search-results col-md-9'>
           <div className='colors'>
@@ -47,7 +53,7 @@ export default class Home extends React.Component {
               <div>{key}</div>
               <div>
                 {this._result.clips[key].map((clip, j) => {
-                   return <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} />;
+                   return <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} onBoxClick={this._onBoxClick}/>;
                  })}
               </div>
             </div>
