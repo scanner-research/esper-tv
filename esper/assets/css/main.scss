@@ -16,6 +16,91 @@ body {
     margin-top: 30px;
 }
 
+.home { }
+
+.search-input {
+    .schema {
+        margin-top: 20px;
+
+        .schema-classes {
+            overflow: auto;
+
+            .schema-class-name {
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+
+            .schema-class {
+                float: left;
+                width: 120px;
+                margin-right: 10px;
+                padding: 5px;
+                border: 1px solid black;
+            }
+
+            .schema-field {
+                cursor: pointer;
+            }
+        }
+
+        img {
+            margin-top: 10px;
+        }
+
+        .schema-example {
+            margin-top: 10px;
+            padding: 5px;
+            border: 1px solid black;
+
+            .schema-example-name {
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+        }
+    }
+
+    .ace_editor {
+        margin-bottom: 10px;
+    }
+
+    button {
+        margin-right: 10px;
+    }
+
+    margin-bottom: 20px;
+}
+
+.search-result {
+    float: left;
+    position: relative;
+    margin: 5px;
+
+    video {
+        position: absolute;
+        height: 100px;
+        z-index: 0;
+
+        /* Always show the control panel on search result tiny videos. */
+        &::-webkit-media-controls-panel {
+            display: flex !important;
+            opacity: 1 !important;
+        }
+    }
+
+    .loading-video {
+        position: absolute;
+        bottom: 3px;
+        left: 3px;
+        z-index: 2;
+
+        img { height: 25px; }
+    }
+
+    .bounding-boxes {
+        z-index: 1;
+    }
+}
+
 .video-summary {
     width: 300px;
     float: left;
@@ -44,18 +129,6 @@ body {
         z-index: 1;
     }
 }
-
-/* .gender-0, .gender-U { */
-/*     border-color: #23b722; */
-/* } */
-
-/* .gender-M { */
-/*     border-color: #00c7ff; */
-/* } */
-
-/* .gender-F { */
-/*     border-color: #ff0084; */
-/* } */
 
 .bounding-boxes {
     position: relative;
@@ -108,28 +181,6 @@ body {
         > div {
             display: inline-block;
         }
-    }
-}
-
-.search-result {
-    float: left;
-    position: relative;
-    margin: 5px;
-
-    video {
-        position: absolute;
-        z-index: 0;
-        height: 100px;
-
-        /* Always show the control panel on search result tiny videos. */
-        &::-webkit-media-controls-panel {
-            display: flex !important;
-            opacity: 1 !important;
-        }
-    }
-
-    .bounding-boxes {
-        z-index: 1;
     }
 }
 

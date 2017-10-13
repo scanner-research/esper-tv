@@ -1,10 +1,15 @@
 import React from 'react';
 import {Box, BoundingBoxView} from './bbox.jsx';
+import {observer} from 'mobx-react';
 
-export default class SearchResultView extends React.Component {
+const HOVER_TO_SHOW_VIDEO_DELAY = 1000;
+
+class ClipView extends React.Component {
   state = {
     hover: false,
     showVideo: false,
+    loadingVideo: false,
+    hoverLongEnough: false
   }
 
   fullScreen = false
@@ -12,6 +17,7 @@ export default class SearchResultView extends React.Component {
   constructor() {
     super();
     document.addEventListener('webkitfullscreenchange', this._onFullScreen);
+    this._timer = null;
   }
 
   _onFullScreen = () => {
@@ -19,7 +25,10 @@ export default class SearchResultView extends React.Component {
   }
 
   _onMouseEnter = () => {
-    this.setState({hover: true, showVideo: false});
+    this.setState({hover: true, showVideo: false, loadingVideo: true, hoverLongEnough: false});
+    this._timer = setTimeout((() => {
+      this.setState({hoverLongEnough: true});
+    }).bind(this), HOVER_TO_SHOW_VIDEO_DELAY);
   }
 
   _onMouseLeave = () => {
@@ -29,7 +38,12 @@ export default class SearchResultView extends React.Component {
       this._video.removeEventListener('timeupdate', this._onTimeUpdate);
     }
 
-    this.setState({hover: false, showVideo: false});
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
+
+    this.setState({hover: false, showVideo: false, loadingVideo: false, hoverLongEnough: false});
   }
 
   _onClick = () => {
@@ -37,22 +51,22 @@ export default class SearchResultView extends React.Component {
   }
 
   _toSeconds = (frame) => {
-    return frame / this.props.video.fps;
+    return frame / this._videoMeta().fps;
   }
 
   _onSeeked = () => {
-    this.setState({showVideo: true});
+    this.setState({showVideo: true, loadingVideo: false});
   }
 
   _onLoadedData = () => {
-    if (this.props.clip.start !== undefined) {
-      this._video.currentTime = this._toSeconds(this.props.clip.start);
-    }
+    this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
   }
 
   _onTimeUpdate = () => {
-    if (!this.state.fullScreen && this._video.currentTime >= this._toSeconds(this.props.clip.end)) {
-      this._video.currentTime = this._toSeconds(this.props.clip.start);
+    if (!this.state.fullScreen &&
+        this._frameMeta('end') !== undefined &&
+        this._video.currentTime >= this._toSeconds(this._frameMeta('end').number)) {
+      this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
     }
   }
 
@@ -64,36 +78,63 @@ export default class SearchResultView extends React.Component {
     }
   }
 
+  _videoMeta = () => {
+    return window.search_result.videos[this.props.clip.video];
+  }
+
+  _frameMeta = (ty) => {
+    return window.search_result.frames[this.props.clip[ty + '_frame']]
+  }
+
   render() {
+    let clip = this.props.clip;
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
-    let path = `/server_media/thumbnails/frame_${this.props.clip.frame}.jpg`;
-    let my_box = <BoundingBoxView
-                     bboxes={this.props.clip.bboxes}
-                     width={this.props.video.width}
-                     height={this.props.video.height}
-                     onClick={this.props.onBoxClick}
-                     path={path} />;
-    let other_box = this.props.clip.other_bboxes
-                  ? <BoundingBoxView
-                        bboxes={this.props.clip.other_bboxes}
-                        width={this.props.video.width}
-                        height={this.props.video.height}
-                        path={path} />
-                  : <div />;
+    let video = this._videoMeta();
+    let path = `/server_media/thumbnails/frame_${clip.start_frame}.jpg`;
     return (
       <div className='search-result'
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}
            onClick={this._onClick}>
-        {this.state.hover
+        {this.state.hover && this.state.hoverLongEnough
          ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
-           <source src={`/system_media/${this.props.video.path}`} />
+           <source src={`/system_media/${video.path}`} />
          </video>
          : <div />}
-        {this.props.clip.bboxes.length > 0 && this.props.clip.bboxes[0].labeler == "tinyfaces"
-         ? <div>{my_box}{other_box}</div>
-         : <div>{other_box}{my_box}</div>}
+        {this.state.hoverLongEnough && this.state.loadingVideo
+         ? <div className='loading-video'><img src="/static/images/spinner.gif" /></div>
+         : <div />}
+        <BoundingBoxView
+          bboxes={clip.bboxes}
+          width={video.width}
+          height={video.height}
+          onClick={this.props.onBoxClick}
+          path={path} />
       </div>
     );
+  }
+}
+
+@observer
+export default class SearchResultView extends React.Component {
+  render() {
+    return (
+      <div className='search-results'>
+        <div className='colors'>
+          {_.values(window.search_result.labelers).map((labeler, i) =>
+            <div key={i}>
+             {labeler.name}: &nbsp;
+              <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
+                           width: '10px', height: '10px', display: 'inline-box'}} />
+            </div>
+          )}
+        </div>
+        <div className='clips'>
+          {window.search_result.result.map((clip, i) =>
+            <ClipView key={i} clip={clip} />
+          )}
+        </div>
+      </div>
+    )
   }
 }

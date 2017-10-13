@@ -2,6 +2,8 @@ from __future__ import print_function
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.forms.models import model_to_dict
+from django.db.models.query import QuerySet
+import django.db.models as models
 from base_models import ModelDelegator
 from timeit import default_timer as now
 import sys
@@ -13,6 +15,7 @@ from django.db import connection
 import logging
 import time
 from django.db.models import Min, Max, Q, F, Count
+from django.db.models.functions import Cast
 import os
 from concurrent.futures import ThreadPoolExecutor
 from django.views.decorators.csrf import csrf_exempt
@@ -24,6 +27,7 @@ import math
 import itertools
 import numpy as np
 from operator import itemgetter
+import traceback
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -36,14 +40,12 @@ logger = logging.getLogger(__name__)
 Config()
 from scanner.types_pb2 import BoundingBox
 
-models = ModelDelegator(DATASET)
-Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = models.Video, models.Frame, models.Face, models.FaceInstance, models.FaceFeatures, models.Labeler
+m = ModelDelegator(DATASET)
+Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = m.Video, m.Frame, m.Face, m.FaceInstance, m.FaceFeatures, m.Labeler
 
 DIFF_BBOX_THRESHOLD = 0.35
 # 24 frames/sec - so this requires more than a sec overlap
 FRAME_OVERLAP_THRESHOLD = 25
-
-COLORS = ['red', 'aqua', 'green', 'cyan', 'darkorange']
 
 
 def _print(*args):
@@ -52,7 +54,18 @@ def _print(*args):
 
 
 def index(request):
-    return render(request, 'index.html')
+    dataset = m.datasets()[DATASET]
+    schema = []
+
+    def get_fields(cls):
+        fields = cls._meta.get_fields()
+        return [f.name for f in fields if isinstance(f, models.Field)]
+
+    for cls in ['Video', 'Frame', 'Labeler'] + sum([[c, c + 'Instance', c + 'Features']
+                                                    for c in dataset.concepts], []) + dataset.other:
+        schema.append([cls, get_fields(getattr(dataset, cls))])
+
+    return render(request, 'index.html', {'schema': json.dumps(schema)})
 
 
 def extract(frames):
@@ -546,7 +559,7 @@ def bboxes_to_json(l):
     r = []
     for b in l:
         obj = _inst_to_bbox_dict('', b)
-        obj['labeler'] = b['labeler__name']
+        obj['labeler'] = b['labeler']
         r.append(obj)
     return r
 
@@ -860,3 +873,89 @@ def search(request):
         for l in FaceInstance.objects.values('labeler__name').distinct()
     }
     return JsonResponse({'clips': clips, 'videos': videos, 'colors': colors})
+
+
+LIMIT = 100
+def search2(request):
+    params = json.loads(request.body)
+
+    def at_fps(qs, n=1):
+        return qs.annotate(_tmp=F('number') % (Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
+
+    def make_error(err):
+        return JsonResponse({'error': err})
+
+    try:
+        exec(params['code']) in globals(), locals()  # woooow danger
+    except Exception as e:
+        return make_error(traceback.format_exc())
+
+    try:
+        result
+    except NameError:
+        return make_error('Variable "result" must be set')
+
+    materialized_result = []
+    if isinstance(result, QuerySet):
+        sample = result[0]
+        cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
+        if cls_name == 'Frame':
+            for frame in result[:LIMIT]:
+                materialized_result.append({
+                    'video': frame.video.id,
+                    'start_frame': frame.id,
+                    'bboxes': []
+                })
+
+        elif cls_name == 'FaceInstance':
+            for inst in result[:LIMIT]:
+                materialized_result.append({
+                    'video': inst.frame.video.id,
+                    'start_frame': inst.frame.id,
+                    'bboxes': [{
+                        'bbox_x1': inst.bbox_x1,
+                        'bbox_x2': inst.bbox_x2,
+                        'bbox_y1': inst.bbox_y1,
+                        'bbox_y2': inst.bbox_y2,
+                        'bbox_score': inst.bbox_score,
+                        'labeler': inst.labeler.id
+                    }]
+                })
+
+        else:
+            return make_error('QuerySet for invalid object type {}'.format(cls_name))
+
+    video_ids = set()
+    frame_ids = set()
+    labeler_ids = set()
+    for obj in materialized_result:
+        video_ids.add(obj['video'])
+        frame_ids.add(obj['start_frame'])
+        if 'end_frame' in obj:
+            frame_ids.add(obj['end_frame'])
+
+        for bbox in obj['bboxes']:
+            labeler_ids.add(bbox['labeler'])
+
+        obj['bboxes'] = bboxes_to_json(obj['bboxes'])
+
+    def to_dict(qs):
+        return {t.id: model_to_dict(t) for t in qs}
+
+    videos = to_dict(Video.objects.filter(id__in=video_ids))
+    frames = to_dict(Frame.objects.filter(id__in=frame_ids))
+    labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
+
+    return JsonResponse({'success': {
+        'result': materialized_result,
+        'videos': videos,
+        'frames': frames,
+        'labelers': labelers,
+    }})
+
+
+def schema(request):
+    params = json.loads(request.body)
+    cls = getattr(m, params['cls_name'])
+    result = [r[params['field']] for r in cls.objects.values(params['field']).distinct()[:LIMIT]]
+    return JsonResponse({'result': result})

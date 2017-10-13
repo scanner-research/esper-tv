@@ -115,12 +115,13 @@ class BoxView extends React.Component {
       offsetX = this.state.mouseX - this.state.clickX;
       offsetY = this.state.mouseY - this.state.clickY;
     }
+
     let style = {
       left: box.x1 * this.props.width + offsetX,
       top: box.y1 * this.props.height + offsetY,
       width: (box.x2-box.x1) * this.props.width,
       height: (box.y2-box.y1) * this.props.height,
-      borderColor: window.COLORS[box.labeler]
+      borderColor: window.search_result.labeler_colors[box.labeler]
     };
 
     return <div onMouseOver={this._onMouseOver}

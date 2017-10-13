@@ -46,6 +46,8 @@ datasets = {}
 class Dataset(object):
     def __init__(self, name):
         self.name = name
+        self.concepts = []
+        self.other = []
         if name not in datasets:
             datasets[name] = self
 
@@ -96,6 +98,8 @@ class BaseMeta(ModelBase):
             setattr(current_dataset, name, new_cls)
             if base.__name__ == 'Concept':
                 register_concept(name)
+            elif base.__name__ == 'Model':
+                current_dataset.other.append(name)
 
         return new_cls
 
@@ -107,13 +111,15 @@ def register_concept(name):
         unique_together = (name.lower(), 'frame', 'labeler')
 
     inst_cls_name = '{}Instance'.format(name)
-    inst = type(inst_cls_name, (Instance, ), {
+    inst_cls = type(inst_cls_name, (Instance, ), {
         '__module__': current_dataset.Video.__module__,
         name.lower(): ForeignKey(getattr(current_dataset, name), inst_cls_name),
         'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
         'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
         'Meta': Meta
     })
+
+    current_dataset.concepts.append(name)
 
     class Meta:
         unique_together = ('labeler', inst_cls_name.lower())
@@ -122,7 +128,7 @@ def register_concept(name):
     type(cls_name, (Features, ), {
         '__module__': current_dataset.Video.__module__,
         'labeler': ForeignKey(current_dataset.Labeler, cls_name),
-        inst_cls_name.lower(): ForeignKey(inst, cls_name),
+        inst_cls_name.lower(): ForeignKey(inst_cls, cls_name),
         'Meta': Meta,
         '_datasetName': current_dataset.name,
         '_conceptName': cls_name,
@@ -246,7 +252,7 @@ class ModelDelegator:
         self._dataset = datasets[name]
 
     def datasets(self):
-        return datasets.keys()
+        return datasets
 
     def __getattr__(self, k):
         return getattr(self._dataset, k)
