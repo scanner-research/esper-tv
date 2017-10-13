@@ -104,30 +104,29 @@ def register_concept(name):
     global current_datset
 
     class Meta:
-        unique_together = ('concept', 'frame', 'labeler')
+        unique_together = (name.lower(), 'frame', 'labeler')
 
-    cls_name = '{}Instance'.format(name)
-    inst = type(cls_name, (Instance, ), {
+    inst_cls_name = '{}Instance'.format(name)
+    inst = type(inst_cls_name, (Instance, ), {
         '__module__': current_dataset.Video.__module__,
-        'concept': ForeignKey(getattr(current_dataset, name), cls_name, null=True),
-        'frame': ForeignKey(current_dataset.Frame, cls_name),
-        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
+        name.lower(): ForeignKey(getattr(current_dataset, name), inst_cls_name),
+        'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
+        'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
         'Meta': Meta
     })
 
     class Meta:
-        unique_together = ('labeler', 'instance')
+        unique_together = ('labeler', inst_cls_name.lower())
 
-    instance_cls_name = cls_name
     cls_name = '{}Features'.format(name)
     type(cls_name, (Features, ), {
         '__module__': current_dataset.Video.__module__,
         'labeler': ForeignKey(current_dataset.Labeler, cls_name),
-        'instance': ForeignKey(inst, cls_name),
+        inst_cls_name.lower(): ForeignKey(inst, cls_name),
         'Meta': Meta,
         '_datasetName': current_dataset.name,
         '_conceptName': cls_name,
-        '_instanceName': instance_cls_name
+        '_instanceName': inst_cls_name
     })
 
 
@@ -165,11 +164,11 @@ class Model(models.Model):
 class Instance(models.Model):
     __metaclass__ = BaseMeta
 
-    bbox_x1 = models.FloatField(null=True)
-    bbox_x2 = models.FloatField(null=True)
-    bbox_y1 = models.FloatField(null=True)
-    bbox_y2 = models.FloatField(null=True)
-    bbox_score = models.FloatField(null=True)
+    bbox_x1 = models.FloatField()
+    bbox_x2 = models.FloatField()
+    bbox_y1 = models.FloatField()
+    bbox_y2 = models.FloatField()
+    bbox_score = models.FloatField()
 
     def save(self, *args, **kwargs):
         self.validate_unique()

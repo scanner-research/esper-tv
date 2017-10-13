@@ -175,7 +175,7 @@ export default class SearchInput extends React.Component {
 
   componentWillReceiveProps(props) {
     if (props.clickedBox != this.lastOrderby) {
-      this.state.orderby.push('facefeaturestemp__distto_' + props.clickedBox);
+      this.state.orderby.push('facefeaturestemp_distto_' + props.clickedBox);
       this.lastOrderby = props.clickedBox;
     }
   }

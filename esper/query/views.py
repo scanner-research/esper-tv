@@ -712,9 +712,11 @@ def search(request):
             else:
                 Qargs = Qargs & currQ
 
+        orderby_with_minus = [t for t in orderby]
+        orderby = [t.strip('-') for t in orderby]
         for val in orderby:
             if val not in values:
-                values.append(val)
+                values.append(val.strip('-'))
         annotate_vals_map = {}
 
         filteredby = queryset.objects.annotate()
@@ -726,14 +728,14 @@ def search(request):
         for field in count_fields:
             filteredby = queryset.objects.filter(faceinstance__labeler__name='mtcnn').annotate(**{field+"_count": Count(field)}).filter(aggQargs[field] & Q(**{'id__in':filteredby}))
 
-        insts = queryset.objects.annotate(**annotate_dict).filter(Qargs & Q(**{'id__in':filteredby})).order_by(*orderby).values(*values)
+        insts = queryset.objects.annotate(**annotate_dict).filter(Qargs & Q(**{'id__in':filteredby})).order_by(*orderby_with_minus).values(*values)
         _print(insts.query)
 
         video_keys = Set()
 
         clips = defaultdict(list)
         if querytype == 'faceinstance':
-            for inst in insts[:100]:
+            for inst in insts[:200]:
                 video_keys.add(inst['frame__video__id'])
                 bbox = _inst_to_bbox_dict('', inst)
                 bbox['labeler'] = inst['labeler__name']
@@ -746,12 +748,12 @@ def search(request):
                     'start': inst['frame__number']
                 })
         elif querytype == 'face':
-            for inst in insts[:100]:
+            for inst in insts[:200]:
                 if inst['faceinstance__frame__video__id'] is None:
                     continue
                 video_keys.add(inst['faceinstance__frame__video__id'])
                 #bbox = _inst_to_bbox_dict('faceinstance', inst)
-                faceinst = FaceInstance.objects.filter(concept_id=inst['id'], frame__number=inst['faceinstance__min_frame'])[0]
+                faceinst = FaceInstance.objects.filter(face_id=inst['id'], frame__number=inst['faceinstance__min_frame'])[0]
                 bbox = _inst_to_bbox_dict('', model_to_dict(faceinst))
                 bbox['id'] = faceinst.id
                 clips[inst[orderby[0]] if len(orderby) > 0 and type(inst[orderby[0]]) in [str, unicode] else ''].append({
@@ -774,7 +776,7 @@ def search(request):
                 bbox['id'] = inst['faceinstance__id']
                 bboxes[inst['id']].append(bbox)
 
-            for inst in insts[:100]:
+            for inst in insts[:200]:
                 video_keys.add(inst['video__id'])
                 if inst['id'] in frameset:
                     continue

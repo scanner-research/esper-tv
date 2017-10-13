@@ -28,6 +28,10 @@ http {
         }
 
         location / {
+            uwsgi_read_timeout 300;
+            proxy_connect_timeout 300;
+            proxy_send_timeout 300;
+            proxy_read_timeout 300;
             proxy_pass http://esper:8000;
         }
     }
