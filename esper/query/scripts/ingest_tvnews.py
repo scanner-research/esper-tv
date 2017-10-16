@@ -56,12 +56,16 @@ print 'Instances'
 instances = {}
 tuples = set()
 for i, line in enumerate(lines):
-    if i % 100 == 0: print i
     [path, frame_number, labelset, track, gender, bbox] = line.strip().split('\t')[:6]
     frame_number = int(frame_number)
 
-    path = 'tvnews/segments/{}'.format(path.split('/')[-1])
-    if path not in videos:
+    fname = path.split('/')[-1]
+    if 'full_vids' in path:
+        path = 'tvnews/videos/{}'.format(fname)
+    else:
+        path = 'tvnews/segments/{}'.format(fname)
+    if not path in videos:
+        print 'Missing: ', path
         continue
     video = videos[path]
     frame = frames[video.id][frame_number]
@@ -81,7 +85,7 @@ for i, line in enumerate(lines):
     bbox = proto.BoundingBox()
     bbox.ParseFromString(bbox_bytes)
 
-    instances[i] = FaceInstance(frame=frame, bbox_x1=bbox.x1, bbox_x2=bbox.x2, bbox_y1=bbox.y1, bbox_y2=bbox.y2, labeler=labeler, concept=face)
+    instances[i] = FaceInstance(frame=frame, bbox_x1=bbox.x1, bbox_x2=bbox.x2, bbox_y1=bbox.y1, bbox_y2=bbox.y2, bbox_score=bbox.score, labeler=labeler, face=face)
 
 FaceInstance.objects.bulk_create(instances.values())
 
@@ -92,7 +96,7 @@ for i, line in enumerate(lines):
     try:
         [path, frame_number, labelset, track, gender, bbox, features_str] = line.strip().split('\t')[:7]
 
-        features.append(FaceFeatures(labeler=facenet, features=features_str, instance=instances[i]))
+        features.append(FaceFeatures(labeler=facenet, features=features_str, faceinstance=instances[i]))
     except ValueError:
         pass
 

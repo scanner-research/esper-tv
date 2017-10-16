@@ -32,18 +32,18 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 # Python dependencies
 ADD requirements.txt .
 RUN pip install -r requirements.txt && \
-    jupyter nbextension enable --py --sys-prefix widgetsnbextension && \  # permit Javascript extensions
-    python -c "import qgrid; qgrid.nbinstall(overwrite=True)" && \
+    jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
 
-ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:/usr/src/app/deps/facenet/src:$PYTHONPATH
-ENV GLOG_minloglevel=1
+ENV APPDIR=/usr/src/app
+WORKDIR ${APPDIR}
 
-WORKDIR /usr/src/app
+ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH
+ENV GLOG_minloglevel=1
 
 # TODO(wcrichto): don't run this if running without --cloud-files
 ADD visualdb-key.json .
-ENV GOOGLE_APPLICATION_CREDENTIALS=/usr/src/app/visualdb-key.json
+ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/visualdb-key.json
 RUN gcloud config set project visualdb-1046 && \
     gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
 

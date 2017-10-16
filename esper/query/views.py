@@ -95,14 +95,14 @@ def extract(frames):
             with ThreadPoolExecutor(max_workers=64) as executor:
                 list(executor.map(write_jpg, jpgs))
             sp.check_call(
-                shlex.split('gsutil -m mv "{}/*" gs://{}/{}/thumbnails'.format(
-                    temp_dir, BUCKET, DATA_PATH)))
+                shlex.split('gsutil -m mv "{}/*" gs://{}/{}/thumbnails/{}'.format(
+                    temp_dir, BUCKET, DATA_PATH, DATASET)))
             _print('Write: {:.3f}'.format(now() - start))
 
         elif ESPER_ENV == 'local':
 
             def write_jpg((jpg, frame)):
-                with open('assets/thumbnails/frame_{}.jpg'.format(frame.id), 'w') as f:
+                with open('assets/thumbnails/{}/frame_{}.jpg'.format(DATASET, frame.id), 'w') as f:
                     f.write(jpg)
 
             start = now()

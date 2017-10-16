@@ -24,7 +24,7 @@ SECRET_KEY = 'krdjiha6=n73&qlw^*nr8@fis&k#z3m3&phy+h%a^$ry-i)na('
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['esper']
+ALLOWED_HOSTS = ['esper', 'localhost']
 
 # Application definition
 
@@ -135,4 +135,5 @@ WEBPACK_LOADER = {
 # https://stackoverflow.com/questions/39254562/csrf-with-django-reactredux-using-axios
 CSRF_COOKIE_NAME = "XSRF-TOKEN"
 
+# Make Jupyter notebook work within container
 NOTEBOOK_ARGUMENTS = ['--ip', '0.0.0.0', '--allow-root', '--port', os.environ.get('IPYTHON_PORT')]

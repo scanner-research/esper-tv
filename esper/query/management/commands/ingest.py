@@ -14,6 +14,7 @@ from timeit import default_timer as now
 import os
 import requests
 from datetime import datetime
+import math
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -72,16 +73,16 @@ def extract_audio(video):
 
 
 def save_frames(video):
+    stride = int(math.ceil(video.fps)/2)
     ids = [
         str(f['id'])
-        for f in Frame.objects.filter(video=video, number__in=range(0, video.num_frames, 24))
+        for f in Frame.objects.filter(video=video, number__in=range(0, video.num_frames, stride))
         .order_by('number').values('id')
     ]
     requests.post('http://localhost:8000/batch_fallback', data={'frames': ','.join(ids)})
 
 
 def ingest(path, num_frames):
-    print path
     try:
         if ESPER_ENV == 'google':
             _, filename = os.path.split(path)
@@ -137,13 +138,15 @@ class Command(BaseCommand):
             paths = [s.strip() for s in f.readlines()]
 
         with Database() as db:
-        #     print 'Ingesting videos into Scanner...'
-        #     tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
-        #     for path, _ in failed:
-        #         paths.remove(path)
-        #     all_num_frames = [table.num_rows() for table in tables]
-            all_num_frames = [db.table(p).num_rows() for p in paths]
+            print 'Ingesting videos into Scanner...'
+            tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
+            for path, _ in failed:
+                paths.remove(path)
+            all_num_frames = [table.num_rows() for table in tables]
+
+            # all_num_frames = [db.table(p).num_rows() for p in paths]
 
         print 'Creating entries in DB...'
-        for path, num_frames in zip(paths, all_num_frames):
+        for i, (path, num_frames) in enumerate(zip(paths, all_num_frames)):
+            print '{}/{}: {}'.format(i, len(paths), path)
             ingest(path, num_frames)
