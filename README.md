@@ -83,6 +83,20 @@ python manage.py face_cluster paths
 ```
 
 
+## Using Jupyter
+
+First, enter the Esper container:
+```
+dc exec esper bash
+```
+
+Then inside the container run:
+```
+python manage.py shell_plus --notebook
+```
+
+Then in your browser, visit the address of your server on port 8888.
+
 ## Using Tableau
 
 Ask Will about getting permissions on the Esper project in Google Cloud. Then, install the [Google Cloud SDK](https://cloud.google.com/sdk/downloads). After that, run:
@@ -94,7 +108,7 @@ gcloud auth application-default login
 
 This sets up your machine for accessing any of the Google Cloud services. Then, download the [Google Cloud proxy tool](https://cloud.google.com/sql/docs/mysql/connect-admin-proxy#install) and run:
 ```
-./cloud_sql_proxy -instances=visualdb-1046:us-central1:esper=tcp:3306
+./cloud_sql_proxy -instances=visualdb-1046:us-west1:esper-shared=tcp:5432
 ```
 
 Then download the Esper workbook with:

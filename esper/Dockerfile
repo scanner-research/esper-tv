@@ -33,7 +33,7 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 ADD requirements.txt .
 RUN pip install -r requirements.txt && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \  # permit Javascript extensions
-    python -c "import qgrid; qgrid.nbinstall(overwrite=True)" &&
+    python -c "import qgrid; qgrid.nbinstall(overwrite=True)" && \
     python -c "import matplotlib"
 
 ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:/usr/src/app/deps/facenet/src:$PYTHONPATH
