@@ -20,7 +20,7 @@ RUN git clone https://github.com/torch/distro.git /opt/torch --recursive && \
 # Misc apt dependencies
 RUN apt-get update && \
     apt-get install -y postgresql libpq-dev cron python-tk sqlite3 \
-    npm nodejs vim mysql-client libmysqlclient-dev && \
+    npm nodejs && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # Google Cloud SDK
@@ -31,7 +31,10 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 
 # Python dependencies
 ADD requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt && \
+    jupyter nbextension enable --py --sys-prefix widgetsnbextension && \  # permit Javascript extensions
+    python -c "import qgrid; qgrid.nbinstall(overwrite=True)" &&
+    python -c "import matplotlib"
 
 ENV PYTHONPATH=/usr/src/app/deps/face_recognizer:/usr/src/app/deps/openface:/usr/src/app/deps/rude-carnie:/usr/src/app/deps/facenet/src:$PYTHONPATH
 ENV GLOG_minloglevel=1

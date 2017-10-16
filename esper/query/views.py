@@ -14,7 +14,7 @@ from scannerpy import Config, Database, Job, DeviceType
 from django.db import connection
 import logging
 import time
-from django.db.models import Min, Max, Q, F, Count
+from django.db.models import Min, Max, Q, F, Count  #, OuterRef, Subquery
 from django.db.models.functions import Cast
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -879,16 +879,21 @@ LIMIT = 100
 def search2(request):
     params = json.loads(request.body)
 
-    def at_fps(qs, n=1):
-        return qs.annotate(_tmp=F('number') % (Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
-
     def make_error(err):
         return JsonResponse({'error': err})
 
+    #### UTILITIES ####
+    # TODO(wcrichto): move this into a separate, user-modifiable file
+
+    def at_fps(qs, n=1):
+        return qs.annotate(_tmp=F('number') % (Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
+
+    ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
     try:
-        exec(params['code']) in globals(), locals()  # woooow danger
+        exec(params['code']) in globals(), locals()
     except Exception as e:
         return make_error(traceback.format_exc())
+    ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
 
     try:
         result
@@ -922,8 +927,41 @@ def search2(request):
                     }]
                 })
 
+        elif cls_name == 'Face':
+            faces = list(result[:LIMIT])
+
+            # TODO: move to django 1.11, enable subquery
+
+            # face_ids = [f.id for f in faces]
+            # sq = FaceInstance.objects.filter(face_id=OuterRef('pk')).annotate(min_frame=Min('frame__number'))
+            # tracks = Face \
+            #     .filter(id__in=face_ids) \
+            #     .annotate(min_frame=Subquery(sq.values('min_frame'))) \
+            #     .values()
+
+            for f in faces:
+                bounds = FaceInstance.objects.filter(face=f).aggregate(min_frame=Min('frame__number'), max_frame=Max('frame__number'))
+                min_face = FaceInstance.objects.get(frame__number=bounds['min_frame'], face=f)
+                video = min_face.frame.video.id
+                materialized_result.append({
+                    'video': video,
+                    'start_frame': Frame.objects.get(video_id=video, number=bounds['min_frame']).id,
+                    'end_frame': Frame.objects.get(video_id=video, number=bounds['max_frame']).id,
+                    'bboxes': [{
+                        'bbox_x1': min_face.bbox_x1,
+                        'bbox_x2': min_face.bbox_x2,
+                        'bbox_y1': min_face.bbox_y1,
+                        'bbox_y2': min_face.bbox_y2,
+                        'bbox_score': min_face.bbox_score,
+                        'labeler': min_face.labeler.id
+                    }]
+                })
+
         else:
             return make_error('QuerySet for invalid object type {}'.format(cls_name))
+
+    else:
+        return make_error('Result must be a QuerySet (for now)')
 
     video_ids = set()
     frame_ids = set()
@@ -958,4 +996,9 @@ def schema(request):
     params = json.loads(request.body)
     cls = getattr(m, params['cls_name'])
     result = [r[params['field']] for r in cls.objects.values(params['field']).distinct()[:LIMIT]]
+    try:
+        json.dumps(result)
+    except TypeError as e:
+        return JsonResponse({'error': str(e)})
+
     return JsonResponse({'result': result})

@@ -50,24 +50,3 @@ export default class Home extends React.Component {
     );
   }
 };
-
-/*
- *         <div className='search-results col-md-9'>
- *           <div className='colors'>
- *             {_.keys(this._result.colors).map((name, i) =>
- *               <div key={i}>{name}: <div style={{backgroundColor: this._result.colors[name], width: '10px', height: '10px', display: 'inline-box'}} /></div>
- *             )}
- *           </div>
- *           {orderby_keys.map((key, i) =>
- *             <div className='search-result-video' key={i}>
- *               <div className='group-header'>{key}</div>
- *               <div>
- *                 {this._result.clips[key].map((clip, j) => {
- *                    return <SearchResultView key={j} video={this._result.videos[clip.video_id]} clip={clip} onBoxClick={this._onBoxClick}/>;
- *                  })}
- *               </div>
- *             </div>
- *            )}
- *         </div>
- *       </div>
- * */

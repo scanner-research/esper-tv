@@ -31,9 +31,14 @@ class SchemaView extends React.Component {
         axios
           .post('/api/schema', {cls_name: cls_name, field: field})
           .then(((response) => {
-            this.examples[full_name] = response.data['result'];
+            if (response.data.hasOwnProperty('error')) {
+              this.examples[full_name] = false;
+            } else {
+              this.examples[full_name] = response.data['result'];
+            }
             this.setState({showExamples: true});
           }).bind(this))
+          .catch((error) => console.error(error))
           .then((() => {
             this.setState({loadingExamples: false});
           }));
@@ -63,9 +68,11 @@ class SchemaView extends React.Component {
          ? <div className='schema-example'>
            <div className='schema-example-name'>{this.exampleField}</div>
            <div>
-             {this.examples[this.exampleField].map((example, i) =>
-               <div key={i}>{example}</div>
-             )}
+             {this.examples[this.exampleField]
+              ? this.examples[this.exampleField].map((example, i) =>
+                <div key={i}>{example}</div>
+              )
+              : <div>Field cannot be displayed (not serializable, likely binary data).</div>}
            </div>
          </div>
          : <div />}
@@ -77,13 +84,26 @@ class SchemaView extends React.Component {
 export default class SearchInputView extends React.Component {
   state = {
     searching: false,
-    showSchema: true
+    showSchema: false,
+    showExampleQueries: false
   }
 
-  /* query = `result = at_fps(Frame.objects, 2)`
-   */
+  exampleQueries = [
+    ["All frames",
+     "result = Frame.objects.all()"],
+    ["Frames at 2 FPS",
+     "result = at_fps(Frame.objects, 2)"],
+    ["All faces",
+     "result = FaceInstance.objects.all()"],
+    ["Handlabeled faces",
+     "result = FaceInstance.objects.filter(labeler__name='handlabeled')"],
+    ["Faces from Fox News",
+     "result = FaceInstance.objects.filter(frame__video__channel='FOXNEWS')"],
+    ["All face tracks",
+     "result = Face.objects.all()"],
+  ]
 
-  query = `result = FaceInstance.objects.all()`
+  query = `result = Face.objects.all()`
 
   _onSearch = (e) => {
     e.preventDefault();
@@ -133,8 +153,19 @@ export default class SearchInputView extends React.Component {
         <Button onClick={() => {this.setState({showSchema: !this.state.showSchema})}}>
           {this.state.showSchema ? 'Hide' : 'Show'} Schema
         </Button>
+        <Button onClick={() => {this.setState({showExampleQueries: !this.state.showExampleQueries})}}>
+          {this.state.showExampleQueries ? 'Hide' : 'Show'} Example Queries
+        </Button>
         {this.state.searching
          ? <img className='spinner' src="/static/images/spinner.gif" />
+         : <div />}
+        {this.state.showExampleQueries
+         ? <div>
+           {this.exampleQueries.map((q, i) => {
+              return (<span key={i}><a href="#" onClick={() => {this.query = q[1]; this.forceUpdate()}}>{q[0]}</a>
+              <br /></span>);
+           })}
+           </div>
          : <div />}
         {this.state.showSchema ? <SchemaView /> : <div />}
       </Form>

@@ -146,13 +146,23 @@ class ProgressiveImage extends React.Component {
     }
   }
 
+  _onError = () => {
+    // TODO(wcrichto): handle 404 on image (theoretically shouldn't happen, but...)
+  }
+
+  componentWillReceiveProps(props) {
+    if (this.props.src != props.src) {
+      this.setState({loaded: false});
+    }
+  }
+
   render() {
     return (
       <div>
         {this.state.loaded
          ? <div />
          : <img src='/static/images/spinner.gif' />}
-        <img {...this.props} onLoad={this._onLoad} />
+        <img {...this.props} onLoad={this._onLoad} onError={this._onError} />
       </div>
     );
   }
@@ -262,6 +272,12 @@ export class BoundingBoxView extends React.Component {
        track: null,
        gender: '0'
     });
+  }
+
+  componentWillReceiveProps(props) {
+    if (this.props.path != props.path) {
+      this.setState({imageLoaded: false});
+    }
   }
 
   render() {

@@ -7,6 +7,7 @@ from dotmap import DotMap
 
 NAME = None
 NGINX_PORT = '80'
+IPYTHON_PORT = '8888'
 SUFFIX = '-{}'.format(NAME) if NAME is not None else ''
 
 
@@ -24,8 +25,8 @@ services:
       - ./esper:/usr/src/app
       - ./nginx:/tmp
     depends_on: [esper{suffix}]
-    ports: ["{port}:{port}"]
-    environment: ["PORT={port}"]
+    ports: ["{nginx_port}:{nginx_port}"]
+    environment: ["PORT={nginx_port}"]
 
   esper{suffix}:
     build:
@@ -40,11 +41,12 @@ services:
       - ${{HOME}}/.bash_history:/root/.bash_history
       - ./visualdb-key.json:/usr/src/app/visualdb-key.json
       - /mnt/gcs:/usr/src/app/gcs
-    ports: ["8000"]
-""".format(port=NGINX_PORT, suffix=SUFFIX))
+    ports: ["8000", "{ipython_port}:{ipython_port}"]
+    environment: ["IPYTHON_PORT={ipython_port}"]
+""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, suffix=SUFFIX))
 
 db_local = yaml.load("""
-image: postgres 
+image: postgres
 environment:
   - POSTGRES_USER=will
   - POSTGRES_PASSWORD=foobar
@@ -88,10 +90,8 @@ def main():
                 project=base_config.google.project, zone=base_config.google.zone, name=base_config.database.name)
     else:
         config['services'][svc('db')] = db_local
-    config['services'][svc('esper')]['environment'] = [
-        'DJANGO_DB_USER={}'.format(base_config.database.user
-                                   if 'user' in base_config.database else 'root'),
-    ]
+    config['services'][svc('esper')]['environment'].append('DJANGO_DB_USER={}'.format(
+        base_config.database.user if 'user' in base_config.database else 'root'))
     if 'password' in base_config.database:
         config['services'][svc('esper')]['environment'].append(
             "DJANGO_DB_PASSWORD={}".format(base_config.database.password))

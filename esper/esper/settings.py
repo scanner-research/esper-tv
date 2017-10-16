@@ -24,12 +24,13 @@ SECRET_KEY = 'krdjiha6=n73&qlw^*nr8@fis&k#z3m3&phy+h%a^$ry-i)na('
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['halfmoon.graphics.cs.cmu.edu', 'ocean.pdl.local.cmu.edu', 'esper']
+ALLOWED_HOSTS = ['esper']
 
 # Application definition
 
 INSTALLED_APPS = [
     'webpack_loader',
+    'django_extensions',
     'query.apps.QueryConfig',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -133,3 +134,5 @@ WEBPACK_LOADER = {
 # Make AJAX work with Django's CSRF protection
 # https://stackoverflow.com/questions/39254562/csrf-with-django-reactredux-using-axios
 CSRF_COOKIE_NAME = "XSRF-TOKEN"
+
+NOTEBOOK_ARGUMENTS = ['--ip', '0.0.0.0', '--allow-root', '--port', os.environ.get('IPYTHON_PORT')]
