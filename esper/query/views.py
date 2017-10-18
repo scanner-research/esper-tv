@@ -888,6 +888,16 @@ def search2(request):
     def at_fps(qs, n=1):
         return qs.annotate(_tmp=F('number') % (Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
 
+    def bbox_to_dict(f):
+        return {
+            'bbox_x1': f.bbox_x1,
+            'bbox_x2': f.bbox_x2,
+            'bbox_y1': f.bbox_y1,
+            'bbox_y2': f.bbox_y2,
+            'bbox_score': f.bbox_score,
+            'labeler': f.labler.id
+        }
+
     ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
     try:
         exec(params['code']) in globals(), locals()

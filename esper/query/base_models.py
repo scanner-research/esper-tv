@@ -97,27 +97,29 @@ class BaseMeta(ModelBase):
         if not is_base_class:
             setattr(current_dataset, name, new_cls)
             if base.__name__ == 'Concept':
-                register_concept(name)
+                register_concept(name, attrs)
             elif base.__name__ == 'Model':
                 current_dataset.other.append(name)
 
         return new_cls
 
 
-def register_concept(name):
+def register_concept(name, attrs):
     global current_datset
 
     class Meta:
         unique_together = (name.lower(), 'frame', 'labeler')
 
     inst_cls_name = '{}Instance'.format(name)
-    inst_cls = type(inst_cls_name, (Instance, ), {
+    inst_methods = {
         '__module__': current_dataset.Video.__module__,
         name.lower(): ForeignKey(getattr(current_dataset, name), inst_cls_name),
         'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
         'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
         'Meta': Meta
-    })
+    }
+    inst_methods.update(attrs)
+    inst_cls = type(inst_cls_name, (Instance, ), inst_methods)
 
     current_dataset.concepts.append(name)
 
