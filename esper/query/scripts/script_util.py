@@ -1,6 +1,6 @@
 from scannerpy import ProtobufGenerator, Config, Database, Job
 from query.base_models import ModelDelegator
-from django.db.models import Min, Max, Count
+from django.db.models import Min, Max, Count, F
 import os
 import matplotlib.pyplot as plt
 import numpy as np

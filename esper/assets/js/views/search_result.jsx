@@ -47,7 +47,7 @@ class ClipView extends React.Component {
   }
 
   _onClick = () => {
-    console.log('Clicked SearchResultView');
+    console.log('Clicked SearchResultView', this.props.clip.bboxes[0].id);
   }
 
   _toSeconds = (frame) => {
@@ -90,7 +90,9 @@ class ClipView extends React.Component {
     let clip = this.props.clip;
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let video = this._videoMeta();
-    let path = `/server_media/thumbnails/frame_${clip.start_frame}.jpg`;
+    let frame = this._frameMeta('start');
+    let path = `/server_media/thumbnails/tvnews/frame_${clip.start_frame}.jpg`;
+    /* let path = `https://frameserver-dot-visualdb-1046.appspot.com/?path=${encodeURIComponent(video.path)}&frame=${frame.number}&id=${clip.start_frame}`;*/
     return (
       <div className='search-result'
            onMouseEnter={this._onMouseEnter}

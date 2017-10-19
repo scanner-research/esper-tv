@@ -6,6 +6,7 @@
  * CSS class name with corresponding styles.
  */
 
+
 body {
     background: #fefefe;
 }
@@ -16,11 +17,22 @@ body {
     margin-top: 30px;
 }
 
+.panel {
+    margin: 0;
+}
+
 .home { }
 
 .search-input {
+    $spacing: 10px;
+
+    .control-label {
+        font-weight: normal;
+        margin-right: 5px;
+    }
+
     .schema {
-        margin-top: 20px;
+        margin-top: $spacing;
 
         .schema-classes {
             overflow: auto;
@@ -33,9 +45,7 @@ body {
             .schema-class {
                 float: left;
                 width: 120px;
-                margin-right: 10px;
-                padding: 5px;
-                border: 1px solid black;
+                margin-right: $spacing;
             }
 
             .schema-field {
@@ -44,13 +54,11 @@ body {
         }
 
         img {
-            margin-top: 10px;
+            margin-top: $spacing;
         }
 
         .schema-example {
-            margin-top: 10px;
-            padding: 5px;
-            border: 1px solid black;
+            margin-top: $spacing;
 
             .schema-example-name {
                 font-weight: bold;
@@ -59,15 +67,19 @@ body {
         }
     }
 
+    .example-queries {
+        margin-top: $spacing;
+    }
+
     .ace_editor {
-        margin-bottom: 10px;
+        margin-bottom: $spacing;
     }
 
     button {
-        margin-right: 10px;
+        margin-right: $spacing;
     }
 
-    margin-bottom: 20px;
+    margin-bottom: 2*$spacing;
 }
 
 .search-result {

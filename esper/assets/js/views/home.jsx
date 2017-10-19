@@ -18,6 +18,8 @@ class SearchResult {
   };
 };
 
+window.DATASET = observable('tvnews');
+
 @observer
 export default class Home extends React.Component {
   state = { clickedBox: null }

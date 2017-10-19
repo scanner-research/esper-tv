@@ -2,12 +2,14 @@ import React from 'react';
 import axios from 'axios';
 import ReactDOM from 'react-dom';
 import brace from 'brace';
-import {Form, FormGroup, FormControl, FieldGroup, ControlLabel, InputGroup, Button} from 'react-bootstrap';
+import * as Rb from 'react-bootstrap';
 import AceEditor from 'react-ace';
+import {observer} from 'mobx-react';
 
 import 'brace/mode/python'
 import 'brace/theme/github'
 
+@observer
 class SchemaView extends React.Component {
   state = {
     loadingExamples: false,
@@ -29,7 +31,7 @@ class SchemaView extends React.Component {
       } else {
         this.setState({showExamples: false, loadingExamples: true});
         axios
-          .post('/api/schema', {cls_name: cls_name, field: field})
+          .post('/api/schema', {dataset: window.DATASET, cls_name: cls_name, field: field})
           .then(((response) => {
             if (response.data.hasOwnProperty('error')) {
               this.examples[full_name] = false;
@@ -50,22 +52,22 @@ class SchemaView extends React.Component {
     return (
       <div className='schema'>
         <div className='schema-classes'>
-          {SCHEMA.map((cls, i) =>
-            <div key={i} className='schema-class'>
+          {_.find(SCHEMAS, (l) => l[0] == window.DATASET)[1].map((cls, i) =>
+            <Rb.Panel key={i} className='schema-class'>
               <div className='schema-class-name'>{cls[0]}</div>
               <div className='schema-class-fields'>
                 {cls[1].map((field, j) =>
                   <div className='schema-field' key={j} onClick={() => this._onClick(cls[0], field)}>{field}</div>
                 )}
               </div>
-            </div>
+            </Rb.Panel>
           )}
         </div>
         {this.state.loadingExamples
          ? <img className='spinner' src="/static/images/spinner.gif" />
          : <div />}
         {this.state.showExamples
-         ? <div className='schema-example'>
+         ? <Rb.Panel className='schema-example'>
            <div className='schema-example-name'>{this.exampleField}</div>
            <div>
              {this.examples[this.exampleField]
@@ -74,7 +76,7 @@ class SchemaView extends React.Component {
               )
               : <div>Field cannot be displayed (not serializable, likely binary data).</div>}
            </div>
-         </div>
+         </Rb.Panel>
          : <div />}
       </div>
     );
@@ -85,22 +87,104 @@ export default class SearchInputView extends React.Component {
   state = {
     searching: false,
     showSchema: false,
-    showExampleQueries: false
+    showExampleQueries: false,
   }
 
+  /*
+   *   exampleQueries = [
+   *     ["All videos",
+   *      "result = Frame.objects.filter(number=0)"],
+   *     ["All frames",
+   *      "result = Frame.objects.all()"],
+   *     ["Frames at 2 FPS",
+   *      "result = at_fps(Frame.objects, 2)"],
+   *     ["All faces",
+   *      "result = FaceInstance.objects.all()"],
+   *     ["Handlabeled faces",
+   *      "result = FaceInstance.objects.filter(labeler__name='handlabeled')"],
+   *     ["Faces from Fox News",
+   *      "result = FaceInstance.objects.filter(frame__video__channel='FOXNEWS')"],
+   *     ["All face tracks",
+   *      "result = Face.objects.all()"],
+   *   ]
+   * */
+
   exampleQueries = [
-    ["All frames",
-     "result = Frame.objects.all()"],
-    ["Frames at 2 FPS",
-     "result = at_fps(Frame.objects, 2)"],
-    ["All faces",
-     "result = FaceInstance.objects.all()"],
-    ["Handlabeled faces",
-     "result = FaceInstance.objects.filter(labeler__name='handlabeled')"],
-    ["Faces from Fox News",
-     "result = FaceInstance.objects.filter(frame__video__channel='FOXNEWS')"],
-    ["All face tracks",
-     "result = Face.objects.all()"],
+    ["All videos",
+     "result = Frame.objects.filter(number=0)"],
+    ["Fox News videos",
+     "result = Frame.objects.filter(number=0, video__channel='FOXNEWS')"],
+    ["Faces on Poppy Harlow",
+     "result = FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0'])"],
+    ["Female faces on Poppy Harlow",
+     "result = FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0'])"],
+    ["'Talking heads' on Poppy Harlow",
+     "result = FaceInstance.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(height__gte=0.3, frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0'])"],
+    ["Two female faces on Poppy Harlow",
+`result = []
+for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
+    for frame in Frame.objects.filter(video=video).annotate(n=F('number')%math.ceil(video.fps)).filter(n=0)[:1000:10]:
+        faces = list(FaceInstance.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame=frame, gender__name='female', height__gte=0.2))
+        if len(faces) == 2:
+            result.append({
+                'video': frame.video.id,
+                'start_frame': frame.id,
+                'bboxes': [bbox_to_dict(f) for f in faces]
+            })`],
+    ["Faces like Poppy Harlow",
+     `id = 4457280
+FaceFeatures.dropTempFeatureModel()
+FaceFeatures.getTempFeatureModel([id])
+result = FaceInstance.objects.all().order_by('facefeaturestemp__distto_{}'.format(id))`],
+    ["Faces unlike Poppy Harlow",
+     `id = 4457280
+FaceFeatures.dropTempFeatureModel()
+FaceFeatures.getTempFeatureModel([id])
+result = FaceInstance.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by('facefeaturestemp__distto_{}'.format(id))`],
+    ["Differing bounding boxes", `labeler_names = [l['labeler__name'] for l in FaceInstance.objects.values('labeler__name').distinct()]
+print(labeler_names)
+
+videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+for frame in Frame.objects.filter(Q(video__show='Situation Room With Wolf Blitzer') | Q(video__show='Special Report With Bret Baier')).select_related('video')[:10000:10]:
+    faces = FaceInstance.objects.filter(frame=frame).select_related('labeler')
+    for face in faces:
+        videos[frame.video.id][frame.id][face.labeler.name].append(face)
+
+AREA_THRESHOLD = 0.02
+DIST_THRESHOLD = 0.10
+
+mistakes = defaultdict(lambda: defaultdict(tuple))
+for video, frames in videos.iteritems():
+    for frame, labelers in frames.iteritems():
+        for labeler, faces in labelers.iteritems():
+            for face in faces:
+                if bbox_area(face) < AREA_THRESHOLD:
+                    continue
+
+                mistake = True
+                for other_labeler in labeler_names:
+                    if labeler == other_labeler: continue
+                    other_faces = labelers[other_labeler] if other_labeler in labelers else []
+                    for other_face in other_faces:
+                        if bbox_dist(face, other_face) < DIST_THRESHOLD:
+                            mistake = False
+                            break
+
+                    if mistake and len(other_faces) > 0:
+                        mistakes[video][frame] = (faces, other_faces)
+                        break
+                else:
+                    continue
+                break
+
+result = []
+for video, frames in list(mistakes.iteritems())[:100]:
+    for frame, (faces, other_faces) in frames.iteritems():
+        result.append({
+            'video': video,
+            'start_frame': frame,
+            'bboxes': [bbox_to_dict(f) for f in faces + other_faces]
+        })`]
   ]
 
   query = `result = Face.objects.all()`
@@ -109,7 +193,7 @@ export default class SearchInputView extends React.Component {
     e.preventDefault();
     this.setState({searching: true});
     axios
-      .post('/api/search2', {code: this._editor.editor.getValue()})
+      .post('/api/search2', {dataset: window.DATASET, code: this._editor.editor.getValue()})
       .then((response) => {
         if (response.data.success) {
           this.props.onSearch(response.data.success);
@@ -125,6 +209,10 @@ export default class SearchInputView extends React.Component {
       });
   }
 
+  _onChangeDataset = (e) => {
+    window.DATASET.set(e.target.value);
+  }
+
   /* Hacks to avoid code getting wiped out when setState causes the form to re-render. */
   _onCodeChange = (newCode) => {
     this.query = newCode;
@@ -135,7 +223,7 @@ export default class SearchInputView extends React.Component {
 
   render() {
     return (
-      <Form className='search-input' onSubmit={this._onSearch} ref={(n) => {this._form = n;}}>
+      <Rb.Form className='search-input' onSubmit={this._onSearch} ref={(n) => {this._form = n;}} inline>
         <AceEditor
           mode="python"
           theme="github"
@@ -149,26 +237,35 @@ export default class SearchInputView extends React.Component {
           defaultValue={this.query}
           editorProps={{$blockScrolling: Infinity}}
           ref={(n) => {this._editor = n;}} />
-        <Button type="submit" disabled={this.state.searching}>Search</Button>
-        <Button onClick={() => {this.setState({showSchema: !this.state.showSchema})}}>
+        <Rb.Button type="submit" disabled={this.state.searching}>Search</Rb.Button>
+        <Rb.Button onClick={() => {this.setState({showSchema: !this.state.showSchema})}}>
           {this.state.showSchema ? 'Hide' : 'Show'} Schema
-        </Button>
-        <Button onClick={() => {this.setState({showExampleQueries: !this.state.showExampleQueries})}}>
+        </Rb.Button>
+        <Rb.Button onClick={() => {this.setState({showExampleQueries: !this.state.showExampleQueries})}}>
           {this.state.showExampleQueries ? 'Hide' : 'Show'} Example Queries
-        </Button>
+        </Rb.Button>
+        <Rb.FormGroup>
+          <Rb.ControlLabel>Dataset:</Rb.ControlLabel>
+          <Rb.FormControl componentClass="select" onChange={this._onChangeDataset} defaultValue={window.DATASET}>
+            {SCHEMAS.map((l, i) =>
+              <option key={i} value={l[0]}>{l[0]}</option>
+            )}
+          </Rb.FormControl>
+        </Rb.FormGroup>
         {this.state.searching
          ? <img className='spinner' src="/static/images/spinner.gif" />
          : <div />}
         {this.state.showExampleQueries
-         ? <div>
+         ? <Rb.Panel className='example-queries'>
+           <strong>Example queries</strong><br />
            {this.exampleQueries.map((q, i) => {
               return (<span key={i}><a href="#" onClick={() => {this.query = q[1]; this.forceUpdate()}}>{q[0]}</a>
               <br /></span>);
            })}
-           </div>
+           </Rb.Panel>
          : <div />}
         {this.state.showSchema ? <SchemaView /> : <div />}
-      </Form>
+      </Rb.Form>
     );
   }
 }

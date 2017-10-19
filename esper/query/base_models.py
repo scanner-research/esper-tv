@@ -200,7 +200,7 @@ class Features(models.Model):
                     [', distto_{} double precision NULL'.format(inst) for inst in instance_ids])
                 #MYSQL can fuck off with its bullshit about not being able to use a temporary table more than once
                 cursor.execute(
-                    "CREATE TEMP TABLE {} (id integer NOT NULL PRIMARY KEY, features bytea NOT NULL, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".
+                    "CREATE TABLE IF NOT EXISTS {} (id integer NOT NULL PRIMARY KEY, features bytea, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".
                     format(cls._meta.db_table + "temp", col_def))
                 current_dataset = datasets[cls._datasetName]
                 cls_name = cls._conceptName + "Temp"
@@ -210,6 +210,7 @@ class Features(models.Model):
                     'labeler': ForeignKey(current_dataset.Labeler, cls_name),
                     'instance': ForeignKey(getattr(current_dataset, cls._instanceName), cls_name)
                 }
+
                 for instance_id in instance_ids:
                     model_params['distto_{}'.format(instance_id)] = models.FloatField(null=True)
                 with warnings.catch_warnings():
@@ -218,8 +219,9 @@ class Features(models.Model):
                     warnings.simplefilter("ignore")
                     tempmodel = type(cls_name, (Features, ), model_params)
                 testfeatures = {}
-                for i in cls.objects.filter(instance_id__in=instance_ids).all():
-                    testfeatures[i.instance_id] = np.array(json.loads(str(i.features)))
+                for i in cls.objects.filter(faceinstance_id__in=instance_ids).all():
+                    testfeatures[i.faceinstance_id] = np.array(json.loads(str(i.features)))
+
                 it = cls.objects.all()
                 batch_size = 1000
                 batch = []
@@ -227,9 +229,9 @@ class Features(models.Model):
                 for feat in it:
                     newfeat = tempmodel()
                     newfeat.id = feat.id
-                    newfeat.features = feat.features
+                    #newfeat.features = feat.features
                     newfeat.labeler_id = feat.labeler_id
-                    newfeat.instance_id = feat.instance_id
+                    newfeat.instance_id = feat.faceinstance_id
                     featarr = np.array(json.loads(str(feat.features)))
                     #TODO better distance computation
                     for i in instance_ids:
@@ -246,12 +248,14 @@ class Features(models.Model):
     @classmethod
     def dropTempFeatureModel(cls):
         with connection.cursor() as cursor:
+            # cursor.execute("DELETE FROM {}".format(cls._meta.db_table + "temp"))
             cursor.execute("DROP TABLE IF EXISTS {};".format(cls._meta.db_table + "temp"))
 
 
 class ModelDelegator:
-    def __init__(self, name):
-        self._dataset = datasets[name]
+    def __init__(self, name=None):
+        if name is not None:
+            self._dataset = datasets[name]
 
     def datasets(self):
         return datasets

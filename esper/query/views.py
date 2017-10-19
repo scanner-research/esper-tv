@@ -14,7 +14,7 @@ from scannerpy import Config, Database, Job, DeviceType
 from django.db import connection
 import logging
 import time
-from django.db.models import Min, Max, Q, F, Count  #, OuterRef, Subquery
+from django.db.models import Min, Max, Q, F, Count, OuterRef, Subquery
 from django.db.models.functions import Cast
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -40,9 +40,6 @@ logger = logging.getLogger(__name__)
 Config()
 from scanner.types_pb2 import BoundingBox
 
-m = ModelDelegator(DATASET)
-Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = m.Video, m.Frame, m.Face, m.FaceInstance, m.FaceFeatures, m.Labeler
-
 DIFF_BBOX_THRESHOLD = 0.35
 # 24 frames/sec - so this requires more than a sec overlap
 FRAME_OVERLAP_THRESHOLD = 25
@@ -54,18 +51,20 @@ def _print(*args):
 
 
 def index(request):
-    dataset = m.datasets()[DATASET]
-    schema = []
+    schemas = []
+    for name, ds in ModelDelegator().datasets().iteritems():
+        schema = []
 
-    def get_fields(cls):
-        fields = cls._meta.get_fields()
-        return [f.name for f in fields if isinstance(f, models.Field)]
+        def get_fields(cls):
+            fields = cls._meta.get_fields()
+            return [f.name for f in fields if isinstance(f, models.Field)]
 
-    for cls in ['Video', 'Frame', 'Labeler'] + sum([[c, c + 'Instance', c + 'Features']
-                                                    for c in dataset.concepts], []) + dataset.other:
-        schema.append([cls, get_fields(getattr(dataset, cls))])
+        for cls in ['Video', 'Frame', 'Labeler'] + sum([[c, c + 'Instance', c + 'Features']
+                                                        for c in ds.concepts], []) + ds.other:
+            schema.append([cls, get_fields(getattr(ds, cls))])
+        schemas.append([name, schema])
 
-    return render(request, 'index.html', {'schema': json.dumps(schema)})
+    return render(request, 'index.html', {'schemas': json.dumps(schemas)})
 
 
 def extract(frames):
@@ -560,6 +559,7 @@ def bboxes_to_json(l):
     for b in l:
         obj = _inst_to_bbox_dict('', b)
         obj['labeler'] = b['labeler']
+        obj['id'] = b['id']
         r.append(obj)
     return r
 
@@ -774,6 +774,7 @@ def search(request):
                         video__id=inst['faceinstance__frame__video__id'],
                         number=inst['faceinstance__min_frame']).id,
                     'video_id': inst['faceinstance__frame__video__id'],
+
                     'bboxes': [bbox],
                     'start': inst['faceinstance__min_frame'],
                     'end': inst['faceinstance__max_frame'],
@@ -876,8 +877,12 @@ def search(request):
 
 
 LIMIT = 100
+STRIDE = 1
 def search2(request):
     params = json.loads(request.body)
+
+    m = ModelDelegator(params['dataset'])
+    Video, Frame, Face, FaceInstance, FaceFeatures, Labeler = m.Video, m.Frame, m.Face, m.FaceInstance, m.FaceFeatures, m.Labeler
 
     def make_error(err):
         return JsonResponse({'error': err})
@@ -890,13 +895,24 @@ def search2(request):
 
     def bbox_to_dict(f):
         return {
+            'id': f.id,
             'bbox_x1': f.bbox_x1,
             'bbox_x2': f.bbox_x2,
             'bbox_y1': f.bbox_y1,
             'bbox_y2': f.bbox_y2,
             'bbox_score': f.bbox_score,
-            'labeler': f.labler.id
+            'labeler': f.labeler.id
         }
+
+    def bbox_area(f):
+        return (f.bbox_x2 - f.bbox_x1) * (f.bbox_y2 - f.bbox_y1)
+
+    def bbox_midpoint(f):
+        return np.array([(f.bbox_x1 + f.bbox_x2) / 2, (f.bbox_y1 + f.bbox_y2) / 2])
+
+    def bbox_dist(f1, f2):
+        return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
+
 
     ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
     try:
@@ -912,10 +928,14 @@ def search2(request):
 
     materialized_result = []
     if isinstance(result, QuerySet):
-        sample = result[0]
+        try:
+            sample = result[0]
+        except IndexError:
+            return make_error('No results.')
+
         cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
         if cls_name == 'Frame':
-            for frame in result[:LIMIT]:
+            for frame in result[:LIMIT*STRIDE:STRIDE]:
                 materialized_result.append({
                     'video': frame.video.id,
                     'start_frame': frame.id,
@@ -923,22 +943,15 @@ def search2(request):
                 })
 
         elif cls_name == 'FaceInstance':
-            for inst in result[:LIMIT]:
+            for inst in result[:LIMIT*STRIDE:STRIDE]:
                 materialized_result.append({
                     'video': inst.frame.video.id,
                     'start_frame': inst.frame.id,
-                    'bboxes': [{
-                        'bbox_x1': inst.bbox_x1,
-                        'bbox_x2': inst.bbox_x2,
-                        'bbox_y1': inst.bbox_y1,
-                        'bbox_y2': inst.bbox_y2,
-                        'bbox_score': inst.bbox_score,
-                        'labeler': inst.labeler.id
-                    }]
+                    'bboxes': [bbox_to_dict(inst)]
                 })
 
         elif cls_name == 'Face':
-            faces = list(result[:LIMIT])
+            faces = list(result[:LIMIT*STRIDE:STRIDE])
 
             # TODO: move to django 1.11, enable subquery
 
@@ -957,21 +970,16 @@ def search2(request):
                     'video': video,
                     'start_frame': Frame.objects.get(video_id=video, number=bounds['min_frame']).id,
                     'end_frame': Frame.objects.get(video_id=video, number=bounds['max_frame']).id,
-                    'bboxes': [{
-                        'bbox_x1': min_face.bbox_x1,
-                        'bbox_x2': min_face.bbox_x2,
-                        'bbox_y1': min_face.bbox_y1,
-                        'bbox_y2': min_face.bbox_y2,
-                        'bbox_score': min_face.bbox_score,
-                        'labeler': min_face.labeler.id
-                    }]
+                    'bboxes': [bbox_to_dict(min_face)]
                 })
-
         else:
             return make_error('QuerySet for invalid object type {}'.format(cls_name))
 
     else:
-        return make_error('Result must be a QuerySet (for now)')
+        if not isinstance(result, list):
+            return make_error('Result must be a QuerySet (for now) or frame list')
+        else:
+            materialized_result = result
 
     video_ids = set()
     frame_ids = set()
@@ -994,6 +1002,12 @@ def search2(request):
     frames = to_dict(Frame.objects.filter(id__in=frame_ids))
     labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
 
+    for r in materialized_result:
+        path = Video.objects.get(id=r['video']).path
+        frame = r['start_frame']
+        number = Frame.objects.get(id=frame).number
+
+
     return JsonResponse({'success': {
         'result': materialized_result,
         'videos': videos,
@@ -1004,11 +1018,21 @@ def search2(request):
 
 def schema(request):
     params = json.loads(request.body)
+    m = ModelDelegator(params['dataset'])
+
     cls = getattr(m, params['cls_name'])
-    result = [r[params['field']] for r in cls.objects.values(params['field']).distinct()[:LIMIT]]
+    result = [r[params['field']] for r in cls.objects.values(params['field']).distinct().order_by(params['field'])[:LIMIT]]
     try:
         json.dumps(result)
     except TypeError as e:
         return JsonResponse({'error': str(e)})
 
     return JsonResponse({'result': result})
+
+
+def build_index(request):
+    id = request.GET.get('id', 4457280)
+    m = ModelDelegator('tvnews')
+    m.FaceFeatures.dropTempFeatureModel()
+    m.FaceFeatures.getTempFeatureModel([id])
+    return JsonResponse({})
