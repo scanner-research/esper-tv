@@ -3,3 +3,4 @@
 docker-compose.yml
 nvidia-docker-compose.yml
 service-key.json
+postgres

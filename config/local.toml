@@ -6,3 +6,6 @@ path = "/var/esper"
 type = "local"
 user = "will"
 password = "foobar"
+
+[compute]
+gpu = false

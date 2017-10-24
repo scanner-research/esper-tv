@@ -1,4 +1,5 @@
-FROM scannerresearch/scanner:gpu
+ARG device=cpu
+FROM scannerresearch/scanner:${device}
 ARG https_proxy
 ARG project
 ENV DJANGO_CONFIGURATION Docker
@@ -33,6 +34,5 @@ ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 ENV GOOGLE_PROJECT=${project}
 
 CMD cp .scanner.toml /root/ && \
-    gcloud config set project ${GOOGLE_PROJECT} && \
-    gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS && \
+    ./scripts/google-setup.sh && \
     supervisord -c supervisord.conf
