@@ -22,7 +22,7 @@ export MYSQL_PASSWORD=<pick a password, save it to your shell .rc>
 alias dc=docker-compose
 
 pip install -r requirements.txt
-python configure.py
+python configure.py -c config/local.toml
 dc pull
 dc up -d
 dc exec esper ./scripts/setup.sh
@@ -32,7 +32,7 @@ Then visit `http://yourserver.com`.
 
 
 ### Accessing the local database
-The default Esper build comes with a local MySQL database, saved to `mysql-db` inside the Esper repository. It is exposed on the default port (3306) and comes with a root user whose password is what you specified in `MYSQL_PASSWORD`. Connect to the database with:
+The default Esper build comes with a local Postgres database, saved to `mysql-db` inside the Esper repository. It is exposed on the default port (3306) and comes with a root user whose password is what you specified in `MYSQL_PASSWORD`. Connect to the database with:
 ```
 mysql -h <your server> -u root -p${MYSQL_PASSWORD} esper
 ```

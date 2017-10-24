@@ -1,0 +1,8 @@
+[storage]
+type = "local"
+path = "/var/esper"
+
+[database]
+type = "local"
+user = "will"
+password = "foobar"
