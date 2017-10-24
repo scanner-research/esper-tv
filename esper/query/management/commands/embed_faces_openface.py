@@ -32,7 +32,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
-        model_path = '/usr/src/app/deps/openface/models'
+        model_path = '/app/deps/openface/models'
         of = OpenFaceHelper(model_path)
         print model_path
 

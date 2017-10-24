@@ -2,4 +2,4 @@
 *.pyc
 docker-compose.yml
 nvidia-docker-compose.yml
-mysql-db
+service-key.json

@@ -17,7 +17,7 @@ class Command(BaseCommand):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
 
-        model_dir = '/usr/src/app/deps/rude-carnie/inception_gender_checkpoint'
+        model_dir = '/app/deps/rude-carnie/inception_gender_checkpoint'
         rc = RudeCarnie(model_dir=model_dir)
 
         for path in paths:

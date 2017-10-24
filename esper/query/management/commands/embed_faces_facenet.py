@@ -28,7 +28,7 @@ class Command(BaseCommand):
 
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
-        model_path = '/usr/src/app/deps/facenet/models/20170512-110547/'
+        model_path = '/app/deps/facenet/models/20170512-110547/'
         print model_path
 
         #load facenet models and start tensorflow

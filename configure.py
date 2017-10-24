@@ -22,7 +22,7 @@ services:
     image: nginx
     command: ["bash", "/tmp/subst.sh"]
     volumes:
-      - ./esper:/usr/src/app
+      - ./esper:/app
       - ./nginx:/tmp
     depends_on: [esper{suffix}]
     ports: ["{nginx_port}:{nginx_port}"]
@@ -37,10 +37,9 @@ services:
     privileged: true
     depends_on: [db{suffix}]
     volumes:
-      - ./esper:/usr/src/app
+      - ./esper:/app
       - ${{HOME}}/.bash_history:/root/.bash_history
-      - ./visualdb-key.json:/usr/src/app/visualdb-key.json
-      - /mnt/gcs:/usr/src/app/gcs
+      - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}"]
 """.format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, suffix=SUFFIX))
@@ -57,7 +56,7 @@ ports: ["5432"]
 
 db_google = yaml.load("""
 image: gcr.io/cloudsql-docker/gce-proxy:1.09
-volumes: ["./visualdb-key.json:/config"]
+volumes: ["./service-key.json:/config"]
 environment: []
 ports: ["5432"]
 """)
@@ -115,7 +114,7 @@ def main():
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
         ])
     else:
-        scanner_config['storage'] = {'type': 'posix', 'db_path': '/usr/src/app/scanner_db'}
+        scanner_config['storage'] = {'type': 'posix', 'db_path': '/app/scanner_db'}
 
     for service in config['services'].values():
         env_vars = [

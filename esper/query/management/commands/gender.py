@@ -30,7 +30,7 @@ class Command(BaseCommand):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
 
-        model_dir = '/usr/src/app/deps/rude-carnie/inception_gender_checkpoint'
+        model_dir = '/app/deps/rude-carnie/inception_gender_checkpoint'
         for i, path in enumerate(paths):
             confident = 0
             if path == '':

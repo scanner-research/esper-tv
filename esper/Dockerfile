@@ -24,14 +24,14 @@ RUN pip install -r requirements.txt && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
 
-ENV APPDIR=/usr/src/app
+ENV APPDIR=/app
 WORKDIR ${APPDIR}
 
 ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH
 ENV GLOG_minloglevel=1
-
-ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/visualdb-key.json
+ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 ENV GOOGLE_PROJECT=${project}
+
 CMD cp .scanner.toml /root/ && \
     gcloud config set project ${GOOGLE_PROJECT} && \
     gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS && \

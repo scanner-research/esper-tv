@@ -17,7 +17,7 @@ http {
         error_log /dev/stdout debug;
 
         location /static {
-            alias /usr/src/app/assets;
+            alias /app/assets;
         }
 
         include /etc/nginx/${ESPER_ENV}.conf;

@@ -30,7 +30,7 @@ class Command(BaseCommand):
             paths = [s.strip() for s in f.readlines()]
 
         face_db = FaceDB(
-            open_face_model_dir = '/usr/src/app/deps/openface/models',
+            open_face_model_dir = '/app/deps/openface/models',
             num_clusters = 10,
             merge_threshold=0.90,
             same_frame_penalty = False,

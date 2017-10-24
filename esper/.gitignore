@@ -10,6 +10,6 @@ assets/thumbnails
 assets/audio
 webpack-stats.json
 .scanner.toml
-visualdb-key.json
+service-key.json
 .ipynb_checkpoints
 **/yapf*.py
