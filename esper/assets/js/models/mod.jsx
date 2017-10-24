@@ -1,1 +1,1 @@
-export * from './face.jsx';
+export {Face} from './face.jsx';

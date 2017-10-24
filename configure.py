@@ -82,22 +82,29 @@ def main():
                 'name': 'esper'
             }
         })
+        
+    if 'google' in base_config:
+        config['services'][svc('esper')]['build']['args']['project'] = str(base_config.google.project)
 
     if base_config.database.type == 'google':
+        assert 'google' in base_config
         config['services'][svc('db')] = db_google
         config['services'][svc('db')]['command'] = \
             '/cloud_sql_proxy -instances={project}:{zone}:{name}=tcp:0.0.0.0:5432 -credential_file=/config'.format(
                 project=base_config.google.project, zone=base_config.google.zone, name=base_config.database.name)
     else:
         config['services'][svc('db')] = db_local
+
     config['services'][svc('esper')]['environment'].append('DJANGO_DB_USER={}'.format(
         base_config.database.user if 'user' in base_config.database else 'root'))
+
     if 'password' in base_config.database:
         config['services'][svc('esper')]['environment'].append(
             "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
 
     scanner_config = {}
     if base_config.storage.type == 'google':
+        assert 'google' in base_config
         scanner_config['storage'] = {
             'type': 'gcs',
             'bucket': base_config.storage.bucket,

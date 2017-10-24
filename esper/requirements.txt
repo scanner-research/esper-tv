@@ -11,3 +11,4 @@ qgrid==1.0.0b5
 matplotlib==2.1.0
 seaborn==0.8.1
 django-extensions==1.9.6
+supervisor==3.3.3
