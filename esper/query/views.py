@@ -113,8 +113,9 @@ def extract(frames):
 
 @csrf_exempt
 def batch_fallback(request):
+    m = ModelDelegator('tvnews')
     frames = [int(s) for s in request.POST.get('frames').split(',')]
-    frames = Frame.objects.filter(id__in=frames)
+    frames = m.Frame.objects.filter(id__in=frames)
     extract(frames)
     return JsonResponse({'success': True})
 

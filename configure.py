@@ -43,7 +43,7 @@ environment:
   - POSTGRES_USER=will
   - POSTGRES_PASSWORD=foobar
   - POSTGRES_DB=esper
-volumes: ["./postgres:/var/lib/postgres"]
+volumes: ["./postgres:/var/lib/postgresql/data"]
 ports: ["5432"]
 """))
 

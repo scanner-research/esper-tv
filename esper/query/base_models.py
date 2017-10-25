@@ -113,7 +113,7 @@ def register_concept(name, attrs):
     inst_cls_name = '{}Instance'.format(name)
     inst_methods = {
         '__module__': current_dataset.Video.__module__,
-        name.lower(): ForeignKey(getattr(current_dataset, name), inst_cls_name),
+        name.lower(): ForeignKey(getattr(current_dataset, name), inst_cls_name, null=True),
         'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
         'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
         'Meta': Meta

@@ -63,9 +63,9 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             face_features = FaceFeatures.objects.filter(
-                instance__frame__video=video,
-                instance__labeler=bbox_labeler,
-                labeler=feature_labeler).order_by('instance__frame__number').all()
+                faceinstance__frame__video=video,
+                faceinstance__labeler=bbox_labeler,
+                labeler=feature_labeler).order_by('faceinstance__frame__number').all()
             fps = video.fps
 
             # [first_frame, last_frame, all_features, avg_feature, sum_feature]
@@ -79,10 +79,10 @@ class Command(BaseCommand):
             #index in the face array NOT the face id
             for face_idx in range(faces_len):
                 curr_face = face_features[face_idx]
-                curr_feature = np.array(json.loads(curr_face.features))
-                curr_face_id = curr_face.instance.id
-                curr_frame_id = curr_face.instance.frame.number
-                confidence = curr_face.instance.bbox.score
+                curr_feature = np.array(json.loads(str(curr_face.features)))
+                curr_face_id = curr_face.faceinstance.id
+                curr_frame_id = curr_face.faceinstance.frame.number
+                confidence = curr_face.faceinstance.bbox_score
                 #                if confidence < .98:
                 #                    low_confidence += 1
                 #                    continue
@@ -110,7 +110,7 @@ class Command(BaseCommand):
                                 for seq_face_id in item[2]:
                                     seq_face = FaceInstance.objects.get(id=seq_face_id)
                                     if seq_face.frame.number == last_frame: continue
-                                    seq_face.concept = track
+                                    seq_face.face = track
                                     in_seq += 1
                                     seq_face.save()
                                     last_frame = seq_face.frame.number
@@ -147,7 +147,7 @@ class Command(BaseCommand):
                 for seq_face_id in item[2]:
                     seq_face = FaceInstance.objects.get(id=seq_face_id)
                     if seq_face.frame.number == last_frame: continue
-                    seq_face.concept = track
+                    seq_face.face = track
                     in_seq += 1
                     seq_face.save()
                     last_frame = seq_face.frame.number
