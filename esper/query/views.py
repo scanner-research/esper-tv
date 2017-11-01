@@ -914,26 +914,13 @@ def search2(request):
     def bbox_dist(f1, f2):
         return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
 
-
-    ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
-    try:
-        exec(params['code']) in globals(), locals()
-    except Exception as e:
-        return make_error(traceback.format_exc())
-    ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
-
-    try:
-        result
-    except NameError:
-        return make_error('Variable "result" must be set')
-
-    materialized_result = []
-    if isinstance(result, QuerySet):
+    def qs_to_result(result, group=False):
         try:
             sample = result[0]
         except IndexError:
-            return make_error('No results.')
+            return []
 
+        materialized_result = []
         cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
         if cls_name == 'Frame':
             for frame in result[:LIMIT*STRIDE:STRIDE]:
@@ -973,19 +960,37 @@ def search2(request):
                     'end_frame': Frame.objects.get(video_id=video, number=bounds['max_frame']).id,
                     'bboxes': [bbox_to_dict(min_face)]
                 })
-        else:
-            return make_error('QuerySet for invalid object type {}'.format(cls_name))
 
-    else:
-        if not isinstance(result, list):
-            return make_error('Result must be a QuerySet (for now) or frame list')
-        else:
-            materialized_result = result
+        if group:
+            grouped_result = defaultdict(list)
+            for r in materialized_result:
+                grouped_result[(r['video'], r['start_frame'])].extend(r['bboxes'])
+
+            flat_result = [{'video': t1, 'start_frame': t2, 'bboxes': r}
+                                   for (t1, t2), r in grouped_result.iteritems()]
+            materialized_result = sorted(flat_result, key=itemgetter('video', 'start_frame'))
+
+        return materialized_result
+
+    ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
+    try:
+        exec(params['code']) in globals(), locals()
+    except Exception as e:
+        return make_error(traceback.format_exc())
+    ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
+
+    try:
+        result
+    except NameError:
+        return make_error('Variable "result" must be set')
+
+    if not isinstance(result, list):
+        return make_error('Result must be a frame list')
 
     video_ids = set()
     frame_ids = set()
     labeler_ids = set()
-    for obj in materialized_result:
+    for obj in result:
         video_ids.add(obj['video'])
         frame_ids.add(obj['start_frame'])
         if 'end_frame' in obj:
@@ -1003,14 +1008,14 @@ def search2(request):
     frames = to_dict(Frame.objects.filter(id__in=frame_ids))
     labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
 
-    for r in materialized_result:
+    for r in result:
         path = Video.objects.get(id=r['video']).path
         frame = r['start_frame']
         number = Frame.objects.get(id=frame).number
 
 
     return JsonResponse({'success': {
-        'result': materialized_result,
+        'result': result,
         'videos': videos,
         'frames': frames,
         'labelers': labelers,

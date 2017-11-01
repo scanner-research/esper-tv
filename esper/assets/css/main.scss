@@ -87,6 +87,10 @@ body {
     position: relative;
     margin: 5px;
 
+    video, img {
+        user-select: none;
+    }
+
     video {
         position: absolute;
         height: 100px;
@@ -110,6 +114,14 @@ body {
 
     .bounding-boxes {
         z-index: 1;
+    }
+
+    .search-result-meta {
+        font-size: 10px;
+
+        td {
+            width: 50%;
+        }
     }
 }
 
@@ -239,7 +251,6 @@ body {
     }
 
     .video-labeler {
-        * { user-select: none; }
 
         .bounding-box-wrapper {
             white-space: pre;

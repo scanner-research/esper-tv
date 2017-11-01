@@ -2,14 +2,11 @@ import React from 'react';
 import {Box, BoundingBoxView} from './bbox.jsx';
 import {observer} from 'mobx-react';
 
-const HOVER_TO_SHOW_VIDEO_DELAY = 1000;
-
 class ClipView extends React.Component {
   state = {
     hover: false,
     showVideo: false,
     loadingVideo: false,
-    hoverLongEnough: false
   }
 
   fullScreen = false
@@ -24,14 +21,24 @@ class ClipView extends React.Component {
     this.fullScreen = !this.fullScreen;
   }
 
+  _onKeyPress = (e) => {
+    let chr = String.fromCharCode(e.which);
+    if (chr == 'p') {
+      this.setState({
+        showVideo: false,
+        loadingVideo: true
+      });
+    }
+  }
+
   _onMouseEnter = () => {
-    this.setState({hover: true, showVideo: false, loadingVideo: true, hoverLongEnough: false});
-    this._timer = setTimeout((() => {
-      this.setState({hoverLongEnough: true});
-    }).bind(this), HOVER_TO_SHOW_VIDEO_DELAY);
+    document.addEventListener('keypress', this._onKeyPress);
+    this.setState({hover: true});
   }
 
   _onMouseLeave = () => {
+    document.removeEventListener('keypress', this._onKeyPress);
+
     if (this._video) {
       this._video.removeEventListener('seeked', this._onSeeked);
       this._video.removeEventListener('loadeddata', this._onLoadedData);
@@ -43,7 +50,7 @@ class ClipView extends React.Component {
       this._timer = null;
     }
 
-    this.setState({hover: false, showVideo: false, loadingVideo: false, hoverLongEnough: false});
+    this.setState({hover: false, showVideo: false, loadingVideo: false});
   }
 
   _onClick = () => {
@@ -86,24 +93,34 @@ class ClipView extends React.Component {
     return window.search_result.frames[this.props.clip[ty + '_frame']]
   }
 
+  componentWillUnmount() {
+    document.removeEventListener('keypress', this._onKeyPress);
+  }
+
   render() {
     let clip = this.props.clip;
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let video = this._videoMeta();
     let frame = this._frameMeta('start');
     let path = `/server_media/thumbnails/tvnews/frame_${clip.start_frame}.jpg`;
+    let img_width = video.width * (100 / video.height);
+    let meta = [`# people: ${clip.bboxes.length}`];
+    if (clip.end_frame !== undefined) {
+      let duration = (clip.end_frame - clip.start_frame) / video.fps;
+      meta.push(`Duration: ${duration.toString(2)}`);
+    }
     /* let path = `https://frameserver-dot-visualdb-1046.appspot.com/?path=${encodeURIComponent(video.path)}&frame=${frame.number}&id=${clip.start_frame}`;*/
     return (
       <div className='search-result'
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}
-           onClick={this._onClick}>
-        {this.state.hover && this.state.hoverLongEnough
+            onClick={this._onClick}>
+        {this.state.loadingVideo || this.state.showVideo
          ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
            <source src={`/system_media/${video.path}`} />
          </video>
          : <div />}
-        {this.state.hoverLongEnough && this.state.loadingVideo
+        {this.state.loadingVideo
          ? <div className='loading-video'><img src="/static/images/spinner.gif" /></div>
          : <div />}
         <BoundingBoxView
@@ -112,6 +129,15 @@ class ClipView extends React.Component {
           height={video.height}
           onClick={this.props.onBoxClick}
           path={path} />
+        <table className='search-result-meta' style={{width: img_width}}>
+          <tbody>
+            {_.range(Math.ceil(meta.length/2)).map((i) =>
+            <tr key={i}>
+              <td>{meta[i*2]}</td>
+              <td>{meta[i*2+1]}</td>
+            </tr>)}
+          </tbody>
+        </table>
       </div>
     );
   }

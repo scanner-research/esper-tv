@@ -67,14 +67,14 @@ class BoxView extends React.Component {
   }
 
   _onMouseOver = (e) => {
-    document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('keypress', this._onKeyPress);
   }
 
   _onMouseOut = (e) => {
-    document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('keypress', this._onKeyPress);
   }
 
-  _onKeyDown = (e) => {
+  _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
     let box = this.props.box;
     let {width, height} = this.props;
@@ -87,13 +87,13 @@ class BoxView extends React.Component {
       this.props.onChange(this.props.i);
 
       e.preventDefault();
-    } else if (chr == 'D') {
+    } else if (chr == 'd') {
       this.props.onDelete(this.props.i);
-    } else if(chr == 'T') {
+    } else if(chr == 't') {
       this.props.onTrack(this.props.i);
-    } else if(chr == 'Q') {
+    } else if(chr == 'q') {
       this.props.onSetTrack(this.props.i);
-    } else if(chr == 'U') {
+    } else if(chr == 'u') {
       this.props.onDeleteTrack(this.props.i);
     }
   }
@@ -103,7 +103,7 @@ class BoxView extends React.Component {
   }
 
   componentWillUnmount() {
-    document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('keypress', this._onKeyPress);
     document.removeEventListener('mousemove', this._onMouseMove);
   }
 
@@ -185,7 +185,7 @@ export class BoundingBoxView extends React.Component {
 
   _onMouseOver = (e) => {
     document.addEventListener('mousemove', this._onMouseMove);
-    document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('keypress', this._onKeyPress);
     if (!(e.buttons & 1)){
       this.setState({startX: -1});
     }
@@ -193,7 +193,7 @@ export class BoundingBoxView extends React.Component {
 
   _onMouseOut = (e) => {
     document.removeEventListener('mousemove', this._onMouseMove);
-    document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('keypress', this._onKeyPress);
   }
 
   _onMouseDown = (e) => {
@@ -219,11 +219,11 @@ export class BoundingBoxView extends React.Component {
     this.setState({startX: -1});
   }
 
-  _onKeyDown = (e) => {
+  _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
-    if (chr == 'F') {
+    if (chr == 'f') {
       this.setState({fullwidth: !this.state.fullwidth});
-    } else if (chr == 'S') {
+    } else if (chr == 's') {
       this.props.onSelect(this.props.ni);
     }
   }

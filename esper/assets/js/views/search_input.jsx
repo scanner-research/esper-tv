@@ -90,36 +90,17 @@ export default class SearchInputView extends React.Component {
     showExampleQueries: false,
   }
 
-  /*
-   *   exampleQueries = [
-   *     ["All videos",
-   *      "result = Frame.objects.filter(number=0)"],
-   *     ["All frames",
-   *      "result = Frame.objects.all()"],
-   *     ["Frames at 2 FPS",
-   *      "result = at_fps(Frame.objects, 2)"],
-   *     ["All faces",
-   *      "result = FaceInstance.objects.all()"],
-   *     ["Handlabeled faces",
-   *      "result = FaceInstance.objects.filter(labeler__name='handlabeled')"],
-   *     ["Faces from Fox News",
-   *      "result = FaceInstance.objects.filter(frame__video__channel='FOXNEWS')"],
-   *     ["All face tracks",
-   *      "result = Face.objects.all()"],
-   *   ]
-   * */
-
   exampleQueries = [
     ["All videos",
-     "result = Frame.objects.filter(number=0)"],
+     "result = qs_to_result(Frame.objects.filter(number=0))"],
     ["Fox News videos",
-     "result = Frame.objects.filter(number=0, video__channel='FOXNEWS')"],
+     "result = qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))"],
     ["Faces on Poppy Harlow",
-     "result = FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0'])"],
+     "result = qs_to_result(FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0']), group=True)"],
     ["Female faces on Poppy Harlow",
-     "result = FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0'])"],
+     "result = qs_to_result(FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0']), group=True)"],
     ["'Talking heads' on Poppy Harlow",
-     "result = FaceInstance.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(height__gte=0.3, frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0'])"],
+     "result = qs_to_result(FaceInstance.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(height__gte=0.3, frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0']), group=True)"],
     ["Two female faces on Poppy Harlow",
 `result = []
 for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
@@ -135,12 +116,12 @@ for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
      `id = 4457280
 FaceFeatures.dropTempFeatureModel()
 FaceFeatures.getTempFeatureModel([id])
-result = FaceInstance.objects.all().order_by('facefeaturestemp__distto_{}'.format(id))`],
+result = qs_to_result(FaceInstance.objects.all().order_by('facefeaturestemp__distto_{}'.format(id)))`],
     ["Faces unlike Poppy Harlow",
      `id = 4457280
 FaceFeatures.dropTempFeatureModel()
 FaceFeatures.getTempFeatureModel([id])
-result = FaceInstance.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by('facefeaturestemp__distto_{}'.format(id))`],
+result = qs_to_result(FaceInstance.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by('facefeaturestemp__distto_{}'.format(id)))`],
     ["Differing bounding boxes", `labeler_names = [l['labeler__name'] for l in FaceInstance.objects.values('labeler__name').distinct()]
 print(labeler_names)
 
@@ -187,7 +168,7 @@ for video, frames in list(mistakes.iteritems())[:100]:
         })`]
   ]
 
-  query = `result = Face.objects.all()`
+  query = `result = qs_to_result(Face.objects.all())`
 
   _onSearch = (e) => {
     e.preventDefault();
