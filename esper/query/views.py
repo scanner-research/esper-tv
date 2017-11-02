@@ -914,7 +914,7 @@ def search2(request):
     def bbox_dist(f1, f2):
         return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
 
-    def qs_to_result(result, group=False):
+    def qs_to_result(result, group=False, segment=False):
         try:
             sample = result[0]
         except IndexError:
@@ -952,7 +952,7 @@ def search2(request):
 
             for f in faces:
                 bounds = FaceInstance.objects.filter(face=f).aggregate(min_frame=Min('frame__number'), max_frame=Max('frame__number'))
-                min_face = FaceInstance.objects.get(frame__number=bounds['min_frame'], face=f)
+                min_face = FaceInstance.objects.filter(frame__number=bounds['min_frame'], face=f)[0]
                 video = min_face.frame.video.id
                 materialized_result.append({
                     'video': video,
@@ -969,6 +969,34 @@ def search2(request):
             flat_result = [{'video': t1, 'start_frame': t2, 'bboxes': r}
                                    for (t1, t2), r in grouped_result.iteritems()]
             materialized_result = sorted(flat_result, key=itemgetter('video', 'start_frame'))
+
+        if segment:
+            intervals = [(r['start_frame'], r['end_frame']) for r in materialized_result]
+            points = []
+            for (start, end) in intervals:
+                points.extend([(start, False), (end, True)])
+            points.sort(key=itemgetter(0))
+                
+            intervals_active = 0
+            boundaries = []
+            for i, (frame, is_end) in enumerate(points):
+                if not is_end:
+                    intervals_active += 1
+                    boundaries.append((frame, points[i+1][0]))
+                else:
+                    if intervals_active > 1:
+                        boundaries.append((frame, points[i+1][0]))
+                    intervals_active -= 1
+
+            materialized_result = []
+            for (start, end) in boundaries:
+                f = Frame.objects.filter(id=start).select_related('video').get()
+                materialized_result.append({
+                    'video': f.video.id,
+                    'start_frame': start,
+                    'end_frame': end,
+                    'bboxes': [bbox_to_dict(face) for face in FaceInstance.objects.filter(frame=f)]
+                })
 
         return materialized_result
 

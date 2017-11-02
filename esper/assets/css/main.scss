@@ -82,6 +82,8 @@ body {
     margin-bottom: 2*$spacing;
 }
 
+$img-height: 100px;
+
 .search-result {
     float: left;
     position: relative;
@@ -93,7 +95,7 @@ body {
 
     video {
         position: absolute;
-        height: 100px;
+        height: $img-height;
         z-index: 0;
 
         /* Always show the control panel on search result tiny videos. */
@@ -105,7 +107,7 @@ body {
 
     .loading-video {
         position: absolute;
-        bottom: 3px;
+        top: $img-height - 30px;
         left: 3px;
         z-index: 2;
 

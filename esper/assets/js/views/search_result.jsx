@@ -107,7 +107,7 @@ class ClipView extends React.Component {
     let meta = [`# people: ${clip.bboxes.length}`];
     if (clip.end_frame !== undefined) {
       let duration = (clip.end_frame - clip.start_frame) / video.fps;
-      meta.push(`Duration: ${duration.toString(2)}`);
+      meta.push(`Duration: ${duration.toFixed(1)}s`);
     }
     /* let path = `https://frameserver-dot-visualdb-1046.appspot.com/?path=${encodeURIComponent(video.path)}&frame=${frame.number}&id=${clip.start_frame}`;*/
     return (
