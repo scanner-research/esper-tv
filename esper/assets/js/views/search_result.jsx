@@ -73,7 +73,7 @@ class ClipView extends React.Component {
   }
 
   _onTimeUpdate = () => {
-    if (!this.state.fullScreen &&
+    if (!this.fullScreen &&
         this._frameMeta('end') !== undefined &&
         this._video.currentTime >= this._toSeconds(this._frameMeta('end').number)) {
       this._video.currentTime = this._toSeconds(this._frameMeta('start').number);

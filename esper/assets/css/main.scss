@@ -120,11 +120,21 @@ $img-height: 100px;
 
     .search-result-meta {
         font-size: 10px;
+        table-layout: fixed;
+        word-wrap: break-word;
+
+        td {
+            vertical-align: top;
+        }
     }
 
     &.expanded {
         .search-result-meta {
             font-size: 14px;
+
+            td {
+                padding: 5px;
+            }
         }
     }
 }

@@ -93,6 +93,8 @@ export default class SearchInputView extends React.Component {
   exampleQueries = [
     ["All videos",
      "result = qs_to_result(Frame.objects.filter(number=0))"],
+    ["Faces",
+     "result = qs_to_result(FaceTrack.objects.filter(id__in=Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame__video__id=791, labeler__name='mtcnn', height__gte=0.3).distinct('track').values('track')), segment=True)"],
     ["Fox News videos",
      "result = qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))"],
     ["Faces on Poppy Harlow",

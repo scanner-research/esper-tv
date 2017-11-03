@@ -12,8 +12,8 @@ plt.rc("axes.spines", top=False, right=False)
 sns.set_style('white')
 
 m = ModelDelegator(os.environ.get('DATASET'))
-Video, Frame, Face, FaceInstance, FaceFeatures, Labeler, Gender = \
-    m.Video, m.Frame, m.Face, m.FaceInstance, m.FaceFeatures, m.Labeler, m.Gender
+Video, Frame, Face, FaceTrack, FaceFeatures, Labeler, Gender = \
+    m.Video, m.Frame, m.Face, m.FaceTrack, m.FaceFeatures, m.Labeler, m.Gender
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)

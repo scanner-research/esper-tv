@@ -27,6 +27,7 @@ import itertools
 import numpy as np
 from operator import itemgetter
 import traceback
+from pprint import pprint
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -144,156 +145,6 @@ def fallback(request):
     return HttpResponse(jpg, content_type="image/jpeg")
 
 
-def videos(request):
-    id = request.GET.get('id', None)
-    if id is None:
-        videos = Video.objects.all()
-    else:
-        videos = [Video.objects.filter(id=id).get()]
-    return JsonResponse({
-        'videos':
-        [dict(model_to_dict(v).items() + {'stride': v.get_stride()}.items()) for v in videos]
-    })
-
-
-def frames(request):
-    video_id = request.GET.get('video_id', None)
-    handlabeled = request.GET.get('video_id', False)
-    video = Video.objects.filter(id=video_id).get()
-    labelset = video.handlabeled_labelset() if handlabeled else video.detected_labelset()
-    resp = JsonResponse({
-        'frames':[dict(model_to_dict(f, exclude='labels').items() + {'labels' : f.label_ids()}.items()) \
-                for f in Frame.objects.filter(labelset=labelset).prefetch_related('labels').all()] ,
-        'labels':[model_to_dict(s) for s in FrameLabel.objects.all()]
-    })
-    return resp
-
-
-def frame_and_faces(request):
-    video_id = request.GET.get('video_id', None)
-    video = Video.objects.filter(id=video_id).prefetch_related('labelset_set').get()
-    labelsets = video.labelset_set.all()
-    frame_and_face_dict = {}
-    ret_dict = {}
-    for ls in labelsets:
-        frames = Frame.objects.filter(labelset=ls).prefetch_related(
-            'faces', 'labels').order_by('number').all()
-        ls_dict = {}
-        for frame in frames:
-            frame_dict = {}
-            frame_dict['labels'] = frame.label_ids()
-            faces = frame.faces.all()
-            face_list = []
-            for face in faces:
-                bbox = _inst_to_bbox_dict('', face)
-                face_json = model_to_dict(face)
-                del face_json['features']
-                face_json['bbox'] = bbox
-                face_list.append(face_json)
-            frame_dict['faces'] = face_list
-            ls_dict[frame.number] = frame_dict
-        frame_and_face_dict[2 if ls.name == 'handlabeled' else 1] = ls_dict
-    ret_dict['frames'] = frame_and_face_dict
-    frame_labels = FrameLabel.objects.all()
-    label_dict = {}
-    for label in frame_labels:
-        label_dict[label.id] = label.name
-    ret_dict['labels'] = label_dict
-    return JsonResponse(ret_dict)
-
-
-def faces(request):
-    video_id = request.GET.get('video_id', None)
-    if video_id is None:
-        return JsonResponse({})  # TODO
-    video = Video.objects.filter(id=video_id).get()
-    labelsets = LabelSet.objects.filter(video=video)
-    all_bboxes = {}
-    for labelset in labelsets:
-        bboxes = defaultdict(list)
-        faces = FaceTrack.objects.filter(frame__labelset=labelset).select_related('frame').all()
-        for face in faces:
-            bbox = _inst_to_bbox('', face)
-            face_json = model_to_dict(face)
-            del face_json['features']
-            face_json['bbox'] = bbox
-            bboxes[face.frame.number].append(face_json)
-        # 1 is Autolabeled 2 is handlabled ugly but works until
-        # we use something more than a string in the model
-        set_id = 1 if labelset.name == 'detected' else 2
-        all_bboxes[set_id] = bboxes
-    return JsonResponse({'faces': all_bboxes})
-
-
-def identities(request):
-    # FIXME: Should we be sending faces for each identity too?
-    # FIXME: How do I see output of this when calling from js?
-    identities = Identity.objects.all()
-    return JsonResponse({'ids': [model_to_dict(id) for id in identities]})
-
-
-def handlabeled(request):
-    params = json.loads(request.body)
-    video = Video.objects.filter(id=params['video']).get()
-    labelset = video.handlabeled_labelset()
-    frame_nums = map(int, params['frames'].keys())
-
-    min_frame = min(frame_nums)
-    max_frame = max(frame_nums)
-    #old frames, create new_frames
-    old_frames = Frame.objects.filter(
-        labelset=labelset, number__lte=max_frame, number__gte=min_frame).all()
-    labelsModel = Frame.labels.through
-    if len(old_frames) > 0:
-        FaceTrack.objects.filter(frame__in=old_frames).delete()
-        labelsModel.objects.filter(frame__in=old_frames).delete()
-
-    old_frame_nums = [old_frame.number for old_frame in old_frames]
-    missing_frame_nums = [num for num in frame_nums if num not in old_frame_nums]
-    new_frames = [Frame(labelset=labelset, number=num) for num in missing_frame_nums]
-    Frame.objects.bulk_create(new_frames)
-    tracks = defaultdict(list)
-    for frame_num, frames in params['frames'].iteritems():
-        for face_params in frames['faces']:
-            track_id = face_params['track']
-            if track_id is not None:
-                tracks[track_id].append(frame_num)
-
-    id_to_track = {}
-    all_frames = Frame.objects.filter(
-        labelset=labelset, number__lte=max_frame, number__gte=min_frame).all()
-    curr_video_tracks = Track.objects.filter(video=video).all()
-    for track in curr_video_tracks:
-        id_to_track[track.id] = track
-    for track_id, frames in tracks.iteritems():
-        if track_id < 0:
-            track = Track(video=video)
-            track.save()
-            id_to_track[track_id] = track
-
-    new_faces = []
-    new_labels = []
-    for frame in all_frames:
-        for face_params in params['frames'][str(frame.number)]['faces']:
-            face_params['bbox_x1'] = face_params['bbox']['x1']
-            face_params['bbox_y1'] = face_params['bbox']['y1']
-            face_params['bbox_x2'] = face_params['bbox']['x2']
-            face_params['bbox_y2'] = face_params['bbox']['y2']
-            track_id = face_params['track']
-            if track_id is not None:
-                face_params['track'] = id_to_track[track_id]
-            face = FaceTrack(**face_params)
-            face.frame = frame
-            new_faces.append(face)
-        for label_id in params['frames'][str(frame.number)]['labels']:
-            new_labels.append(labelsModel(frame=frame, framelabel_id=int(label_id)))
-
-    FaceTrack.objects.bulk_create(new_faces)
-    labelsModel.objects.bulk_create(new_labels)
-
-    return JsonResponse({'success': True})
-
-
 def _inst_to_bbox_dict(prefix, inst):
     if prefix != '':
         prefix = prefix + "__"
@@ -405,7 +256,7 @@ def search2(request):
                 })
 
         elif cls_name == 'FaceTrack':
-            tracks = list(result[:LIMIT*STRIDE:STRIDE])
+            # tracks = list(result[:LIMIT*STRIDE:STRIDE])
 
             # TODO: move to django 1.11, enable subquery
 
@@ -416,17 +267,26 @@ def search2(request):
             #     .annotate(min_frame=Subquery(sq.values('min_frame'))) \
             #     .values()
 
-            for t in tracks:
+            for t in result:
                 bounds = Face.objects.filter(track=t).aggregate(min_frame=Min('frame__number'), max_frame=Max('frame__number'))
                 assert(bounds['min_frame'] is not None)
+                if bounds['min_frame'] == bounds['max_frame']: 
+                    continue
+
                 min_face = Face.objects.filter(frame__number=bounds['min_frame'], track=t)[0]
                 video = min_face.frame.video.id
                 materialized_result.append({
                     'video': video,
+                    'track': t.id,
                     'start_frame': Frame.objects.get(video_id=video, number=bounds['min_frame']).id,
                     'end_frame': Frame.objects.get(video_id=video, number=bounds['max_frame']).id,
                     'bboxes': [bbox_to_dict(min_face)]
                 })
+
+                if len(materialized_result) == LIMIT:
+                    break
+
+            materialized_result.sort(key=itemgetter('video', 'start_frame'))
 
         if group:
             grouped_result = defaultdict(list)
@@ -438,22 +298,45 @@ def search2(request):
             materialized_result = sorted(flat_result, key=itemgetter('video', 'start_frame'))
 
         if segment:
-            intervals = [(r['start_frame'], r['end_frame']) for r in materialized_result]
+            tracks = [r['track'] for r in materialized_result]
+            intervals = [(r['video'], r['start_frame'], r['end_frame']) for r in materialized_result]
             points = []
-            for (start, end) in intervals:
-                points.extend([(start, False), (end, True)])
-            points.sort(key=itemgetter(0))
+            for (video, start, end) in intervals:
+                points.extend([(video, Frame.objects.get(id=start).number, start, False),
+                               (video, Frame.objects.get(id=end).number, end, True)])
+            points.sort(key=itemgetter(0, 1)) 
+
+            pprint(points)
+            sys.stdout.flush()
 
             intervals_active = 0
             boundaries = []
-            for i, (frame, is_end) in enumerate(points):
+            i = 0
+            while i < len(points):
+                num_intervals = 1
+                (_, _, frame, is_end) = points[i]
+                while i + 1 < len(points):
+                    if points[i+1][2] == frame:
+                        num_intervals += 1
+                        i += 1
+                    else:
+                        break
+
+                pprint((points[i], num_intervals))
+                sys.stdout.flush()
+
                 if not is_end:
-                    intervals_active += 1
-                    boundaries.append((frame, points[i+1][0]))
+                    intervals_active += num_intervals
+                    boundaries.append((frame, points[i+1][2]))
                 else:
-                    if intervals_active > 1:
-                        boundaries.append((frame, points[i+1][0]))
-                    intervals_active -= 1
+                    intervals_active -= num_intervals
+                    if intervals_active > 0:
+                        boundaries.append((frame, points[i+1][2]))
+
+                i += 1
+
+            # pprint(boundaries)
+            # sys.stdout.flush()
 
             materialized_result = []
             for (start, end) in boundaries:
@@ -462,7 +345,8 @@ def search2(request):
                     'video': f.video.id,
                     'start_frame': start,
                     'end_frame': end,
-                    'bboxes': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
+                    #'bboxes': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
+                    'bboxes': [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
                 })
 
         return materialized_result
