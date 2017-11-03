@@ -22,23 +22,23 @@ with base.Dataset('tvnews'):
         name = base.CharField()
 
     class Face(base.Concept):
-        gender = models.ForeignKey(Gender, null=True, blank=True)
-        identity = models.ForeignKey(Identity, null=True, blank=True)
+        gender = models.ForeignKey(Gender, on_delete=models.CASCADE, null=True, blank=True)
+        identity = models.ForeignKey(Identity, on_delete=models.CASCADE, null=True, blank=True)
 
 
-with base.Dataset('krishna'):
+# with base.Dataset('krishna'):
 
-    class Video(base.Video):
-        pass
+#     class Video(base.Video):
+#         pass
 
-    class Frame(base.Frame):
-        pass
+#     class Frame(base.Frame):
+#         pass
 
-    class Labeler(base.Labeler):
-        pass
+#     class Labeler(base.Labeler):
+#         pass
 
-    class Face(base.Concept):
-        pass
+#     class Face(base.Concept):
+#         pass
 
-    class Person(base.Concept):
-        pass
+#     class Person(base.Concept):
+#         pass

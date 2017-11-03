@@ -13,7 +13,7 @@ import os
 # TODO(matt): make this a python module in Scanner
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
-Video, Labeler, FaceInstance, Frame, FaceFeatures = models.Video, models.Labeler, models.FaceInstance, models.Frame, models.FaceFeatures
+Video, Labeler, Face, Frame, FaceFeatures = models.Video, models.Labeler, models.Face, models.Frame, models.FaceFeatures
 
 class Command(BaseCommand):
     help = 'Cluster faces in videos'
@@ -51,7 +51,7 @@ class Command(BaseCommand):
                 return
             print path
             video = Video.objects.get(path=path)
-            faces = FaceInstance.objects.filter(frame__video=video, labeler=face_labeler).all()
+            faces = Face.objects.filter(frame__video=video, labeler=face_labeler).all()
 
             faces = [f for f in faces if f.bbox_x2 - f.bbox_x1 >= .04]
 
@@ -74,7 +74,7 @@ class Command(BaseCommand):
                     features = [
                         FaceFeatures(
                             features=json.dumps(embs[i].tolist()),
-                            instance=faces[face_indexes[i]],
+                            face=faces[face_indexes[i]],
                             labeler=feature_labeler)
                         for i in range(len(face_indexes))]
                     FaceFeatures.objects.bulk_create(features)
@@ -89,7 +89,7 @@ class Command(BaseCommand):
                 features = [
                     FaceFeatures(
                         features=json.dumps(embs[i].tolist()),
-                        instance=faces[face_indexes[i]],
+                        face=faces[face_indexes[i]],
                         labeler=feature_labeler)
                     for i in range(len(face_indexes))]
                 FaceFeatures.objects.bulk_create(features)

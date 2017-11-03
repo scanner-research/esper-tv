@@ -10,7 +10,6 @@ cfg = Config()
 proto = ProtobufGenerator(cfg)
 MAX_STR_LEN = 256
 
-
 class ProtoField(models.BinaryField):
     def __init__(self, proto, *args, **kwargs):
         self._proto = proto
@@ -61,14 +60,14 @@ class Dataset(object):
 
 
 def ForeignKey(model, name, **kwargs):
-    return models.ForeignKey(model, related_query_name=name.lower(), **kwargs)
+    return models.ForeignKey(model, related_query_name=name.lower(), on_delete=models.CASCADE, **kwargs)
 
 
 class BaseMeta(ModelBase):
     def __new__(cls, name, bases, attrs):
         global current_dataset
         base = bases[0]
-        is_base_class = base is models.Model
+        is_base_class = base is models.Model or base is object
 
         if is_base_class:
             if not 'Meta' in attrs:
@@ -92,14 +91,16 @@ class BaseMeta(ModelBase):
 
             child_name = '{}_{}'.format(current_dataset.name, name)
 
-        new_cls = super(BaseMeta, cls).__new__(cls, child_name, bases, attrs)
+        if base.__name__ != 'Concept':
+            new_cls = super(BaseMeta, cls).__new__(cls, child_name, bases, attrs)
 
         if not is_base_class:
-            setattr(current_dataset, name, new_cls)
             if base.__name__ == 'Concept':
-                register_concept(name, attrs)
+                new_cls = register_concept(name, attrs)
             elif base.__name__ == 'Model':
                 current_dataset.other.append(name)
+                
+            setattr(current_dataset, name, new_cls)
 
         return new_cls
 
@@ -107,13 +108,22 @@ class BaseMeta(ModelBase):
 def register_concept(name, attrs):
     global current_datset
 
-    class Meta:
-        unique_together = (name.lower(), 'frame', 'labeler')
+    current_dataset.concepts.append(name)
 
-    inst_cls_name = '{}Instance'.format(name)
+    track_cls_name = '{}Track'.format(name)
+    track_methods = {
+        '__module__': current_dataset.Video.__module__,
+    }
+    track_methods.update(attrs)
+    track_cls = type(track_cls_name, (Track, ), track_methods)
+
+    class Meta:
+        unique_together = ('track', 'frame', 'labeler')
+
+    inst_cls_name = name
     inst_methods = {
         '__module__': current_dataset.Video.__module__,
-        name.lower(): ForeignKey(getattr(current_dataset, name), inst_cls_name, null=True),
+        'track': ForeignKey(track_cls, inst_cls_name, null=True),
         'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
         'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
         'Meta': Meta
@@ -121,22 +131,21 @@ def register_concept(name, attrs):
     inst_methods.update(attrs)
     inst_cls = type(inst_cls_name, (Instance, ), inst_methods)
 
-    current_dataset.concepts.append(name)
-
     class Meta:
         unique_together = ('labeler', inst_cls_name.lower())
 
-    cls_name = '{}Features'.format(name)
-    type(cls_name, (Features, ), {
+    feat_cls_name = '{}Features'.format(name)
+    type(feat_cls_name, (Features, ), {
         '__module__': current_dataset.Video.__module__,
-        'labeler': ForeignKey(current_dataset.Labeler, cls_name),
-        inst_cls_name.lower(): ForeignKey(inst_cls, cls_name),
+        'labeler': ForeignKey(current_dataset.Labeler, feat_cls_name),
+        name.lower(): ForeignKey(inst_cls, feat_cls_name),
         'Meta': Meta,
         '_datasetName': current_dataset.name,
-        '_conceptName': cls_name,
-        '_instanceName': inst_cls_name
+        '_trackName': track_cls_name,
+        '_conceptName': inst_cls_name
     })
 
+    return inst_cls
 
 class Video(models.Model):
     __metaclass__ = BaseMeta
@@ -161,13 +170,14 @@ class Labeler(models.Model):
     name = CharField(db_index=True)
 
 
-class Concept(models.Model):
+class Concept(object):
     __metaclass__ = BaseMeta
 
+class Track(models.Model):
+    __metaclass__ = BaseMeta
 
 class Model(models.Model):
     __metaclass__ = BaseMeta
-
 
 class Instance(models.Model):
     __metaclass__ = BaseMeta

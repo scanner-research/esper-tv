@@ -9,7 +9,7 @@ import random
 
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
-Video, Labeler, FaceInstance, Frame = models.Video, models.Labeler, models.FaceInstance, models.Frame
+Video, Labeler, Face, Frame = models.Video, models.Labeler, models.Face, models.Frame
 
 class Command(BaseCommand):
     help = 'Detect faces in videos'
@@ -32,7 +32,7 @@ class Command(BaseCommand):
                     video = Video.objects.get(path=path)
                 except Video.DoesNotExist:
                     continue
-                if len(FaceInstance.objects.filter(frame__video=video, labeler=labeler)) > 0:
+                if len(Face.objects.filter(frame__video=video, labeler=labeler)) > 0:
                     continue
                 filtered.append(path)
 
@@ -61,7 +61,7 @@ class Command(BaseCommand):
                            bbox.y1 += 50
                            bbox.y2 += 50
 
-                        f = FaceInstance()
+                        f = Face()
                         f.frame = frame
                         f.bbox_x1 = bbox.x1/video.width
                         f.bbox_x2 = bbox.x2/video.width

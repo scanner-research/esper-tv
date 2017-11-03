@@ -13,7 +13,7 @@ def dist(feat1, feat2):
 
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
-Video, Labeler, FaceFeatures, FaceInstance, Face = models.Video, models.Labeler, models.FaceFeatures, models.FaceInstance, models.Face
+Video, Labeler, FaceFeatures, Face, FaceTrack = models.Video, models.Labeler, models.FaceFeatures, models.Face, models.FaceTrack
 
 # TODO(matt): clean this up, seems like there's a lot of redundant/commented code
 # The 5-tuple that's stored in "recent_features" should be a dict for human-readable keys
@@ -63,9 +63,9 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             face_features = FaceFeatures.objects.filter(
-                faceinstance__frame__video=video,
-                faceinstance__labeler=bbox_labeler,
-                labeler=feature_labeler).order_by('faceinstance__frame__number').all()
+                face__frame__video=video,
+                face__labeler=bbox_labeler,
+                labeler=feature_labeler).order_by('face__frame__number').all()
             fps = video.fps
 
             # [first_frame, last_frame, all_features, avg_feature, sum_feature]
@@ -80,9 +80,9 @@ class Command(BaseCommand):
             for face_idx in range(faces_len):
                 curr_face = face_features[face_idx]
                 curr_feature = np.array(json.loads(str(curr_face.features)))
-                curr_face_id = curr_face.faceinstance.id
-                curr_frame_id = curr_face.faceinstance.frame.number
-                confidence = curr_face.faceinstance.bbox_score
+                curr_face_id = curr_face.face.id
+                curr_frame_id = curr_face.face.frame.number
+                confidence = curr_face.face.bbox_score
                 #                if confidence < .98:
                 #                    low_confidence += 1
                 #                    continue
@@ -103,12 +103,12 @@ class Command(BaseCommand):
                                 if (seq_len < min_feat_threshold):
                                     short_seq += len(item[2])
                                     continue
-                                track = Face()
+                                track = FaceTrack()
                                 track.labeler = bbox_labeler
                                 track.save()
                                 last_frame = None
                                 for seq_face_id in item[2]:
-                                    seq_face = FaceInstance.objects.get(id=seq_face_id)
+                                    seq_face = Face.objects.get(id=seq_face_id)
                                     if seq_face.frame.number == last_frame: continue
                                     seq_face.face = track
                                     in_seq += 1
@@ -140,12 +140,12 @@ class Command(BaseCommand):
                 if (seq_len < min_feat_threshold):
                     short_seq += len(item[2])
                     continue
-                track = Face()
+                track = FaceTrack()
                 track.labeler = bbox_labeler
                 track.save()
                 last_frame = None
                 for seq_face_id in item[2]:
-                    seq_face = FaceInstance.objects.get(id=seq_face_id)
+                    seq_face = Face.objects.get(id=seq_face_id)
                     if seq_face.frame.number == last_frame: continue
                     seq_face.face = track
                     in_seq += 1
