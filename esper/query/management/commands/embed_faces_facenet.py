@@ -5,7 +5,7 @@ import tensorflow as tf
 import facenet
 import cv2
 import os
-
+import json
 # TODO(wcrichto): merge this with the other embed faces script
 
 # TODO(pari): for dummy, can just add same labels rather than rerunning script.
@@ -47,9 +47,6 @@ class Command(BaseCommand):
         batch_size = 1000
 
         for path in paths:
-            if path == '':
-                return
-            print path
             video = Video.objects.get(path=path)
             faces = Face.objects.filter(frame__video=video, labeler=face_labeler).all()
 
@@ -60,7 +57,13 @@ class Command(BaseCommand):
             face_indexes = []
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
-                curr_img = cv2.imread('./assets/thumbnails/face_{}.jpg'.format(faces[face_idx].id))
+                f = faces[face_idx]
+                # curr_img = cv2.imread('./assets/thumbnails/face_{}.jpg'.format(faces[face_idx].id))
+                img = cv2.imread('assets/thumbnails/tvnews/frame_{}.jpg'.format(f.frame.id))
+                [h, w] = img.shape[:2]
+                curr_img = img[int(h*f.bbox_y1):int(h*f.bbox_y2), int(w*f.bbox_x1):int(w*f.bbox_x2)]
+                # print img.shape, curr_img.shape
+                # exit()
                 if curr_img is None:
                     continue
                 face_indexes.append(face_idx)
@@ -74,7 +77,11 @@ class Command(BaseCommand):
                     features = [
                         FaceFeatures(
                             features=json.dumps(embs[i].tolist()),
+<<<<<<< Updated upstream
                             face=faces[face_indexes[i]],
+=======
+                            faceinstance=faces[face_indexes[i]],
+>>>>>>> Stashed changes
                             labeler=feature_labeler)
                         for i in range(len(face_indexes))]
                     FaceFeatures.objects.bulk_create(features)
@@ -89,7 +96,11 @@ class Command(BaseCommand):
                 features = [
                     FaceFeatures(
                         features=json.dumps(embs[i].tolist()),
+<<<<<<< Updated upstream
                         face=faces[face_indexes[i]],
+=======
+                        faceinstance=faces[face_indexes[i]],
+>>>>>>> Stashed changes
                         labeler=feature_labeler)
                     for i in range(len(face_indexes))]
                 FaceFeatures.objects.bulk_create(features)

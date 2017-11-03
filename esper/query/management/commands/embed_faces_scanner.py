@@ -8,7 +8,7 @@ import json
 
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
-Video, Labeler, FaceInstance, Frame, FaceFeatures = models.Video, models.Labeler, models.FaceInstance, models.Frame, models.FaceFeatures
+Video, Labeler, Face, Frame, FaceFeatures = models.Video, models.Labeler, models.Face, models.Frame, models.FaceFeatures
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,7 +41,7 @@ class Command(BaseCommand):
             for path in paths:
                 video = Video.objects.get(path=path)
 
-                faces = FaceInstance.objects.filter(frame__video=video, labeler=face_labeler) \
+                faces = Face.objects.filter(frame__video=video, labeler=face_labeler) \
                                             .select_related('frame') \
                                             .order_by('frame__video__id', 'frame__number')
                 faces = [f for f in faces if f.bbox_x2 - f.bbox_x1 >= .04]
@@ -86,7 +86,7 @@ class Command(BaseCommand):
                         e = np.frombuffer(emb[i:i+512], dtype=np.float32)
                         features.append(FaceFeatures(
                             features=json.dumps(e.tolist()),
-                            faceinstance_id=insts[inst_idx],
+                            face_id=insts[inst_idx],
                             labeler=feature_labeler))
                         inst_idx += 1
             FaceFeatures.objects.bulk_create(features)
