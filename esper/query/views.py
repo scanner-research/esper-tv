@@ -10,7 +10,7 @@ import sys
 from google.protobuf.json_format import MessageToJson
 import json
 from collections import defaultdict
-from scannerpy import Config, Database, Job, DeviceType
+from scannerpy import Config, Database, Job, BulkJob, DeviceType
 from django.db import connection
 import logging
 import time
@@ -68,14 +68,19 @@ def index(request):
 
 def extract(frames):
     with Database() as db:
-        frame = db.table(frames[0].video.path).as_op().gather(
-            [frame.number for frame in frames], task_size=1000)
-        resized = db.ops.Resize(frame=frame, width=640, preserve_aspect=True, device=DeviceType.GPU)
+        frame = db.ops.FrameInput()
+        gathered = frame.sample()
+        resized = db.ops.Resize(frame=gathered, width=640, preserve_aspect=True, device=DeviceType.GPU)
         compressed = db.ops.ImageEncoder(frame=resized)
-        job = Job(columns=[compressed], name='_ignore')
+        output = db.ops.Output(columns=[compressed])
+        job = Job(op_args={
+            frame: db.table(frames[0].video.path).column('frame'),
+            gathered: db.sampler.gather([frame.number for frame in frames]),
+            output: '_ignore'
+        })
 
         start = now()
-        output = db.run(job, force=True)
+        [output] = db.run(BulkJob(output=output, jobs=[job]), force=True)
         _print('Extract: {:.3f}'.format(now() - start))
 
         start = now()
@@ -98,6 +103,11 @@ def extract(frames):
             _print('Write: {:.3f}'.format(now() - start))
 
         elif ESPER_ENV == 'local':
+
+            try:
+                os.makedirs('assets/thumbnails/' + DATASET)
+            except OSError:
+                pass
 
             def write_jpg((jpg, frame)):
                 with open('assets/thumbnails/{}/frame_{}.jpg'.format(DATASET, frame.id), 'w') as f:
@@ -432,7 +442,7 @@ def search2(request):
             for (start, end) in intervals:
                 points.extend([(start, False), (end, True)])
             points.sort(key=itemgetter(0))
-                
+
             intervals_active = 0
             boundaries = []
             for i, (frame, is_end) in enumerate(points):
