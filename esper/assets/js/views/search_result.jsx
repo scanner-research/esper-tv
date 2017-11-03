@@ -7,6 +7,7 @@ class ClipView extends React.Component {
     hover: false,
     showVideo: false,
     loadingVideo: false,
+    expand: false
   }
 
   fullScreen = false
@@ -28,6 +29,8 @@ class ClipView extends React.Component {
         showVideo: false,
         loadingVideo: true
       });
+    } else if (chr == 'f') {
+      this.setState({expand: !this.state.expand});
     }
   }
 
@@ -103,18 +106,31 @@ class ClipView extends React.Component {
     let video = this._videoMeta();
     let frame = this._frameMeta('start');
     let path = `/server_media/thumbnails/tvnews/frame_${clip.start_frame}.jpg`;
-    let img_width = video.width * (100 / video.height);
-    let meta = [`# people: ${clip.bboxes.length}`];
+    let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
+    let meta = [];
+
+    if (this.state.expand) {
+      meta.push(['Video', `${video.path.split(/[\\/]/).pop()} (${video.id})`]);
+      meta.push(['Frame', `${frame.number} (${frame.id})`]);
+    }
+
     if (clip.end_frame !== undefined) {
       let duration = (clip.end_frame - clip.start_frame) / video.fps;
-      meta.push(`Duration: ${duration.toFixed(1)}s`);
+      meta.push(['Duration', `${duration.toFixed(1)}s`]);
     }
+
+    meta.push(['# people', `${clip.bboxes.length}`]);
+
+    let meta_per_row = this.state.expand ? 4 : 2;
+    let td_style = {width: `${100 / meta_per_row}%`};
+
     /* let path = `https://frameserver-dot-visualdb-1046.appspot.com/?path=${encodeURIComponent(video.path)}&frame=${frame.number}&id=${clip.start_frame}`;*/
+
     return (
-      <div className='search-result'
+      <div className={'search-result ' + (this.state.expand ? 'expanded' : '')}
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}
-            onClick={this._onClick}>
+           onClick={this._onClick}>
         {this.state.loadingVideo || this.state.showVideo
          ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
            <source src={`/system_media/${video.path}`} />
@@ -124,18 +140,22 @@ class ClipView extends React.Component {
          ? <div className='loading-video'><img src="/static/images/spinner.gif" /></div>
          : <div />}
         <BoundingBoxView
-          bboxes={clip.bboxes}
-          width={video.width}
-          height={video.height}
-          onClick={this.props.onBoxClick}
-          path={path} />
+            bboxes={clip.bboxes}
+            width={video.width}
+            height={video.height}
+            onClick={this.props.onBoxClick}
+            expand={this.state.expand}
+            path={path} />
         <table className='search-result-meta' style={{width: img_width}}>
           <tbody>
-            {_.range(Math.ceil(meta.length/2)).map((i) =>
-            <tr key={i}>
-              <td>{meta[i*2]}</td>
-              <td>{meta[i*2+1]}</td>
-            </tr>)}
+            {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>
+              <tr key={i}>
+                {_.range(meta_per_row).map((j) => {
+                   let entry = meta[i*meta_per_row + j];
+                   if (entry === undefined) { return <td key={j} />; }
+                   return (<td key={j} style={td_style}><strong>{entry[0]}</strong>: {entry[1]}</td>);
+                 })}
+              </tr>)}
           </tbody>
         </table>
       </div>

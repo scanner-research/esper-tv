@@ -174,7 +174,7 @@ export class BoundingBoxView extends React.Component {
     startY: -1,
     curX: -1,
     curY: -1,
-    fullwidth: false,
+    expand: false,
     mouseIn: false,
     imageLoaded: false
   }
@@ -221,9 +221,7 @@ export class BoundingBoxView extends React.Component {
 
   _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
-    if (chr == 'f') {
-      this.setState({fullwidth: !this.state.fullwidth});
-    } else if (chr == 's') {
+    if (chr == 's') {
       this.props.onSelect(this.props.ni);
     }
   }
@@ -254,8 +252,8 @@ export class BoundingBoxView extends React.Component {
 
   _getDimensions() {
     return {
-      width: this.state.fullwidth ? 780 : (this.props.width * (100 / this.props.height)),
-      height: this.state.fullwidth ? (this.props.height * (780 / this.props.width)) : 100
+      width: this.props.expand ? 780 : (this.props.width * (100 / this.props.height)),
+      height: this.props.expand ? (this.props.height * (780 / this.props.width)) : 100
     };
   }
 
@@ -281,7 +279,7 @@ export class BoundingBoxView extends React.Component {
   }
 
   render() {
-    let imgStyle = this.state.fullwidth ? {width: '780px', height: 'auto'} : {};
+    let imgStyle = this.props.expand ? {width: '780px', height: 'auto'} : {};
     let {width, height} = this._getDimensions();
     return (
       <div className='bounding-boxes'
@@ -305,7 +303,11 @@ export class BoundingBoxView extends React.Component {
                    onDeleteTrack={this._onDeleteTrack}/>)}
          </div>
          : <div />}
-        <ProgressiveImage src={this.props.path} draggable={false} style={imgStyle} onLoad={() => this.setState({imageLoaded: true})} />
+        <ProgressiveImage
+            src={this.props.path}
+            draggable={false}
+            style={imgStyle}
+            onLoad={() => this.setState({imageLoaded: true})} />
       </div>
     );
   }

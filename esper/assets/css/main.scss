@@ -120,9 +120,11 @@ $img-height: 100px;
 
     .search-result-meta {
         font-size: 10px;
+    }
 
-        td {
-            width: 50%;
+    &.expanded {
+        .search-result-meta {
+            font-size: 14px;
         }
     }
 }

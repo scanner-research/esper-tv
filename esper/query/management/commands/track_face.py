@@ -110,7 +110,7 @@ class Command(BaseCommand):
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.get(id=seq_face_id)
                                     if seq_face.frame.number == last_frame: continue
-                                    seq_face.face = track
+                                    seq_face.track = track
                                     in_seq += 1
                                     seq_face.save()
                                     last_frame = seq_face.frame.number
@@ -147,7 +147,7 @@ class Command(BaseCommand):
                 for seq_face_id in item[2]:
                     seq_face = Face.objects.get(id=seq_face_id)
                     if seq_face.frame.number == last_frame: continue
-                    seq_face.face = track
+                    seq_face.track = track
                     in_seq += 1
                     seq_face.save()
                     last_frame = seq_face.frame.number

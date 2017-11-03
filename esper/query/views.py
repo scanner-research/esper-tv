@@ -418,6 +418,7 @@ def search2(request):
 
             for t in tracks:
                 bounds = Face.objects.filter(track=t).aggregate(min_frame=Min('frame__number'), max_frame=Max('frame__number'))
+                assert(bounds['min_frame'] is not None)
                 min_face = Face.objects.filter(frame__number=bounds['min_frame'], track=t)[0]
                 video = min_face.frame.video.id
                 materialized_result.append({
