@@ -71,7 +71,8 @@ def extract(frames):
     with Database() as db:
         frame = db.ops.FrameInput()
         gathered = frame.sample()
-        resized = db.ops.Resize(frame=gathered, width=640, preserve_aspect=True, device=DeviceType.GPU)
+        # TODO(wcrichto): use GPU for resize if exists
+        resized = db.ops.Resize(frame=gathered, width=640, preserve_aspect=True, device=DeviceType.CPU)
         compressed = db.ops.ImageEncoder(frame=resized)
         output = db.ops.Output(columns=[compressed])
         job = Job(op_args={

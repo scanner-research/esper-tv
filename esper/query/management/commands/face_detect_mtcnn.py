@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.models import Video, Face, LabelSet, Frame
+from query.models import Video, Face, Frame
 from scannerpy import ProtobufGenerator, Config
 import os
 import cv2
@@ -17,13 +17,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('path')
 
-    next_face_id = 1;
-
-
-    def detect_faces_batch(self, frame_ids, batch, minsize, pnet, rnet, onet, threshold, factor, labelset, vmargin, hmargin, video, frame_map):
+    def detect_faces_batch(self, frame_ids, batch, minsize, pnet, rnet, onet, threshold, factor, vmargin, hmargin, video, frame_map):
         detections = align.detect_face.bulk_detect_face(batch, minsize, pnet, rnet, onet, threshold, factor)
         face_obj_batch = []
+        print(len(frame_ids))
         for (frame_id, bounding_boxes, img) in zip(frame_ids, detections, batch):
+            
             if bounding_boxes == None:
                 continue
             bounding_boxes = bounding_boxes[0]
@@ -54,10 +53,7 @@ class Command(BaseCommand):
                     continue
 
                 f = Face()
-                #ugly, but I don't have time for a better solution right now
-                f.id = 1000000*labelset.id+self.next_face_id
-                self.next_face_id+=1
-                f.labelset = labelset
+                f.labeler = mtcnn_labeler
                 f.frame = frame_map[frame_id] 
                 f.bbox = normalized_bbox
                 f.bbox_x1 = bb[0]/float(video.width)
@@ -67,10 +63,6 @@ class Command(BaseCommand):
                 f.bbox_score = confidence 
 
                 face_obj_batch.append(f)
-
-                cropped = img[bb[1]:bb[3],bb[0]:bb[2],:]
-                thumbnail_path = 'assets/thumbnails/{}_{}.png'.format(labelset.id, f.id)
-                cv2.imwrite(thumbnail_path, cropped)
         Face.objects.bulk_create(face_obj_batch)
             
 
@@ -84,11 +76,8 @@ class Command(BaseCommand):
             video = Video.objects.filter(path=path)
             if len(video) == 0: continue
             video = video[0]
-            if len(LabelSet.objects.all()) == 0:
+            if Face.objects.filter(frame__video=video).count() == 0:
                 break
-            labelset = video.detected_labelset()
-            if len(Face.objects.filter(frame__labelset=labelset)) > 0: continue
-            filtered.append(path)
 
         # Run the detector via Scanner
         threshold = [0.45, 0.6, 0.7]
@@ -108,19 +97,10 @@ class Command(BaseCommand):
         # Save the results to the database
         for path in paths:
             video = Video.objects.filter(path=path).get()
-            labelset = video.detected_labelset()
-            Face.objects.filter(frame__labelset=labelset).delete()
-            Frame.objects.filter(labelset=labelset).delete()
-            print path
-            invid = cv2.VideoCapture(path)
-            max_frame = int(invid.get(cv2.CAP_PROP_FRAME_COUNT))
-            stride = video.get_stride() 
-            #bulk create frame objects
-            frame_batch = []
-            for frame_id in range(0, max_frame, stride):
-                frame_batch.append(Frame(labelset=labelset, number=frame_id))
-            Frame.objects.bulk_create(frame_batch)
-            frames = Frame.objects.all()
+            max_frame = video.num_frames
+            stride = int(math.ceil(video.fps)/2)
+
+            frames = Frame.objects.filter(video=video)
             frame_map = {}
 
             for frame in frames:
@@ -133,13 +113,15 @@ class Command(BaseCommand):
                 #retval, img = invid.read()
                 #if retval==False:
                 #    break
-                img = cv2.imread("assets/thumbnails/{}_frame_{:>06}.png".format(video.id, frame_id+1))
+                img = cv2.imread("assets/thumbnails/{}/frame_{}.jpg".format(os.environ['DATASET'], frame_map[frame_id].id))
+                assert img is not None
                 batch_images.append(img)
                 frame_ids.append(frame_id)
                 if len(batch_images) == batchsize:
-                    self.detect_faces_batch(frame_ids, batch_images, minsize, pnet, rnet, onet, threshold, factor, labelset, vmargin, hmargin, video, frame_map)
+                    self.detect_faces_batch(frame_ids, batch_images, minsize, pnet, rnet, onet, threshold, factor, vmargin, hmargin, video, frame_map)
                     batch_images = []
                     frame_ids = []
-                print frame_id
+                #print frame_id
+
             if len(frame_ids) > 0:
-                self.detect_faces_batch(frame_ids, batch_images, minsize, pnet, rnet, onet, threshold, factor, labelset, vmargin, hmargin, video)
+                self.detect_faces_batch(frame_ids, batch_images, minsize, pnet, rnet, onet, threshold, factor,  vmargin, hmargin, video, frame_map)
