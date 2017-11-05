@@ -91,12 +91,12 @@ def ingest(path, num_frames):
         else:
             local_path = path
 
-        parts = os.path.splitext(os.path.split(path)[1])[0].split('_')
-        [channel, date, time] = parts[:3]
-        dt = datetime.strptime('{} {}'.format(date, time), '%Y%m%d %H%M%S')
-        if channel[-1] == 'W':
-            channel = channel[:-1]
-        show = ' '.join(parts[3:-1])  # -1 for "_segment"
+        # parts = os.path.splitext(os.path.split(path)[1])[0].split('_')
+        # [channel, date, time] = parts[:3]
+        # dt = datetime.strptime('{} {}'.format(date, time), '%Y%m%d %H%M%S')
+        # if channel[-1] == 'W':
+        #     channel = channel[:-1]
+        # show = ' '.join(parts[3:-1] if parts[-1] == 'segment' else parts[3:])
 
         video = Video()
         video.path = path
@@ -105,9 +105,9 @@ def ingest(path, num_frames):
         width, height = get_dimensions(local_path)
         video.width = width
         video.height = height
-        video.time = dt
-        video.channel = channel
-        video.show = show
+        video.time = datetime.now()
+        # video.channel = channel
+        # video.show = show
         video.save()
 
         frames = [Frame(number=i, video=video) for i in range(video.num_frames)]
@@ -142,9 +142,12 @@ class Command(BaseCommand):
             tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
             for path, _ in failed:
                 paths.remove(path)
+            print('Scanner failed on: ', failed)
             all_num_frames = [table.num_rows() for table in tables]
 
             # all_num_frames = [db.table(p).num_rows() for p in paths]
+
+        # all_num_frames = [0 for _ in range(len(paths))]
 
         print 'Creating entries in DB...'
         for i, (path, num_frames) in enumerate(zip(paths, all_num_frames)):
