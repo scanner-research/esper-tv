@@ -39,16 +39,17 @@ class Command(BaseCommand):
             stride = 24
 
             # Run the detector via Scanner
-            # Choose stride based on framerate (3 frames / second)
-            c = db.new_collection('tmp', filtered, force=True)
             faces_c = pipelines.detect_faces(
-                db, c, lambda t: t.strided(stride), 'tmp_faces')
+                db, [db.table(path).column('frame') for path in filtered],
+                db.sampler.strided(stride),
+                'tmp_faces')
+
             for path, video_faces_table in zip(filtered, faces_c):
                 video = Video.objects.filter(path=path).get()
 
                 table = db.table(path)
                 imgs = table.load(['frame'], rows=range(0, table.num_rows(), stride))
-                video_faces = video_faces_table.load(['poses'], lambda lst, db :parsers.bboxes(lst[0], db.protobufs))
+                video_faces = video_faces_table.load(['bboxes'], lambda lst, db :parsers.bboxes(lst[0], db.protobufs))
 
                 for (i, frame_faces), (_, img) in zip(video_faces, imgs):
                     frame = Frame.objects.get(video=video, number=i*stride)
