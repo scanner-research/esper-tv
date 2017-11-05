@@ -25,20 +25,3 @@ with base.Dataset('tvnews'):
         gender = models.ForeignKey(Gender, on_delete=models.CASCADE, null=True, blank=True)
         identity = models.ForeignKey(Identity, on_delete=models.CASCADE, null=True, blank=True)
 
-
-# with base.Dataset('krishna'):
-
-#     class Video(base.Video):
-#         pass
-
-#     class Frame(base.Frame):
-#         pass
-
-#     class Labeler(base.Labeler):
-#         pass
-
-#     class Face(base.Concept):
-#         pass
-
-#     class Person(base.Concept):
-#         pass
