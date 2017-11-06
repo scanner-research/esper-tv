@@ -23,7 +23,7 @@ alias dc=docker-compose
 
 pip install -r requirements.txt
 python configure.py -c config/local.toml
-dc pull
+dc build
 dc up -d
 dc exec esper ./scripts/setup.sh
 ```
