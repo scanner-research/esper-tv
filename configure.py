@@ -77,6 +77,7 @@ def main():
 
     if 'google' in base_config:
         config.services.esper.build.args.project = str(base_config.google.project)
+        config.services.esper.environment.append('GOOGLE_PROJECT={}'.format(base_config.google.project))
 
     if 'compute' in base_config:
         if 'gpu' in base_config.compute:

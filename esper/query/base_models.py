@@ -58,6 +58,9 @@ class Dataset(object):
         global current_dataset
         current_dataset = None
 
+    def all_models(self):
+        return ['Video', 'Frame', 'Labeler'] + self.other + sum([[c, c + 'Track', c + 'Features']
+                                                               for c in self.concepts], [])
 
 def ForeignKey(model, name, **kwargs):
     return models.ForeignKey(model, related_query_name=name.lower(), on_delete=models.CASCADE, **kwargs)
@@ -99,7 +102,7 @@ class BaseMeta(ModelBase):
                 new_cls = register_concept(name, attrs)
             elif base.__name__ == 'Model':
                 current_dataset.other.append(name)
-                
+
             setattr(current_dataset, name, new_cls)
 
         return new_cls

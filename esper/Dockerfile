@@ -1,7 +1,6 @@
 ARG device=cpu
 FROM scannerresearch/scanner:${device}
 ARG https_proxy
-ARG project
 ENV DJANGO_CONFIGURATION Docker
 ENV https_proxy=$https_proxy
 ENV http_proxy=$https_proxy
@@ -31,7 +30,6 @@ WORKDIR ${APPDIR}
 ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH
 ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
-ENV GOOGLE_PROJECT=${project}
 
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \

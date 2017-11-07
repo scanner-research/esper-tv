@@ -59,8 +59,7 @@ def index(request):
             fields = cls._meta.get_fields()
             return [f.name for f in fields if isinstance(f, models.Field)]
 
-        for cls in ['Video', 'Frame', 'Labeler'] + sum([[c, c + 'Track', c + 'Features']
-                                                        for c in ds.concepts], []) + ds.other:
+        for cls in ds.all_models():
             schema.append([cls, get_fields(getattr(ds, cls))])
         schemas.append([name, schema])
 
@@ -274,7 +273,7 @@ def search2(request):
             for t in result:
                 bounds = Face.objects.filter(track=t).aggregate(min_frame=Min('frame__number'), max_frame=Max('frame__number'))
                 assert(bounds['min_frame'] is not None)
-                if bounds['min_frame'] == bounds['max_frame']: 
+                if bounds['min_frame'] == bounds['max_frame']:
                     continue
 
                 min_face = Face.objects.filter(frame__number=bounds['min_frame'], track=t)[0]
@@ -308,7 +307,7 @@ def search2(request):
             for (video, start, end) in intervals:
                 points.extend([(video, Frame.objects.get(id=start).number, start, False),
                                (video, Frame.objects.get(id=end).number, end, True)])
-            points.sort(key=itemgetter(0, 1)) 
+            points.sort(key=itemgetter(0, 1))
 
             pprint(points)
             sys.stdout.flush()
