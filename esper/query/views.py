@@ -232,16 +232,19 @@ def search2(request):
     def bbox_dist(f1, f2):
         return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
 
-    def qs_to_result(result, group=False, segment=False):
+    def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
         try:
             sample = result[0]
         except IndexError:
             return []
 
+        if shuffle:
+            result = result.order_by('?')
+
         materialized_result = []
         cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
         if cls_name == 'Frame':
-            for frame in result[:LIMIT*STRIDE:STRIDE]:
+            for frame in result[:LIMIT*stride:stride]:
                 materialized_result.append({
                     'video': frame.video.id,
                     'start_frame': frame.id,
@@ -249,7 +252,7 @@ def search2(request):
                 })
 
         elif cls_name == 'Face':
-            for inst in result[:LIMIT*STRIDE:STRIDE]:
+            for inst in result[:LIMIT*stride:stride]:
                 materialized_result.append({
                     'video': inst.frame.video.id,
                     'start_frame': inst.frame.id,
@@ -257,7 +260,7 @@ def search2(request):
                 })
 
         elif cls_name == 'FaceTrack':
-            # tracks = list(result[:LIMIT*STRIDE:STRIDE])
+            # tracks = list(result[:LIMIT*stride:stride])
 
             # TODO: move to django 1.11, enable subquery
 

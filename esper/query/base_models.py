@@ -208,17 +208,18 @@ class Features(models.Model):
             with Dataset(cls._datasetName):
                 col_def = ''.join(
                     [', distto_{} double precision NULL'.format(inst) for inst in instance_ids])
+                print(cls._meta.db_table + "temp")
                 #MYSQL can fuck off with its bullshit about not being able to use a temporary table more than once
                 cursor.execute(
                     "CREATE TABLE IF NOT EXISTS {} (id integer NOT NULL PRIMARY KEY, features bytea, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".
                     format(cls._meta.db_table + "temp", col_def))
                 current_dataset = datasets[cls._datasetName]
-                cls_name = cls._conceptName + "Temp"
+                cls_name = cls._conceptName + "FeaturesTemp"
                 model_params = {
                     '__module__': cls.__module__,
                     #'features': models.BinaryField(),
                     'labeler': ForeignKey(current_dataset.Labeler, cls_name),
-                    'instance': ForeignKey(getattr(current_dataset, cls._instanceName), cls_name)
+                    'instance': ForeignKey(getattr(current_dataset, cls._conceptName), cls_name)
                 }
 
                 for instance_id in instance_ids:
@@ -229,8 +230,8 @@ class Features(models.Model):
                     warnings.simplefilter("ignore")
                     tempmodel = type(cls_name, (Features, ), model_params)
                 testfeatures = {}
-                for i in cls.objects.filter(faceinstance_id__in=instance_ids).all():
-                    testfeatures[i.faceinstance_id] = np.array(json.loads(str(i.features)))
+                for i in cls.objects.filter(face_id__in=instance_ids).all():
+                    testfeatures[i.face_id] = np.array(json.loads(str(i.features)))
 
                 it = cls.objects.all()
                 batch_size = 1000
@@ -241,7 +242,9 @@ class Features(models.Model):
                     newfeat.id = feat.id
                     #newfeat.features = feat.features
                     newfeat.labeler_id = feat.labeler_id
-                    newfeat.instance_id = feat.faceinstance_id
+                    newfeat.instance_id = feat.face_id
+                    print(newfeat.instance_id)
+                    sys.stdout.flush()
                     featarr = np.array(json.loads(str(feat.features)))
                     #TODO better distance computation
                     for i in instance_ids:

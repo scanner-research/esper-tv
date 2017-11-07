@@ -93,21 +93,21 @@ export default class SearchInputView extends React.Component {
   exampleQueries = [
     ["All videos",
      "result = qs_to_result(Frame.objects.filter(number=0))"],
-    ["Faces",
-     "result = qs_to_result(FaceTrack.objects.filter(id__in=Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame__video__id=791, labeler__name='mtcnn', height__gte=0.3).distinct('track').values('track')), segment=True)"],
     ["Fox News videos",
      "result = qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))"],
+    ["Faces",
+     "result = qs_to_result(FaceTrack.objects.filter(id__in=Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame__video__id=791, labeler__name='mtcnn', height__gte=0.3).distinct('track').values('track')), segment=True)"],
     ["Faces on Poppy Harlow",
-     "result = qs_to_result(FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0']), group=True)"],
+     "result = qs_to_result(Face.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow'), group=True, stride=24)"],
     ["Female faces on Poppy Harlow",
-     "result = qs_to_result(FaceInstance.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0']), group=True)"],
+     "result = qs_to_result(Face.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female'), group=True, stride=24)"],
     ["'Talking heads' on Poppy Harlow",
-     "result = qs_to_result(FaceInstance.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(height__gte=0.3, frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female').extra(where=['mod(query_tvnews_faceinstance.id, 64) = 0']), group=True)"],
+     "result = qs_to_result(Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(height__gte=0.3, frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female'), group=True, stride=24)"],
     ["Two female faces on Poppy Harlow",
 `result = []
 for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
     for frame in Frame.objects.filter(video=video).annotate(n=F('number')%math.ceil(video.fps)).filter(n=0)[:1000:10]:
-        faces = list(FaceInstance.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame=frame, gender__name='female', height__gte=0.2))
+        faces = list(Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame=frame, gender__name='female', height__gte=0.2))
         if len(faces) == 2:
             result.append({
                 'video': frame.video.id,
@@ -118,18 +118,18 @@ for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
      `id = 4457280
 FaceFeatures.dropTempFeatureModel()
 FaceFeatures.getTempFeatureModel([id])
-result = qs_to_result(FaceInstance.objects.all().order_by('facefeaturestemp__distto_{}'.format(id)))`],
+result = qs_to_result(Face.objects.all().order_by('facefeaturestemp__distto_{}'.format(id)))`],
     ["Faces unlike Poppy Harlow",
      `id = 4457280
 FaceFeatures.dropTempFeatureModel()
 FaceFeatures.getTempFeatureModel([id])
-result = qs_to_result(FaceInstance.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by('facefeaturestemp__distto_{}'.format(id)))`],
-    ["Differing bounding boxes", `labeler_names = [l['labeler__name'] for l in FaceInstance.objects.values('labeler__name').distinct()]
+result = qs_to_result(Face.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by('facefeaturestemp__distto_{}'.format(id)))`],
+    ["Differing bounding boxes", `labeler_names = [l['labeler__name'] for l in Face.objects.values('labeler__name').distinct()]
 print(labeler_names)
 
 videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 for frame in Frame.objects.filter(Q(video__show='Situation Room With Wolf Blitzer') | Q(video__show='Special Report With Bret Baier')).select_related('video')[:10000:10]:
-    faces = FaceInstance.objects.filter(frame=frame).select_related('labeler')
+    faces = Face.objects.filter(frame=frame).select_related('labeler')
     for face in faces:
         videos[frame.video.id][frame.id][face.labeler.name].append(face)
 
