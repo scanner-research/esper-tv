@@ -12,6 +12,19 @@ RUN apt-get update && \
     npm nodejs curl && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
+# OpenPose
+WORKDIR /opt
+ADD deps/Makefile.config .
+RUN git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose/ && \
+    cd openpose && \
+    mv ../Makefile.config . && \
+    make all -j16 && \
+    cd models && ./getModels.sh && cd .. && \
+    mv .build_release /tmp/openpose && \
+    cp -r include models /tmp/openpose && \
+    rm -rf /opt/openpose && \
+    mv /tmp/openpose /opt
+
 # Google Cloud SDK
 RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
     tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \

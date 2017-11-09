@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='FaceTrack',
+            name='tvnews_FaceTrack',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
             ],
@@ -127,15 +127,15 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='tvnews_face',
             name='track',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_query_name='face', to='query.FaceTrack'),
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_query_name='face', to='query.tvnews_FaceTrack'),
         ),
         migrations.AddField(
-            model_name='facetrack',
+            model_name='tvnews_facetrack',
             name='gender',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='query.tvnews_Gender'),
         ),
         migrations.AddField(
-            model_name='facetrack',
+            model_name='tvnews_facetrack',
             name='identity',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='query.tvnews_Identity'),
         ),

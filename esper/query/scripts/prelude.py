@@ -1,4 +1,4 @@
-from scannerpy import ProtobufGenerator, Config, Database, Job
+from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType
 from query.base_models import ModelDelegator
 from django.db.models import Min, Max, Count, F
 import os

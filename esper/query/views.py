@@ -200,7 +200,7 @@ def search2(request):
     params = json.loads(request.body)
 
     m = ModelDelegator(params['dataset'])
-    Video, Frame, FaceTrack, Face, FaceFeatures, Labeler = m.Video, m.Frame, m.FaceTrack, m.Face, m.FaceFeatures, m.Labeler
+    Video, Frame, Pose, FaceTrack, Face, FaceFeatures, Labeler = m.Video, m.Frame, m.Pose, m.FaceTrack, m.Face, m.FaceFeatures, m.Labeler
 
     def make_error(err):
         return JsonResponse({'error': err})
@@ -250,7 +250,7 @@ def search2(request):
                     'bboxes': []
                 })
 
-        elif cls_name == 'Face':
+        elif cls_name == 'Face' or cls_name == 'Pose':
             for inst in result[:LIMIT*stride:stride]:
                 materialized_result.append({
                     'video': inst.frame.video.id,
