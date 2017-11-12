@@ -77,11 +77,7 @@ class Command(BaseCommand):
                     features = [
                         FaceFeatures(
                             features=json.dumps(embs[i].tolist()),
-<<<<<<< Updated upstream
                             face=faces[face_indexes[i]],
-=======
-                            faceinstance=faces[face_indexes[i]],
->>>>>>> Stashed changes
                             labeler=feature_labeler)
                         for i in range(len(face_indexes))]
                     FaceFeatures.objects.bulk_create(features)
@@ -96,11 +92,7 @@ class Command(BaseCommand):
                 features = [
                     FaceFeatures(
                         features=json.dumps(embs[i].tolist()),
-<<<<<<< Updated upstream
                         face=faces[face_indexes[i]],
-=======
-                        faceinstance=faces[face_indexes[i]],
->>>>>>> Stashed changes
                         labeler=feature_labeler)
                     for i in range(len(face_indexes))]
                 FaceFeatures.objects.bulk_create(features)

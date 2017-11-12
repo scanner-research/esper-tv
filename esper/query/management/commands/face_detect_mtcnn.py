@@ -22,7 +22,7 @@ class Command(BaseCommand):
         face_obj_batch = []
         print(len(frame_ids))
         for (frame_id, bounding_boxes, img) in zip(frame_ids, detections, batch):
-            
+
             if bounding_boxes == None:
                 continue
             bounding_boxes = bounding_boxes[0]
@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 if confidence < .8:
                     continue
                 normalized_bbox = proto.BoundingBox()
-                
+
                 normalized_bbox.score = confidence
                 normalized_bbox.x1 = bb[0]/float(video.width)
                 normalized_bbox.x2 = bb[2]/float(video.width)
@@ -54,17 +54,18 @@ class Command(BaseCommand):
 
                 f = Face()
                 f.labeler = mtcnn_labeler
-                f.frame = frame_map[frame_id] 
+                f.frame = frame_map[frame_id]
                 f.bbox = normalized_bbox
                 f.bbox_x1 = bb[0]/float(video.width)
                 f.bbox_x2 = bb[2]/float(video.width)
                 f.bbox_y1 = bb[1]/float(video.height)
                 f.bbox_y2 = bb[3]/float(video.height)
-                f.bbox_score = confidence 
+                f.bbox_score = confidence
 
                 face_obj_batch.append(f)
+        print(len(face_obj_batch))
         Face.objects.bulk_create(face_obj_batch)
-            
+
 
     def handle(self, *args, **options):
         with open(options['path']) as f:
@@ -86,7 +87,7 @@ class Command(BaseCommand):
         hmargin = 0.3449094129917718
         out_size = 160
         minsize = 20
-        batchsize = 200 
+        batchsize = 200
 
         g1 = tf.Graph()
         g1.as_default()

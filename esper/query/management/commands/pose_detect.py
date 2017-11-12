@@ -36,6 +36,7 @@ class Command(BaseCommand):
             outputs = [db.table(video.path + '_poses') for video in videos]
 
             kplen = (Pose.POSE_KEYPOINTS + Pose.FACE_KEYPOINTS + 2 * Pose.HAND_KEYPOINTS) * 3
+            poses = []
             for (video, output) in zip(videos, outputs):
                 for i, buf in output.column('pose').load():
                     if len(buf) == 1: continue
@@ -63,5 +64,5 @@ class Command(BaseCommand):
                         pose.bbox_y1 = ymin
                         pose.bbox_y2 = ymax
                         pose.bbox_score = min(p[16, 2], p[17, 2], p[0, 2])
-
-                        pose.save()
+                        poses.append(pose)
+            Pose.objects.bulk_create(poses)
