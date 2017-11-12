@@ -1,11 +1,11 @@
 [storage]
-type = "local"
-path = "/var/esper"
+type = "local"       # Video/image files stored on the local machine
+path = "/var/esper"  # Currently unused, ignore
 
 [database]
-type = "local"
-user = "will"
-password = "foobar"
+type = "local"       # Database is stored/run locally
+user = "will"        # Username
+password = "foobar"  # Password
 
 [compute]
-gpu = true
+gpu = true           # Whether or not you have a GPU on the local machine
