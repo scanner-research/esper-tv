@@ -8,4 +8,4 @@ user = "will"
 password = "foobar"
 
 [compute]
-gpu = false
+gpu = true

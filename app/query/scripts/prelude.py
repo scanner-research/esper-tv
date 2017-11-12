@@ -8,6 +8,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import qgrid
+import progressbar
 
 plt.rc("axes.spines", top=False, right=False)
 sns.set_style('white')
@@ -18,3 +19,11 @@ for model in m._dataset.all_models():
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)
+
+def progress_bar(n):
+    return progressbar.ProgressBar(max_value=n, widgets=[
+        progressbar.Percentage(), ' ',
+        '(', progressbar.SimpleProgress(), ')',
+        ' ', progressbar.Bar(), ' ',
+        progressbar.AdaptiveETA(),
+    ])

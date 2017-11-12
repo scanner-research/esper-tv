@@ -1,5 +1,4 @@
 from query.scripts.script_util import *
-import cmdutil
 import json
 import math
 from django.db import transaction
@@ -22,7 +21,7 @@ for fpath, labeler_name in to_ingest:
     print fpath
 
     labeler, _ = Labeler.objects.get_or_create(name=labeler_name)
-    bar = cmdutil.progress_bar(len(list(parse(fpath))))
+    bar = progress_bar(len(list(parse(fpath))))
     does_not_exist = []
 
     for vi, (path, rows) in enumerate(parse(fpath)):
