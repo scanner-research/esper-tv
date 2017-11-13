@@ -1,5 +1,6 @@
 ARG device=cpu
 FROM scannerresearch/scanner:${device}
+ARG cores=1
 ARG https_proxy
 ENV DJANGO_CONFIGURATION Docker
 ENV https_proxy=$https_proxy
@@ -18,7 +19,7 @@ ADD .deps/Makefile.config .
 RUN git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose/ && \
     cd openpose && \
     mv ../Makefile.config . && \
-    make all -j16 && \
+    make all -j${cores} && \
     cd models && ./getModels.sh && cd .. && \
     mv .build_release /tmp/openpose && \
     cp -r include models /tmp/openpose && \

@@ -1,0 +1,11 @@
+sudo: required
+services:
+  - docker
+
+env:
+  global:
+    - DOCKER_REPO=scannerresearch/esper
+    - DOCKER_EMAIL=wcrichto@cs.stanford.edu
+    - DOCKER_USER=wcrichto
+
+script: ./scripts/travis-build.sh

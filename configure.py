@@ -75,7 +75,6 @@ def main():
         })
 
     if 'google' in base_config:
-        config.services.app.build.args.project = str(base_config.google.project)
         config.services.app.environment.append('GOOGLE_PROJECT={}'.format(base_config.google.project))
 
     if 'compute' in base_config:
@@ -86,6 +85,7 @@ def main():
     else:
         device = 'cpu'
     config.services.app.build.args.device = device
+    config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
     if base_config.database.type == 'google':
         assert 'google' in base_config
