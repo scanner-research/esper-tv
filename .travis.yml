@@ -3,6 +3,11 @@ sudo: required
 services:
   - docker
 
+# Use latest docker (need 17.05)
+addons:
+  packages:
+    - docker-ce
+
 env:
   global:
     - DOCKER_REPO=scannerresearch/esper
