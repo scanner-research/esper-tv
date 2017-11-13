@@ -170,7 +170,7 @@ for video, frames in list(mistakes.iteritems())[:100]:
         })`]
   ]
 
-  query = `result = qs_to_result(Face.objects.all())`
+  query = `result = qs_to_result(Pose.objects.all())`
 
   _onSearch = (e) => {
     e.preventDefault();

@@ -175,6 +175,12 @@ $img-height: 100px;
         height: 100px;
     }
 
+    .pose {
+        position: absolute;
+        left: 0;
+        top: 0;
+    }
+
     .bounding-box {
         position: absolute;
         border-width: 2px;

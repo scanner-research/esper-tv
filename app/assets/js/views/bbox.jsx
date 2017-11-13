@@ -134,6 +134,27 @@ class BoxView extends React.Component {
   }
 }
 
+let POSE_PAIRS = [[1,2], [1,5], [2,3], [3,4], [5,6], [6,7], [1,8], [8,9], [9,10],  [1,11],  [11,12], [12,13],  [1,0], [0,14], [14,16],  [0,15], [15,17]];
+
+@observer
+class PoseView extends React.Component {
+  render() {
+    let w = this.props.width;
+    let h = this.props.height;
+    let all_kp = this.props.pose.keypoints;
+    return <svg className='pose'>
+      {all_kp.pose.filter((kp) => kp[2] > 0).map((kp, i) => {
+         return <circle key={i} r={5} cx={kp[0] * w} cy={kp[1] * h} stroke="red" strokeWidth="2" fill="transparent" />;
+      })}
+      {POSE_PAIRS.filter((pair) => all_kp.pose[pair[0]][2] > 0 && all_kp.pose[pair[1]][2] > 0).map((pair, i) => {
+         return <line key={i} x1={all_kp.pose[pair[0]][0] * w} x2={all_kp.pose[pair[1]][0] * w}
+                      y1={all_kp.pose[pair[0]][1] * h} y2={all_kp.pose[pair[1]][1] * h}
+                      strokeWidth="2" stroke="red"/>
+      })}
+    </svg>;
+  }
+}
+
 class ProgressiveImage extends React.Component {
   state = {
     loaded: false
@@ -293,14 +314,18 @@ export class BoundingBoxView extends React.Component {
         {this.state.startX != -1
          ? <BoxView box={this._makeBox()} width={width} height={height} />
          : <div />}
-        {this.props.bboxes.map((box, i) =>
-          <BoxView box={box} key={i} i={i} width={width} height={height}
-                   onClick={this.props.onClick}
-                   onDelete={this._onDelete}
-                   onChange={this._onChange}
-                   onTrack={this._onTrack}
-                   onSetTrack={this._onSetTrack}
-                   onDeleteTrack={this._onDeleteTrack}/>)}
+        {this.props.bboxes.map((box, i) => {
+          if (box.type == 'bbox') {
+            return <BoxView box={box} key={i} i={i} width={width} height={height}
+                            onClick={this.props.onClick}
+                            onDelete={this._onDelete}
+                            onChange={this._onChange}
+                            onTrack={this._onTrack}
+                            onSetTrack={this._onSetTrack}
+                            onDeleteTrack={this._onDeleteTrack}/>;
+          } else if (box.type == 'pose') {
+            return <PoseView pose={box} key={i} width={width} height={height} />;
+          }})}
          </div>
          : <div />}
         <ProgressiveImage

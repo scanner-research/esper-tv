@@ -57,7 +57,7 @@ class ClipView extends React.Component {
   }
 
   _onClick = () => {
-    console.log('Clicked SearchResultView', this.props.clip.bboxes[0].id);
+    console.log('Clicked SearchResultView', this.props.clip.objects[0].id);
   }
 
   _toSeconds = (frame) => {
@@ -106,6 +106,7 @@ class ClipView extends React.Component {
     let video = this._videoMeta();
     let frame = this._frameMeta('start');
     let path = `/server_media/thumbnails/${window.search_result.dataset}/frame_${clip.start_frame}.jpg`;
+
     let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
     let meta = [];
 
@@ -119,7 +120,7 @@ class ClipView extends React.Component {
       meta.push(['Duration', `${duration.toFixed(1)}s`]);
     }
 
-    meta.push(['# people', `${clip.bboxes.length}`]);
+    meta.push(['# objects', `${clip.objects.length}`]);
 
     let meta_per_row = this.state.expand ? 4 : 2;
     let td_style = {width: `${100 / meta_per_row}%`};
@@ -140,7 +141,7 @@ class ClipView extends React.Component {
          ? <div className='loading-video'><img src="/static/images/spinner.gif" /></div>
          : <div />}
         <BoundingBoxView
-            bboxes={clip.bboxes}
+            bboxes={clip.objects}
             width={video.width}
             height={video.height}
             onClick={this.props.onBoxClick}

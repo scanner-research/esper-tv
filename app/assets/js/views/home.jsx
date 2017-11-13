@@ -19,7 +19,7 @@ class SearchResult {
   };
 };
 
-window.DATASET = observable('tvnews');
+window.DATASET = observable('babycam');
 
 @observer
 export default class Home extends React.Component {
@@ -34,7 +34,7 @@ export default class Home extends React.Component {
     window.search_result.videos = results.videos;
     window.search_result.frames = results.frames;
     window.search_result.labelers = results.labelers;
-    window.search_result.dataset = results.datatset;
+    window.search_result.dataset = results.dataset;
 
     // We have to set clips last, because when we set it that triggers a re-render.
     // If we don't set it last, then the views will see inconsistent state in the search results.

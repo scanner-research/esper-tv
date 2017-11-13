@@ -214,12 +214,26 @@ def search2(request):
     def bbox_to_dict(f):
         return {
             'id': f.id,
+            'type': 'bbox',
             'bbox_x1': f.bbox_x1,
             'bbox_x2': f.bbox_x2,
             'bbox_y1': f.bbox_y1,
             'bbox_y2': f.bbox_y2,
             'bbox_score': f.bbox_score,
             'labeler': f.labeler.id
+        }
+
+    def pose_to_dict(f):
+        return {
+            'id': f.id,
+            'labeler': f.labeler.id,
+            'type': 'pose',
+            'keypoints': {
+                'hand-left': f.hand_keypoints()[0].tolist(),
+                'hand-right': f.hand_keypoints()[1].tolist(),
+                'pose': f.pose_keypoints().tolist(),
+                'face': f.face_keypoints().tolist()
+            }
         }
 
     def bbox_area(f):
@@ -247,16 +261,21 @@ def search2(request):
                 materialized_result.append({
                     'video': frame.video.id,
                     'start_frame': frame.id,
-                    'bboxes': []
+                    'objects': []
                 })
 
         elif cls_name == 'Face' or cls_name == 'Pose':
             for inst in result[:LIMIT*stride:stride]:
-                materialized_result.append({
+                r = {
                     'video': inst.frame.video.id,
                     'start_frame': inst.frame.id,
-                    'bboxes': [bbox_to_dict(inst)]
-                })
+                    
+                }
+                if cls_name == 'Face':
+                    r['objects'] = [bbox_to_dict(inst)]
+                elif cls_name == 'Pose':
+                    r['objects'] = [pose_to_dict(inst)]
+                materialized_result.append(r)
 
         elif cls_name == 'FaceTrack':
             # tracks = list(result[:LIMIT*stride:stride])
@@ -283,7 +302,7 @@ def search2(request):
                     'track': t.id,
                     'start_frame': Frame.objects.get(video_id=video, number=bounds['min_frame']).id,
                     'end_frame': Frame.objects.get(video_id=video, number=bounds['max_frame']).id,
-                    'bboxes': [bbox_to_dict(min_face)]
+                    'objects': [bbox_to_dict(min_face)]
                 })
 
                 if len(materialized_result) == LIMIT:
@@ -294,9 +313,9 @@ def search2(request):
         if group:
             grouped_result = defaultdict(list)
             for r in materialized_result:
-                grouped_result[(r['video'], r['start_frame'])].extend(r['bboxes'])
+                grouped_result[(r['video'], r['start_frame'])].extend(r['objects'])
 
-            flat_result = [{'video': t1, 'start_frame': t2, 'bboxes': r}
+            flat_result = [{'video': t1, 'start_frame': t2, 'objects': r}
                                    for (t1, t2), r in grouped_result.iteritems()]
             materialized_result = sorted(flat_result, key=itemgetter('video', 'start_frame'))
 
@@ -348,8 +367,8 @@ def search2(request):
                     'video': f.video.id,
                     'start_frame': start,
                     'end_frame': end,
-                    #'bboxes': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
-                    'bboxes': [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
+                    #'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
+                    'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
                 })
 
         return materialized_result
@@ -378,10 +397,10 @@ def search2(request):
         if 'end_frame' in obj:
             frame_ids.add(obj['end_frame'])
 
-        for bbox in obj['bboxes']:
+        for bbox in obj['objects']:
             labeler_ids.add(bbox['labeler'])
 
-        obj['bboxes'] = bboxes_to_json(obj['bboxes'])
+        #obj['objects'] = bboxes_to_json(obj['objects'])
 
     def to_dict(qs):
         return {t.id: model_to_dict(t) for t in qs}
