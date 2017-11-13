@@ -8,14 +8,6 @@ python manage.py migrate
 mkdir deps
 pushd deps
 
-# Get Pari's face clustering stuff
-git clone https://github.com/scanner-research/face_recognizer
-pushd face_recognizer/data
-wget http://vis-www.cs.umass.edu/lfw/lfw.tgz
-tar -xf lfw.tgz
-rm lfw.tgz
-popd
-
 # Get rude_carnie gender recognition
 git clone https://github.com/MattPerron/rude-carnie.git
 # tmp solution (this is not downloaded anywhere)
@@ -28,13 +20,13 @@ mkdir models
 #model should be downloaded and placed here manually (has to be downloaded from google drive)
 popd
 
-# Get face recognition network
-git clone https://github.com/cmusatyalab/openface
-pushd openface
-./models/get-models.sh
-popd
 popd
 
 # Get face detection network
 cp -r /opt/scanner/nets .
 ./nets/get_caffe_facenet.sh -f
+
+# Setup default dataset
+python manage.py new_dataset default
+python manage.py makemigrations
+python manage.py migrate

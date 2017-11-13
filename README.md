@@ -20,10 +20,9 @@ Next, you will need to configure your Esper installation. If you are using Googl
 alias dc=docker-compose
 pip install -r requirements.txt
 python configure.py --config config/local.toml --dataset default
-dc build
+dc pull
 dc up -d
-dc exec app -- ./scripts/setup.sh
-dc exec app -- python manage.py new_dataset default
+dc exec app ./scripts/setup.sh
 ```
 
 You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend and [http://localhost:8888](http://localhost:8888) to see the Jupyter notebook.
