@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+docker --version
+
 build_docker() {
     docker build -t $DOCKER_REPO:$1 --build-arg device=$1 app
 
