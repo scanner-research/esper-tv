@@ -14,7 +14,7 @@ RUN apt-get update && \
 
 # OpenPose
 WORKDIR /opt
-ADD deps/Makefile.config .
+ADD .deps/Makefile.config .
 RUN git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose/ && \
     cd openpose && \
     mv ../Makefile.config . && \
