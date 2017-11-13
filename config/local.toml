@@ -8,4 +8,4 @@ user = "will"        # Username
 password = "foobar"  # Password
 
 [compute]
-gpu = true           # Whether or not you have a GPU on the local machine
+gpu = false          # Whether or not you have a GPU on the local machine
