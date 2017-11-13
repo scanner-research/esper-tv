@@ -1,6 +1,14 @@
 import React from 'react';
-import {Box, BoundingBoxView} from './bbox.jsx';
+import * as Rb from 'react-bootstrap';
 import {observer} from 'mobx-react';
+import {observable} from 'mobx';
+import {Box, FrameView} from './FrameView.jsx';
+
+class Options {
+  @observable annotation_opacity = 1.0;
+}
+
+window.OPTIONS = new Options;
 
 class ClipView extends React.Component {
   state = {
@@ -125,8 +133,6 @@ class ClipView extends React.Component {
     let meta_per_row = this.state.expand ? 4 : 2;
     let td_style = {width: `${100 / meta_per_row}%`};
 
-    /* let path = `https://frameserver-dot-visualdb-1046.appspot.com/?path=${encodeURIComponent(video.path)}&frame=${frame.number}&id=${clip.start_frame}`;*/
-
     return (
       <div className={'search-result ' + (this.state.expand ? 'expanded' : '')}
            onMouseEnter={this._onMouseEnter}
@@ -138,9 +144,9 @@ class ClipView extends React.Component {
          </video>
          : <div />}
         {this.state.loadingVideo
-         ? <div className='loading-video'><img src="/static/images/spinner.gif" /></div>
+         ? <div className='loading-video'><img className='spinner' /></div>
          : <div />}
-        <BoundingBoxView
+        <FrameView
             bboxes={clip.objects}
             width={video.width}
             height={video.height}
@@ -164,11 +170,34 @@ class ClipView extends React.Component {
   }
 }
 
+class SidebarView extends React.Component {
+  _onChangeOpacity = (e) => {
+    window.OPTIONS.annotation_opacity = e.target.value;
+  }
+
+  render() {
+    return <div className='sidebar'>
+      <h2>Options</h2>
+      <form>
+        <Rb.FormGroup>
+          <Rb.ControlLabel>Annotation opacity</Rb.ControlLabel>
+          <input type="range" min="0" max="1" step="0.01" defaultValue={window.OPTIONS.annotation_opacity} onChange={this._onChangeOpacity} />
+        </Rb.FormGroup>
+      </form>
+    </div>;
+  }
+}
+
 @observer
 export default class SearchResultView extends React.Component {
   render() {
     return (
       <div className='search-results'>
+        {window.search_result.result.length > 0
+        ? <div className='sidebar-wrapper'>
+          <SidebarView />
+        </div>
+         : <div />}
         <div className='colors'>
           {_.values(window.search_result.labelers).map((labeler, i) =>
             <div key={i}>
@@ -182,6 +211,7 @@ export default class SearchResultView extends React.Component {
           {window.search_result.result.map((clip, i) =>
             <ClipView key={i} clip={clip} />
           )}
+          <div className='clearfix' />
         </div>
       </div>
     )

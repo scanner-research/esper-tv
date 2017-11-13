@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {observer} from 'mobx-react';
 import {observable, autorun} from 'mobx';
@@ -136,21 +137,44 @@ class BoxView extends React.Component {
 
 let POSE_PAIRS = [[1,2], [1,5], [2,3], [3,4], [5,6], [6,7], [1,8], [8,9], [9,10],  [1,11],  [11,12], [12,13],  [1,0], [0,14], [14,16],  [0,15], [15,17]];
 
+let FACE_PAIRS = [
+  [0,1], [1,2], [2,3], [3,4], [4,5], [5,6], [6,7], [7,8], [8,9], [9,10], [10,11], [11,12], [12,13], [13,14], [14,15], [15,16], [17,18], [18,19], [19,20], [20,21], [22,23], [23,24], [24,25], [25,26], [27,28], [28,29], [29,30], [31,32], [32,33], [33,34], [34,35], [36,37], [37,38], [38,39], [39,40], [40,41], [41,36], [42,43], [43,44], [44,45], [45,46], [46,47], [47,42], [48,49], [49,50], [50,51], [51,52], [52,53], [53,54], [54,55], [55,56], [56,57], [57,58], [58,59], [59,48], [60,61], [61,62], [62,63], [63,64], [64,65], [65,66], [66,67], [67,60]];
+
+let HAND_PAIRS = [
+  [0,1], [1,2], [2,3], [3,4], [0,5], [5,6], [6,7], [7,8], [0,9], [9,10], [10,11], [11,12], [0,13], [13,14], [14,15], [15,16], [0,17], [17,18], [18,19], [19,20]
+];
+
 @observer
 class PoseView extends React.Component {
   render() {
     let w = this.props.width;
     let h = this.props.height;
     let all_kp = this.props.pose.keypoints;
+    let opacity = window.OPTIONS.annotation_opacity;
+    let kp_sets = [
+      [all_kp.pose, POSE_PAIRS, 'red'],
+      [all_kp.face, FACE_PAIRS, 'white'],
+      [all_kp.hand_left, HAND_PAIRS, 'green'],
+      [all_kp.hand_right, HAND_PAIRS, 'yellow'],
+    ]
+    let expand = this.props.expand;
+    let strokeWidth = this.props.expand ? 3 : 1;
     return <svg className='pose'>
-      {all_kp.pose.filter((kp) => kp[2] > 0).map((kp, i) => {
-         return <circle key={i} r={5} cx={kp[0] * w} cy={kp[1] * h} stroke="red" strokeWidth="2" fill="transparent" />;
-      })}
-      {POSE_PAIRS.filter((pair) => all_kp.pose[pair[0]][2] > 0 && all_kp.pose[pair[1]][2] > 0).map((pair, i) => {
-         return <line key={i} x1={all_kp.pose[pair[0]][0] * w} x2={all_kp.pose[pair[1]][0] * w}
-                      y1={all_kp.pose[pair[0]][1] * h} y2={all_kp.pose[pair[1]][1] * h}
-                      strokeWidth="2" stroke="red"/>
-      })}
+      {kp_sets.map((kp_set, j) =>
+        <g key={j}>
+          {expand
+           ? kp_set[0].filter((kp) => kp[2] > 0).map((kp, i) => {
+             return <circle key={i} r={2} cx={kp[0] * w} cy={kp[1] * h} stroke={kp_set[2]}
+                            strokeOpacity={opacity} strokeWidth={strokeWidth} fill="transparent" />;
+           })
+           : <g />}
+          {kp_set[1].filter((pair) => kp_set[0][pair[0]][2] > 0 && kp_set[0][pair[1]][2] > 0).map((pair, i) => {
+             return <line key={i} x1={kp_set[0][pair[0]][0] * w} x2={kp_set[0][pair[1]][0] * w}
+                          y1={kp_set[0][pair[0]][1] * h} y2={kp_set[0][pair[1]][1] * h}
+                          strokeWidth={strokeWidth} stroke={kp_set[2]} strokeOpacity={opacity} />
+          })}
+        </g>
+      )}
     </svg>;
   }
 }
@@ -182,14 +206,14 @@ class ProgressiveImage extends React.Component {
       <div>
         {this.state.loaded
          ? <div />
-         : <img src='/static/images/spinner.gif' />}
+         : <img className='spinner' />}
         <img {...this.props} onLoad={this._onLoad} onError={this._onError} />
       </div>
     );
   }
 }
 
-export class BoundingBoxView extends React.Component {
+export class FrameView extends React.Component {
   state = {
     startX: -1,
     startY: -1,
@@ -303,7 +327,7 @@ export class BoundingBoxView extends React.Component {
     let imgStyle = this.props.expand ? {width: '780px', height: 'auto'} : {};
     let {width, height} = this._getDimensions();
     return (
-      <div className='bounding-boxes'
+      <div className='frame'
            onMouseDown={this._onMouseDown}
            onMouseUp={this._onMouseUp}
            onMouseOver={this._onMouseOver}
@@ -324,7 +348,7 @@ export class BoundingBoxView extends React.Component {
                             onSetTrack={this._onSetTrack}
                             onDeleteTrack={this._onDeleteTrack}/>;
           } else if (box.type == 'pose') {
-            return <PoseView pose={box} key={i} width={width} height={height} />;
+            return <PoseView pose={box} key={i} width={width} height={height} expand={this.props.expand} />;
           }})}
          </div>
          : <div />}

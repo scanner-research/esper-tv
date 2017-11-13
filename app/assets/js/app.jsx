@@ -32,7 +32,7 @@ export default class App extends React.Component {
         <Router>
           <div>
             <h1><Link to="/">Esper</Link></h1>
-            <Route exact path="/" component={render_component(views.Home)} />
+            <Route exact path="/" component={render_component(views.HomeView)} />
           </div>
         </Router>
       );

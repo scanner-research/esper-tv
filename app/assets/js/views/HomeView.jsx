@@ -1,8 +1,8 @@
 import React from 'react';
 import {observable} from 'mobx';
 import {observer} from 'mobx-react';
-import SearchResultView from './search_result';
-import SearchInputView from './search_input';
+import SearchResultView from './SearchResultView.jsx';
+import SearchInputView from './SearchInputView.jsx';
 import _ from 'lodash';
 
 class SearchResult {

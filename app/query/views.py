@@ -229,8 +229,8 @@ def search2(request):
             'labeler': f.labeler.id,
             'type': 'pose',
             'keypoints': {
-                'hand-left': f.hand_keypoints()[0].tolist(),
-                'hand-right': f.hand_keypoints()[1].tolist(),
+                'hand_left': f.hand_keypoints()[0].tolist(),
+                'hand_right': f.hand_keypoints()[1].tolist(),
                 'pose': f.pose_keypoints().tolist(),
                 'face': f.face_keypoints().tolist()
             }

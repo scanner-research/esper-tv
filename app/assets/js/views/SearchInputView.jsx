@@ -64,7 +64,7 @@ class SchemaView extends React.Component {
           )}
         </div>
         {this.state.loadingExamples
-         ? <img className='spinner' src="/static/images/spinner.gif" />
+         ? <img className='spinner' />
          : <div />}
         {this.state.showExamples
          ? <Rb.Panel className='schema-example'>
@@ -236,7 +236,7 @@ for video, frames in list(mistakes.iteritems())[:100]:
           </Rb.FormControl>
         </Rb.FormGroup>
         {this.state.searching
-         ? <img className='spinner' src="/static/images/spinner.gif" />
+         ? <img className='spinner' />
          : <div />}
         {this.state.showExampleQueries
          ? <Rb.Panel className='example-queries'>
