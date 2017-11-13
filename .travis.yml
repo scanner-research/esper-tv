@@ -5,9 +5,9 @@ services:
 
 # Use latest docker (need 17.05)
 addons:
-  packages:
-    - docker-ce
-
+  apt:
+    packages:
+      - docker-ce
 env:
   global:
     - DOCKER_REPO=scannerresearch/esper

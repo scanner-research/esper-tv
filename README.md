@@ -1,4 +1,4 @@
-# Esper
+# Esper [![Build Status](https://travis-ci.org/scanner-research/esper.svg?branch=master)](https://travis-ci.org/scanner-research/esper)
 
 Esper is a tool for exploratory analysis of large video collections.
 
@@ -30,8 +30,15 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 
 ## Creating a dataset
+First, enter the application container with `dc exec app bash`. Then run:
 ```
-TODO(wcrichto): fill this in
+python manage.py new_dataset default
+```
+
+Modify the models in `app/query/datasets/default/models.py` and define an ETL pipeline in `app/query/datasets/default/ingest.py`. Then run:
+
+```
+esper-run query/datasets/default/ingest.py
 ```
 
 
