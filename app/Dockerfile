@@ -51,6 +51,11 @@ RUN pip install -r requirements.txt && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
 
+# Fix npm hanging on OS X
+# https://github.com/npm/npm/issues/7862#issuecomment-220798263
+RUN npm config set registry http://registry.npmjs.org && \
+    npm config set strict-ssl false
+
 ADD .deps/esper-run /usr/bin
 
 ENV APPDIR=/app
