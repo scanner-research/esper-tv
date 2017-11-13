@@ -10,6 +10,7 @@ class SearchResult {
   videos = {};
   frames = {};
   labelers = {};
+  dataset = '';
   labeler_colors = {
     0: 'darkorange',
     1: 'red',
@@ -33,6 +34,7 @@ export default class Home extends React.Component {
     window.search_result.videos = results.videos;
     window.search_result.frames = results.frames;
     window.search_result.labelers = results.labelers;
+    window.search_result.dataset = results.datatset;
 
     // We have to set clips last, because when we set it that triggers a re-render.
     // If we don't set it last, then the views will see inconsistent state in the search results.

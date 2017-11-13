@@ -105,7 +105,7 @@ class ClipView extends React.Component {
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let video = this._videoMeta();
     let frame = this._frameMeta('start');
-    let path = `/server_media/thumbnails/tvnews/frame_${clip.start_frame}.jpg`;
+    let path = `/server_media/thumbnails/${window.search_result.dataset}/frame_${clip.start_frame}.jpg`;
     let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
     let meta = [];
 

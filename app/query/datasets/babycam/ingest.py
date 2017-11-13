@@ -1,5 +1,5 @@
-from query.scripts.prelude import *
-from query.scripts.ingest import ingest
+from query.datasets.prelude import *
+from query.datasets.ingest import ingest
 import csv
 from datetime import datetime
 

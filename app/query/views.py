@@ -66,7 +66,7 @@ def index(request):
     return render(request, 'index.html', {'schemas': json.dumps(schemas)})
 
 
-def extract(frames):
+def extract(frames, dataset):
     with Database() as db:
         frame = db.ops.FrameInput()
         gathered = frame.sample()
@@ -100,13 +100,13 @@ def extract(frames):
                 list(executor.map(write_jpg, jpgs))
             sp.check_call(
                 shlex.split('gsutil -m mv "{}/*" gs://{}/{}/thumbnails/{}'.format(
-                    temp_dir, BUCKET, DATA_PATH, DATASET)))
+                    temp_dir, BUCKET, DATA_PATH, dataset)))
             _print('Write: {:.3f}'.format(now() - start))
 
         elif ESPER_ENV == 'local':
 
             try:
-                os.makedirs('assets/thumbnails/' + DATASET)
+                os.makedirs('assets/thumbnails/' + dataset)
             except OSError:
                 pass
 
@@ -123,10 +123,11 @@ def extract(frames):
 
 @csrf_exempt
 def batch_fallback(request):
-    m = ModelDelegator('tvnews')
+    dataset = request.POST.get('dataset')
+    m = ModelDelegator(dataset)
     frames = [int(s) for s in request.POST.get('frames').split(',')]
     frames = m.Frame.objects.filter(id__in=frames)
-    extract(frames)
+    extract(frames, dataset)
     return JsonResponse({'success': True})
 
 
@@ -200,7 +201,7 @@ def search2(request):
     params = json.loads(request.body)
 
     m = ModelDelegator(params['dataset'])
-    Video, Frame, Pose, FaceTrack, Face, FaceFeatures, Labeler = m.Video, m.Frame, m.Pose, m.FaceTrack, m.Face, m.FaceFeatures, m.Labeler
+    m.import_all(globals())
 
     def make_error(err):
         return JsonResponse({'error': err})
@@ -397,6 +398,7 @@ def search2(request):
 
 
     return JsonResponse({'success': {
+        'dataset': params['dataset'],
         'result': result,
         'videos': videos,
         'frames': frames,

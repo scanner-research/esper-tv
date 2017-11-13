@@ -1,4 +1,4 @@
-from query.scripts.prelude import *
+from query.datasets.prelude import *
 import requests
 import cv2
 import shlex
@@ -6,6 +6,7 @@ import math
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
+DATASET = os.environ.get('DATASET')
 
 def run(s, shell=False, output=False):
     if shell == True:
@@ -57,13 +58,15 @@ def extract_audio(video):
 
 
 def save_frames(video):
-    stride = int(math.ceil(video.fps)/2)
+    stride = int(math.ceil(video.fps) / 2)
     ids = [
         str(f['id'])
         for f in Frame.objects.filter(video=video, number__in=range(0, video.num_frames, stride))
         .order_by('number').values('id')
     ]
-    requests.post('http://localhost:8000/batch_fallback', data={'frames': ','.join(ids)})
+    requests.post(
+        'http://localhost:8000/batch_fallback', data={'frames': ','.join(ids),
+                                                      'dataset': DATASET})
 
 
 def ingest(paths, fun, dry_run=False):

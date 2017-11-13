@@ -14,8 +14,7 @@ plt.rc("axes.spines", top=False, right=False)
 sns.set_style('white')
 
 m = ModelDelegator(os.environ.get('DATASET'))
-for model in m._dataset.all_models():
-    globals()[model] = getattr(m, model)
+m.import_all(globals())
 
 cfg = Config()
 proto = ProtobufGenerator(cfg)
