@@ -31,7 +31,6 @@ from pprint import pprint
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
-DATASET = os.environ.get('DATASET')  # TODO(wcrichto): move from config to runtime
 DATA_PATH = os.environ.get('DATA_PATH')
 FALLBACK_ENABLED = False
 logger = logging.getLogger(__name__)
@@ -111,7 +110,7 @@ def extract(frames, dataset):
                 pass
 
             def write_jpg((jpg, frame)):
-                with open('assets/thumbnails/{}/frame_{}.jpg'.format(DATASET, frame.id), 'w') as f:
+                with open('assets/thumbnails/{}/frame_{}.jpg'.format(dataset, frame.id), 'w') as f:
                     f.write(jpg)
 
             start = now()

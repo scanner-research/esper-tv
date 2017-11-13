@@ -99,7 +99,7 @@ class BaseMeta(ModelBase):
 
         if not is_base_class:
             if base.__name__ == 'Concept':
-                new_cls = register_concept(name, attrs)
+                new_cls = register_concept(name, attrs, list(bases[1:]))
             elif base.__name__ == 'Model':
                 current_dataset.other.append(name)
 
@@ -108,11 +108,12 @@ class BaseMeta(ModelBase):
         return new_cls
 
 
-def register_concept(name, attrs):
+def register_concept(name, attrs, bases):
     global current_datset
 
     current_dataset.concepts.append(name)
 
+    # Create the ConceptTrack class
     track_cls_name = '{}Track'.format(name)
     track_methods = {
         '__module__': current_dataset.Video.__module__,
@@ -120,6 +121,7 @@ def register_concept(name, attrs):
     track_methods.update(attrs)
     track_cls = type(track_cls_name, (Track, ), track_methods)
 
+    # Create the Concept class
     class Meta:
         unique_together = ('track', 'frame', 'labeler')
 
@@ -132,8 +134,17 @@ def register_concept(name, attrs):
         'Meta': Meta
     }
     inst_methods.update(attrs)
+
+    # Multi-class inheritance doesn't seem to work with the Django magic, so we just explicitly
+    # copy data members and methods into the derived class.
+    for base in bases:
+        for k, v in base.__dict__.iteritems():
+            if not hasattr(super(base), k) and k not in ['__dict__', '__weakref__', '__module__']:
+                inst_methods[k] = v
+
     inst_cls = type(inst_cls_name, (Instance, ), inst_methods)
 
+    # Create the ConceptFeatures class
     class Meta:
         unique_together = ('labeler', inst_cls_name.lower())
 
@@ -195,6 +206,8 @@ class Instance(models.Model):
         self.validate_unique()
         super(Instance, self).save(*args, **kwargs)
 
+    class Meta:
+        abstract = True
 
 class Features(models.Model):
     __metaclass__ = BaseMeta
@@ -266,6 +279,31 @@ class Features(models.Model):
         with connection.cursor() as cursor:
             # cursor.execute("DELETE FROM {}".format(cls._meta.db_table + "temp"))
             cursor.execute("DROP TABLE IF EXISTS {};".format(cls._meta.db_table + "temp"))
+
+
+class Pose(object):
+    keypoints = models.BinaryField()
+
+    def _format_keypoints(self):
+        kp = np.frombuffer(self.keypoints, dtype=np.float32)
+        return kp.reshape((kp.shape[0]/3, 3))
+
+    POSE_KEYPOINTS = 18
+    FACE_KEYPOINTS = 70
+    HAND_KEYPOINTS = 21
+
+    def pose_keypoints(self):
+        kp = self._format_keypoints()
+        return kp[:self.POSE_KEYPOINTS, :]
+
+    def face_keypoints(self):
+        kp = self._format_keypoints()
+        return kp[self.POSE_KEYPOINTS:(self.POSE_KEYPOINTS+self.FACE_KEYPOINTS), :]
+
+    def hand_keypoints(self):
+        kp = self._format_keypoints()
+        base = kp[self.POSE_KEYPOINTS+self.FACE_KEYPOINTS:, :]
+        return [base[:self.HAND_KEYPOINTS, :], base[self.HAND_KEYPOINTS:, :]]
 
 
 class ModelDelegator:

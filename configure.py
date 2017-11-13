@@ -103,7 +103,7 @@ def main():
         config.services.app.environment.append(
             "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
 
-    scanner_config = {}
+    scanner_config = {'scanner_path': '/opt/scanner'}
     if base_config.storage.type == 'google':
         assert 'google' in base_config
         scanner_config['storage'] = {

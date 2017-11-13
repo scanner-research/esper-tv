@@ -50,6 +50,8 @@ RUN pip install -r requirements.txt && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
 
+ADD .deps/esper-run /usr/bin
+
 ENV APPDIR=/app
 WORKDIR ${APPDIR}
 

@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from query.scripts.prelude import *
+from query.datasets.prelude import *
 import math
 
 class Command(BaseCommand):
@@ -32,14 +32,17 @@ class Command(BaseCommand):
                 for video in videos
             ]
             bulk_job = BulkJob(output=output, jobs=jobs)
-            outputs = db.run(bulk_job, force=True)
+            # outputs = db.run(bulk_job, force=True)
             outputs = [db.table(video.path + '_poses') for video in videos]
+            print('Scanner computation finished.')
 
             kplen = (Pose.POSE_KEYPOINTS + Pose.FACE_KEYPOINTS + 2 * Pose.HAND_KEYPOINTS) * 3
             poses = []
             for (video, output) in zip(videos, outputs):
+                print(video)
                 for i, buf in output.column('pose').load():
                     if len(buf) == 1: continue
+                    print('pose #{}'.format(i))
                     kp = np.frombuffer(buf, dtype=np.float32)
                     for j in range(0, len(kp), kplen):
                         frame = Frame.objects.get(video=video, number=i*video.get_stride())
