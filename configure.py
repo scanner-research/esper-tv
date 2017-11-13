@@ -135,7 +135,7 @@ def main():
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
-    print 'Successfully configured Esper.'
+    print('Successfully configured Esper.')
 
 
 if __name__ == '__main__':
