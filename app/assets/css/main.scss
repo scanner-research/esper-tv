@@ -1,0 +1,21 @@
+body {
+    background: #fefefe;
+    font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.login-error {
+    text-align: center;
+    font-size: 24px;
+    margin-top: 30px;
+}
+
+.spinner {
+    content: url('/static/images/spinner.gif');
+}
+
+.clearfix {
+    clear: both;
+}
+
+@import 'search-input';
+@import 'search-result';

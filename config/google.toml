@@ -12,3 +12,6 @@ type = "google"
 name = "esper-public-dev"
 user = "will"
 password = "foobar"
+
+[compute]
+gpu = false

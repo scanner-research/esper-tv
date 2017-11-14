@@ -15,22 +15,21 @@ services:
     image: nginx
     command: ["bash", "/tmp/subst.sh"]
     volumes:
-      - ./esper:/app
+      - ./app:/app
       - ./nginx:/tmp
-    depends_on: [esper]
+    depends_on: [app]
     ports: ["{nginx_port}:{nginx_port}"]
     environment: ["PORT={nginx_port}"]
 
-  esper:
+  app:
     build:
-      context: ./esper
+      context: ./app
       args:
         https_proxy: "${{https_proxy}}"
-    image: scannerresearch/esper
     privileged: true
     depends_on: [db]
     volumes:
-      - ./esper:/app
+      - ./app:/app
       - ${{HOME}}/.bash_history:/root/.bash_history
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
@@ -58,7 +57,7 @@ ports: ["5432"]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c')
-    parser.add_argument('--dataset', default='tvnews')
+    parser.add_argument('--dataset', default='default')
     args = parser.parse_args()
 
     if args.config:
@@ -76,8 +75,7 @@ def main():
         })
 
     if 'google' in base_config:
-        config.services.esper.build.args.project = str(base_config.google.project)
-        config.services.esper.environment.append('GOOGLE_PROJECT={}'.format(base_config.google.project))
+        config.services.app.environment.append('GOOGLE_PROJECT={}'.format(base_config.google.project))
 
     if 'compute' in base_config:
         if 'gpu' in base_config.compute:
@@ -86,7 +84,8 @@ def main():
             device = 'cpu'
     else:
         device = 'cpu'
-    config.services.esper.build.args.device = device
+    config.services.app.build.args.device = device
+    config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
     if base_config.database.type == 'google':
         assert 'google' in base_config
@@ -97,14 +96,14 @@ def main():
     else:
         config.services.db = db_local
 
-    config.services.esper.environment.append('DJANGO_DB_USER={}'.format(
+    config.services.app.environment.append('DJANGO_DB_USER={}'.format(
         base_config.database.user if 'user' in base_config.database else 'root'))
 
     if 'password' in base_config.database:
-        config.services.esper.environment.append(
+        config.services.app.environment.append(
             "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
 
-    scanner_config = {}
+    scanner_config = {'scanner_path': '/opt/scanner'}
     if base_config.storage.type == 'google':
         assert 'google' in base_config
         scanner_config['storage'] = {
@@ -112,7 +111,7 @@ def main():
             'bucket': base_config.storage.bucket,
             'db_path': '{}/scanner_db'.format(base_config.storage.path)
         }
-        config.services.esper.environment.extend([
+        config.services.app.environment.extend([
             'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
             'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
         ])
@@ -130,13 +129,13 @@ def main():
 
         service.environment.extend(env_vars)
 
-    with open('esper/.scanner.toml', 'w') as f:
+    with open('app/.scanner.toml', 'w') as f:
         f.write(toml.dumps(scanner_config))
 
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
-    print 'Successfully configured Esper.'
+    print('Successfully configured Esper.')
 
 
 if __name__ == '__main__':

@@ -1,0 +1,67 @@
+.search-input {
+    $spacing: 10px;
+
+    .spinner {
+        height: 30px;
+        margin-left: 15px;
+    }
+
+    .panel {
+        margin: 0;
+    }
+
+    .control-label {
+        font-weight: normal;
+        margin-right: 5px;
+    }
+
+    .schema {
+        margin-top: $spacing;
+
+        .schema-classes {
+            overflow: auto;
+
+            .schema-class-name {
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+
+            .schema-class {
+                float: left;
+                width: 120px;
+                margin-right: $spacing;
+            }
+
+            .schema-field {
+                cursor: pointer;
+            }
+        }
+
+        img {
+            margin-top: $spacing;
+        }
+
+        .schema-example {
+            margin-top: $spacing;
+
+            .schema-example-name {
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+        }
+    }
+
+    .example-queries {
+        margin-top: $spacing;
+    }
+
+    .ace_editor {
+        margin-bottom: $spacing;
+    }
+
+    button {
+        margin-right: $spacing;
+    }
+
+    margin-bottom: 2*$spacing;
+}

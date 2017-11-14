@@ -1,0 +1,116 @@
+.search-results {
+    position: relative;
+
+    .sidebar-wrapper {
+        $width: 150px;
+        width: $width;
+        position: absolute;
+        left: -($width+20);
+        top: 0;
+        height: 100%;
+
+        .sidebar {
+            position: sticky;
+            top: 20px;
+            left: 0;
+        }
+    }
+
+    .colors {
+        > div {
+            display: inline-block;
+            margin-right: 20px;
+
+            > div {
+                display: inline-block;
+            }
+        }
+    }
+
+    .search-result {
+        $img-height: 100px;
+
+        float: left;
+        position: relative;
+        margin: 5px;
+
+        video, img {
+            user-select: none;
+        }
+
+        video {
+            position: absolute;
+            height: $img-height;
+            z-index: 0;
+
+            /* Always show the control panel on search result tiny videos. */
+            &::-webkit-media-controls-panel {
+                display: flex !important;
+                opacity: 1 !important;
+            }
+        }
+
+        .frame {
+            position: relative;
+            z-index: 1;
+
+            img {
+                height: 100px;
+            }
+
+            .pose {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+            }
+
+            .bounding-box {
+                position: absolute;
+                border-width: 2px;
+                border-style: solid;
+                cursor: pointer;
+                color: white;
+                font-size: 12px;
+
+                &:active {
+                    cursor: none;
+                }
+
+                &:hover {
+                    border-width: 3px;
+                }
+            }
+        }
+
+        .loading-video {
+            position: absolute;
+            top: $img-height - 30px;
+            left: 3px;
+            z-index: 2;
+
+            img { height: 25px; }
+        }
+
+        .search-result-meta {
+            font-size: 10px;
+            table-layout: fixed;
+            word-wrap: break-word;
+
+            td {
+                vertical-align: top;
+            }
+        }
+
+        &.expanded {
+            .search-result-meta {
+                font-size: 14px;
+
+                td {
+                    padding: 5px;
+                }
+            }
+        }
+    }
+}

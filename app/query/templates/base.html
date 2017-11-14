@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Esper</title>
+    <script>
+     var CSRF_TOKEN = "{{ csrf_token }}";
+     var SCHEMAS = JSON.parse('{{ schemas|safe }}');
+    </script>
+    <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
+  </head>
+
+  <body>
+    <div class="container" id="app">
+      {% block content %}{% endblock %}
+    </div>
+  </body>
+</html>

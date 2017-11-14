@@ -24,7 +24,7 @@ http {
 
         location @fallback {
             rewrite ^(.*)$ /fallback$1;
-            proxy_pass http://esper:8000;
+            proxy_pass http://app:8000;
         }
 
         location / {
@@ -32,7 +32,7 @@ http {
             proxy_connect_timeout 300;
             proxy_send_timeout 300;
             proxy_read_timeout 300;
-            proxy_pass http://esper:8000;
+            proxy_pass http://app:8000;
         }
     }
 }
