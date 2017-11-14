@@ -19,7 +19,7 @@ class SearchResult {
   };
 };
 
-window.DATASET = observable('babycam');
+window.DATASET = observable(SCHEMAS.selected);
 
 @observer
 export default class Home extends React.Component {

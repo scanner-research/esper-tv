@@ -29,15 +29,8 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 
 ## Creating a dataset
-First, enter the application container with `dc exec app bash`. Then run:
 ```
-python manage.py new_dataset default
-```
-
-Modify the models in `app/query/datasets/default/models.py` and define an ETL pipeline in `app/query/datasets/default/ingest.py`. Then run:
-
-```
-esper-run query/datasets/default/ingest.py
+TODO(wcrichto)
 ```
 
 

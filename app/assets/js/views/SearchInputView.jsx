@@ -52,7 +52,7 @@ class SchemaView extends React.Component {
     return (
       <div className='schema'>
         <div className='schema-classes'>
-          {_.find(SCHEMAS, (l) => l[0] == window.DATASET)[1].map((cls, i) =>
+          {_.find(SCHEMAS.schemas, (l) => l[0] == window.DATASET)[1].map((cls, i) =>
             <Rb.Panel key={i} className='schema-class'>
               <div className='schema-class-name'>{cls[0]}</div>
               <div className='schema-class-fields'>
@@ -230,7 +230,7 @@ for video, frames in list(mistakes.iteritems())[:100]:
         <Rb.FormGroup>
           <Rb.ControlLabel>Dataset:</Rb.ControlLabel>
           <Rb.FormControl componentClass="select" onChange={this._onChangeDataset} defaultValue={window.DATASET}>
-            {SCHEMAS.map((l, i) =>
+            {SCHEMAS.schemas.map((l, i) =>
               <option key={i} value={l[0]}>{l[0]}</option>
             )}
           </Rb.FormControl>

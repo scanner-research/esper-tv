@@ -62,7 +62,10 @@ def index(request):
             schema.append([cls, get_fields(getattr(ds, cls))])
         schemas.append([name, schema])
 
-    return render(request, 'index.html', {'schemas': json.dumps(schemas)})
+    return render(request, 'index.html', {'schemas': json.dumps({
+        'selected': os.environ.get('DATASET'),
+        'schemas': schemas
+    })})
 
 
 def extract(frames, dataset):
@@ -269,7 +272,7 @@ def search2(request):
                 r = {
                     'video': inst.frame.video.id,
                     'start_frame': inst.frame.id,
-                    
+
                 }
                 if cls_name == 'Face':
                     r['objects'] = [bbox_to_dict(inst)]
