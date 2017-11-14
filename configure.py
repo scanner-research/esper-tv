@@ -4,6 +4,7 @@ import toml
 import subprocess as sp
 import shlex
 from dotmap import DotMap
+import multiprocessing
 
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
@@ -26,6 +27,7 @@ services:
       context: ./app
       args:
         https_proxy: "${{https_proxy}}"
+        cores: {cores}
     privileged: true
     depends_on: [db]
     volumes:
@@ -34,7 +36,7 @@ services:
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}"]
-""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT)))
+""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=multiprocessing.cpu_count())))
 
 db_local = DotMap(yaml.load("""
 image: postgres

@@ -11,6 +11,7 @@ class SearchResult {
   frames = {};
   labelers = {};
   dataset = '';
+  count = 0;
   labeler_colors = {
     0: 'darkorange',
     1: 'red',
@@ -35,6 +36,8 @@ export default class Home extends React.Component {
     window.search_result.frames = results.frames;
     window.search_result.labelers = results.labelers;
     window.search_result.dataset = results.dataset;
+    window.search_result.count = results.count;
+    console.log(results.count);
 
     // We have to set clips last, because when we set it that triggers a re-render.
     // If we don't set it last, then the views will see inconsistent state in the search results.
@@ -49,7 +52,9 @@ export default class Home extends React.Component {
     return (
       <div className='home'>
         <SearchInputView onSearch={this._onSearch} clickedBox={this.state.clickedBox} />
-        <SearchResultView />
+        {window.search_result.result.length > 0
+         ? <SearchResultView />
+         : <div />}
       </div>
     );
   }

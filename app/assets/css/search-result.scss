@@ -1,28 +1,53 @@
+.page-buttons {
+    margin-top: 10px;
+
+    .page-count {
+        position: relative;
+        left: 12px;
+        top: 7px;
+    }
+}
+
 .search-results {
     position: relative;
 
-    .sidebar-wrapper {
+    .sidebar {
         $width: 150px;
         width: $width;
         position: absolute;
-        left: -($width+20);
         top: 0;
         height: 100%;
 
-        .sidebar {
+        $sidebar-margin: -($width+20px);
+
+        &.left {
+            left: $sidebar-margin;
+        }
+
+        &.right {
+            right: $sidebar-margin;
+        }
+
+        > div {
             position: sticky;
             top: 20px;
             left: 0;
         }
-    }
 
-    .colors {
-        > div {
-            display: inline-block;
-            margin-right: 20px;
+        .metadata {
+            .meta-block {
+                margin-bottom: 10px;
+            }
 
-            > div {
-                display: inline-block;
+            .colors {
+                > div {
+                    display: inline-block;
+                    margin-right: 20px;
+
+                    > div {
+                        display: inline-block;
+                    }
+                }
             }
         }
     }

@@ -122,7 +122,8 @@ class BoxView extends React.Component {
       top: box.y1 * this.props.height + offsetY,
       width: (box.x2-box.x1) * this.props.width,
       height: (box.y2-box.y1) * this.props.height,
-      borderColor: window.search_result.labeler_colors[box.labeler]
+      borderColor: window.search_result.labeler_colors[box.labeler],
+      opacity: window.OPTIONS.annotation_opacity
     };
 
     return <div onMouseOver={this._onMouseOver}
@@ -137,12 +138,20 @@ class BoxView extends React.Component {
 
 let POSE_PAIRS = [[1,2], [1,5], [2,3], [3,4], [5,6], [6,7], [1,8], [8,9], [9,10],  [1,11],  [11,12], [12,13],  [1,0], [0,14], [14,16],  [0,15], [15,17]];
 
+let POSE_LEFT = [2, 3, 4, 8, 9, 10, 14, 16];
+
 let FACE_PAIRS = [
   [0,1], [1,2], [2,3], [3,4], [4,5], [5,6], [6,7], [7,8], [8,9], [9,10], [10,11], [11,12], [12,13], [13,14], [14,15], [15,16], [17,18], [18,19], [19,20], [20,21], [22,23], [23,24], [24,25], [25,26], [27,28], [28,29], [29,30], [31,32], [32,33], [33,34], [34,35], [36,37], [37,38], [38,39], [39,40], [40,41], [41,36], [42,43], [43,44], [44,45], [45,46], [46,47], [47,42], [48,49], [49,50], [50,51], [51,52], [52,53], [53,54], [54,55], [55,56], [56,57], [57,58], [58,59], [59,48], [60,61], [61,62], [62,63], [63,64], [64,65], [65,66], [66,67], [67,60]];
 
 let HAND_PAIRS = [
   [0,1], [1,2], [2,3], [3,4], [0,5], [5,6], [6,7], [7,8], [0,9], [9,10], [10,11], [11,12], [0,13], [13,14], [14,15], [15,16], [0,17], [17,18], [18,19], [19,20]
 ];
+
+let POSE_COLOR = 'rgb(255, 60, 60)';
+let POSE_LEFT_COLOR = 'rgb(23, 166, 250)';
+let FACE_COLOR = 'rgb(240, 240, 240)';
+let HAND_LEFT_COLOR = 'rgb(233, 255, 49)';
+let HAND_RIGHT_COLOR = 'rgb(95, 231, 118)';
 
 @observer
 class PoseView extends React.Component {
@@ -152,41 +161,59 @@ class PoseView extends React.Component {
     let all_kp = this.props.pose.keypoints;
     let opacity = window.OPTIONS.annotation_opacity;
     let kp_sets = [];
+
+    // Conditionally draw each part of the keypoints depending on our options
     if (window.OPTIONS.show_pose) {
-      kp_sets.push([all_kp.pose, POSE_PAIRS, 'red']);
+      kp_sets.push([all_kp.pose, POSE_PAIRS, POSE_COLOR]);
     }
     if (window.OPTIONS.show_face) {
-      kp_sets.push([all_kp.face, FACE_PAIRS, 'white']);
+      kp_sets.push([all_kp.face, FACE_PAIRS, FACE_COLOR]);
     }
     if (window.OPTIONS.show_hands) {
       kp_sets = kp_sets.concat([
-        [all_kp.hand_left, HAND_PAIRS, 'green'],
-        [all_kp.hand_right, HAND_PAIRS, 'yellow'],
+        [all_kp.hand_left, HAND_PAIRS, HAND_LEFT_COLOR],
+        [all_kp.hand_right, HAND_PAIRS, HAND_RIGHT_COLOR],
       ])
     }
 
     let expand = this.props.expand;
     let strokeWidth = this.props.expand ? 3 : 1;
+
+    let get_color = (kp_set, pair) => {
+      let color = kp_set[2];
+      // Normally color is just the one in the kp_set, but we special case drawing
+      // the left side of the pose a different color if the option is enabled
+      if (window.OPTIONS.show_lr &&
+          kp_set[0].length == all_kp.pose.length &&
+          (_.includes(POSE_LEFT, pair[0]) || _.includes(POSE_LEFT, pair[1]))) {
+        color = POSE_LEFT_COLOR;
+      }
+      return color;
+    };
+
     return <svg className='pose'>
       {kp_sets.map((kp_set, j) =>
         <g key={j}>
           {expand
-           ? kp_set[0].filter((kp) => kp[2] > 0).map((kp, i) => {
-             return <circle key={i} r={2} cx={kp[0] * w} cy={kp[1] * h} stroke={kp_set[2]}
-                            strokeOpacity={opacity} strokeWidth={strokeWidth} fill="transparent" />;
-           })
+           ? kp_set[0].map((kp, i) => [kp, i]).filter((kptup) => kptup[0][2] > 0).map((kptup, i) =>
+             <circle key={i} r={2} cx={kptup[0][0] * w} cy={kptup[0][1] * h}
+                     stroke={get_color(kp_set, [kptup[1], kptup[1]])}
+                     strokeOpacity={opacity} strokeWidth={strokeWidth} fill="transparent" />
+           )
            : <g />}
-          {kp_set[1].filter((pair) => kp_set[0][pair[0]][2] > 0 && kp_set[0][pair[1]][2] > 0).map((pair, i) => {
-             return <line key={i} x1={kp_set[0][pair[0]][0] * w} x2={kp_set[0][pair[1]][0] * w}
-                          y1={kp_set[0][pair[0]][1] * h} y2={kp_set[0][pair[1]][1] * h}
-                          strokeWidth={strokeWidth} stroke={kp_set[2]} strokeOpacity={opacity} />
-          })}
+          {kp_set[1].filter((pair) => kp_set[0][pair[0]][2] > 0 && kp_set[0][pair[1]][2] > 0).map((pair, i) =>
+            <line key={i} x1={kp_set[0][pair[0]][0] * w} x2={kp_set[0][pair[1]][0] * w}
+                  y1={kp_set[0][pair[0]][1] * h} y2={kp_set[0][pair[1]][1] * h}
+                  strokeWidth={strokeWidth} stroke={get_color(kp_set, pair)}
+                  strokeOpacity={opacity} />
+          )}
         </g>
       )}
     </svg>;
   }
 }
 
+// ProgressiveImage displays a loading gif (the spinner) while an image is loading.
 class ProgressiveImage extends React.Component {
   state = {
     loaded: false
@@ -220,6 +247,10 @@ class ProgressiveImage extends React.Component {
     );
   }
 }
+
+// TODO(wcrichto): can we link these with the equivalent values in the CSS?
+let SMALL_WIDTH = 100;
+let FULL_WIDTH = 780;
 
 export class FrameView extends React.Component {
   state = {
@@ -305,8 +336,8 @@ export class FrameView extends React.Component {
 
   _getDimensions() {
     return {
-      width: this.props.expand ? 780 : (this.props.width * (100 / this.props.height)),
-      height: this.props.expand ? (this.props.height * (780 / this.props.width)) : 100
+      width: this.props.expand ? FULL_WIDTH : (this.props.width * (SMALL_WIDTH / this.props.height)),
+      height: this.props.expand ? (this.props.height * (FULL_WIDTH / this.props.width)) : SMALL_WIDTH
     };
   }
 
@@ -331,8 +362,13 @@ export class FrameView extends React.Component {
     }
   }
 
+  componentWillUnmount() {
+    document.removeEventListener('mousemove', this._onMouseMove);
+    document.removeEventListener('keypress', this._onKeyPress);
+  }
+
   render() {
-    let imgStyle = this.props.expand ? {width: '780px', height: 'auto'} : {};
+    let imgStyle = this.props.expand ? {width: `${FULL_WIDTH}px`, height: 'auto'} : {};
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'

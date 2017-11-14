@@ -5,20 +5,66 @@ import {observable} from 'mobx';
 import {Box, FrameView} from './FrameView.jsx';
 
 class Options {
+  @observable results_per_page = 50;
   @observable annotation_opacity = 1.0;
   @observable show_pose = true;
   @observable show_face = true;
   @observable show_hands = true;
+  @observable show_lr = false;
 }
 
 window.OPTIONS = new Options;
+
+// Displays results with basic pagination
+@observer
+class ClipsView extends React.Component {
+  state = {
+    page: 0
+  }
+
+  _numPages = () => {
+    return Math.floor((window.search_result.result.length - 1)/ window.OPTIONS.results_per_page);
+  }
+
+  _prevPage = (e) => {
+    e.preventDefault();
+    this.setState({page: Math.max(this.state.page - 1, 0)});
+  }
+
+  _nextPage = (e) => {
+    e.preventDefault();
+    this.setState({page: Math.min(this.state.page + 1, this._numPages())});
+  }
+
+  render () {
+    return (
+      <div className='clips'>
+        <div>
+          {_.range(window.OPTIONS.results_per_page * this.state.page,
+                   Math.min(window.OPTIONS.results_per_page * (this.state.page + 1),
+                            window.search_result.result.length))
+            .map((i) => <ClipView key={i} clip={window.search_result.result[i]} />)}
+          <div className='clearfix' />
+        </div>
+        <div className='page-buttons'>
+          <Rb.ButtonGroup>
+            <Rb.Button onClick={this._prevPage}>&larr;</Rb.Button>
+            <Rb.Button onClick={this._nextPage}>&rarr;</Rb.Button>
+            <span className='page-count'>{this.state.page + 1}/{this._numPages()}</span>
+          </Rb.ButtonGroup>
+        </div>
+      </div>
+    );
+  }
+}
+
 
 class ClipView extends React.Component {
   state = {
     hover: false,
     showVideo: false,
     loadingVideo: false,
-    expand: false
+    expand: false,
   }
 
   fullScreen = false
@@ -173,7 +219,7 @@ class ClipView extends React.Component {
   }
 }
 
-class SidebarView extends React.Component {
+class OptionsView extends React.Component {
   _onChangeOpacity = (e) => {
     window.OPTIONS.annotation_opacity = e.target.value;
   }
@@ -184,6 +230,15 @@ class SidebarView extends React.Component {
 
   render() {
     let fields = [
+      {
+        name: 'Results per page',
+        key: 'results_per_page',
+        type: 'number',
+        opts: {
+          min: 1,
+          max: 500
+        }
+      },
       {
         name: 'Annotation opacity',
         key: 'annotation_opacity',
@@ -208,30 +263,64 @@ class SidebarView extends React.Component {
         name: 'Show face',
         key: 'show_face',
         type: 'radio',
+      },
+      {
+        name: 'Show left/right (blue/red)',
+        key: 'show_lr',
+        type: 'radio'
       }
     ]
 
-    return <div className='sidebar'>
+    return <div className='options'>
       <h2>Options</h2>
       <form>
         {fields.map((field, i) =>
            <Rb.FormGroup key={i}>
              <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
              {{
-                range: (
-                  <input type="range" min="0" max="1" step="0.1" defaultValue={window.OPTIONS[field.key]} onChange={this._onChangeOpacity} />),
-                radio: (
+                range: () => (
+                  <input type="range" min={field.opts.min} max={field.opts.max}
+                         step={field.opts.step} defaultValue={window.OPTIONS[field.key]}
+                         onChange={(e) => {window.OPTIONS[field.key] = e.target.value}} />),
+                number: () => (
+                  <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
+                         defaultValue={window.OPTIONS[field.key]}
+                         onKeyPress={(e) => {if (e.key === 'Enter') {
+                             window.OPTIONS[field.key] = e.target.value; e.preventDefault();
+                           }}} />),
+                radio: () => (
                   <Rb.ButtonToolbar>
-                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={true}
+                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={window.OPTIONS[field.key]}
                                           onChange={(e) => {window.OPTIONS[field.key] = e}}>
                       <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
                       <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
                     </Rb.ToggleButtonGroup>
                   </Rb.ButtonToolbar>)
-             }[field.type]}
+             }[field.type]()}
            </Rb.FormGroup>
         )}
       </form>
+    </div>;
+  }
+}
+
+class MetadataView extends React.Component {
+  render() {
+    return <div className='metadata'>
+      <h2>Metadata</h2>
+      <div className='meta-block colors'>
+        <strong>Labelers</strong>
+        {_.values(window.search_result.labelers).map((labeler, i) =>
+          <div key={i}>
+            {labeler.name}: &nbsp;
+            <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
+                         width: '10px', height: '10px', display: 'inline-box'}} />
+          </div>
+        )}
+      </div>
+      <div className='meta-block'>
+        <strong>Count:</strong> {window.search_result.count}
+      </div>
     </div>;
   }
 }
@@ -241,26 +330,13 @@ export default class SearchResultView extends React.Component {
   render() {
     return (
       <div className='search-results'>
-        {window.search_result.result.length > 0
-        ? <div className='sidebar-wrapper'>
-          <SidebarView />
+        <div className='sidebar left'>
+          <MetadataView />
         </div>
-         : <div />}
-        <div className='colors'>
-          {_.values(window.search_result.labelers).map((labeler, i) =>
-            <div key={i}>
-             {labeler.name}: &nbsp;
-              <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
-                           width: '10px', height: '10px', display: 'inline-box'}} />
-            </div>
-          )}
+        <div className='sidebar right'>
+          <OptionsView />
         </div>
-        <div className='clips'>
-          {window.search_result.result.map((clip, i) =>
-            <ClipView key={i} clip={clip} />
-          )}
-          <div className='clearfix' />
-        </div>
+        <ClipsView />
       </div>
     )
   }
