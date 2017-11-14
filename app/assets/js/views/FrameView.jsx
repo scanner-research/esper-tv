@@ -151,12 +151,20 @@ class PoseView extends React.Component {
     let h = this.props.height;
     let all_kp = this.props.pose.keypoints;
     let opacity = window.OPTIONS.annotation_opacity;
-    let kp_sets = [
-      [all_kp.pose, POSE_PAIRS, 'red'],
-      [all_kp.face, FACE_PAIRS, 'white'],
-      [all_kp.hand_left, HAND_PAIRS, 'green'],
-      [all_kp.hand_right, HAND_PAIRS, 'yellow'],
-    ]
+    let kp_sets = [];
+    if (window.OPTIONS.show_pose) {
+      kp_sets.push([all_kp.pose, POSE_PAIRS, 'red']);
+    }
+    if (window.OPTIONS.show_face) {
+      kp_sets.push([all_kp.face, FACE_PAIRS, 'white']);
+    }
+    if (window.OPTIONS.show_hands) {
+      kp_sets = kp_sets.concat([
+        [all_kp.hand_left, HAND_PAIRS, 'green'],
+        [all_kp.hand_right, HAND_PAIRS, 'yellow'],
+      ])
+    }
+
     let expand = this.props.expand;
     let strokeWidth = this.props.expand ? 3 : 1;
     return <svg className='pose'>

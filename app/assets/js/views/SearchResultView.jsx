@@ -6,6 +6,9 @@ import {Box, FrameView} from './FrameView.jsx';
 
 class Options {
   @observable annotation_opacity = 1.0;
+  @observable show_pose = true;
+  @observable show_face = true;
+  @observable show_hands = true;
 }
 
 window.OPTIONS = new Options;
@@ -175,14 +178,59 @@ class SidebarView extends React.Component {
     window.OPTIONS.annotation_opacity = e.target.value;
   }
 
+  _onChangeShowHands = (e) => {
+    window.OPTIONS.show_hands = e;
+  }
+
   render() {
+    let fields = [
+      {
+        name: 'Annotation opacity',
+        key: 'annotation_opacity',
+        type: 'range',
+        opts: {
+          min: 0,
+          max: 1,
+          step: 0.1
+        },
+      },
+      {
+        name: 'Show hands',
+        key: 'show_hands',
+        type: 'radio',
+      },
+      {
+        name: 'Show pose',
+        key: 'show_pose',
+        type: 'radio',
+      },
+      {
+        name: 'Show face',
+        key: 'show_face',
+        type: 'radio',
+      }
+    ]
+
     return <div className='sidebar'>
       <h2>Options</h2>
       <form>
-        <Rb.FormGroup>
-          <Rb.ControlLabel>Annotation opacity</Rb.ControlLabel>
-          <input type="range" min="0" max="1" step="0.01" defaultValue={window.OPTIONS.annotation_opacity} onChange={this._onChangeOpacity} />
-        </Rb.FormGroup>
+        {fields.map((field, i) =>
+           <Rb.FormGroup key={i}>
+             <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
+             {{
+                range: (
+                  <input type="range" min="0" max="1" step="0.1" defaultValue={window.OPTIONS[field.key]} onChange={this._onChangeOpacity} />),
+                radio: (
+                  <Rb.ButtonToolbar>
+                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={true}
+                                          onChange={(e) => {window.OPTIONS[field.key] = e}}>
+                      <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
+                      <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
+                    </Rb.ToggleButtonGroup>
+                  </Rb.ButtonToolbar>)
+             }[field.type]}
+           </Rb.FormGroup>
+        )}
       </form>
     </div>;
   }
