@@ -57,7 +57,7 @@ ports: ["5432"]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c')
-    parser.add_argument('--dataset', default='tvnews')
+    parser.add_argument('--dataset', default='default')
     args = parser.parse_args()
 
     if args.config:
