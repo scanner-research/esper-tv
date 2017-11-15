@@ -118,10 +118,10 @@ class BoxView extends React.Component {
     }
 
     let style = {
-      left: box.x1 * this.props.width + offsetX,
-      top: box.y1 * this.props.height + offsetY,
-      width: (box.x2-box.x1) * this.props.width,
-      height: (box.y2-box.y1) * this.props.height,
+      left: box.bbox_x1 * this.props.width + offsetX,
+      top: box.bbox_y1 * this.props.height + offsetY,
+      width: (box.bbox_x2-box.bbox_x1) * this.props.width,
+      height: (box.bbox_y2-box.bbox_y1) * this.props.height,
       borderColor: window.search_result.labeler_colors[box.labeler],
       opacity: window.OPTIONS.annotation_opacity
     };
