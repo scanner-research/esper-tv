@@ -396,7 +396,7 @@ def search2(request):
         return make_error('Variable "result" must be set')
 
     if not isinstance(result, dict):
-        return make_error('Result must be a dict {result, count, type}')
+        return make_error('Result must be a dict {{result, count, type}}, received type {}'.format(type(result)))
 
     if not isinstance(result['result'], list):
         return make_error('Result must be a frame list')

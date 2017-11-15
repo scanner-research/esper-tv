@@ -93,6 +93,33 @@ export default class SearchInputView extends React.Component {
   exampleQueries = [
     ["All videos",
      "result = qs_to_result(Frame.objects.filter(number=0))"],
+    ["Pose",
+`
+def pose_filter(fn, used, kp):
+    for k in used:
+        if kp[k][2] == 0: return False
+    return fn(kp)
+
+def has_feet(kp):
+    return True
+
+poses = Pose.objects.filter(bbox_score__gte=0).select_related('frame', 'frame__video')
+filtered = []
+for pose in poses[:10000:10]:
+    if pose_filter(has_feet, [10, 13], pose.pose_keypoints()):
+        filtered.append(pose)
+
+result = {
+    'result': [
+        {'video': p.frame.video.id,
+        'start_frame': p.frame.id,
+        'objects': [pose_to_dict(p)]}
+        for p in filtered
+    ],
+    'count': '?',
+    'type': 'Pose'
+}
+`],
     ["Fox News videos",
      "result = qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))"],
     ["Faces",
