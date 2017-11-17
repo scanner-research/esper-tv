@@ -141,7 +141,7 @@ result = {
         'objects': [pose_to_dict(pp) for pp in Pose.objects.filter(frame=p.frame)][:100]}
         for p in filtered
     ],
-    'count': '?',
+    'count': len(filtered),
     'type': 'Pose'
 }`],
     ["Faces like Poppy Harlow",
@@ -202,7 +202,7 @@ for video, frames in list(mistakes.iteritems())[:100]:
             'objects': [bbox_to_dict(f) for f in faces + other_faces]
         })
 
-result = {'result': result, 'count': '?', 'type': 'Frame'}
+result = {'result': result, 'count': len(result), 'type': 'Frame'}
 `]
   ]
 
