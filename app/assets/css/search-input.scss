@@ -1,6 +1,8 @@
 .search-input {
     $spacing: 10px;
 
+    margin-bottom: 2*$spacing;
+
     .spinner {
         height: 30px;
         margin-left: 15px;
@@ -63,5 +65,14 @@
         margin-right: $spacing;
     }
 
-    margin-bottom: 2*$spacing;
+    .alert {
+        margin-top: 10px;
+
+        pre {
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+        }
+    }
 }

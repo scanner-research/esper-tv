@@ -128,9 +128,13 @@
             }
         }
 
+        .media-container {
+            position: relative;
+        }
+
         .loading-video {
             position: absolute;
-            top: $img-height - 30px;
+            bottom: 5px;
             left: 3px;
             z-index: 2;
 
@@ -154,6 +158,11 @@
                 td {
                     padding: 5px;
                 }
+            }
+
+            video {
+                height: auto;
+                width: 780px;
             }
         }
     }

@@ -237,12 +237,13 @@ class ProgressiveImage extends React.Component {
   }
 
   render() {
+    let imgStyle = {display: this.state.loaded ? 'inline-block' : 'none'};
     return (
       <div>
         {this.state.loaded
          ? <div />
          : <img className='spinner' />}
-        <img {...this.props} onLoad={this._onLoad} onError={this._onError} />
+        <img {...this.props} onLoad={this._onLoad} onError={this._onError} style={imgStyle}  />
       </div>
     );
   }

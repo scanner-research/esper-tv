@@ -88,6 +88,7 @@ export default class SearchInputView extends React.Component {
     searching: false,
     showSchema: false,
     showExampleQueries: false,
+    error: null
   }
 
   exampleQueries = [
@@ -261,18 +262,18 @@ result = {'result': result, 'count': len(result), 'type': 'Frame'}
 
   _onSearch = (e) => {
     e.preventDefault();
-    this.setState({searching: true});
+    this.setState({searching: true, error: null});
     axios
       .post('/api/search2', {dataset: window.DATASET, code: this._editor.editor.getValue()})
       .then((response) => {
         if (response.data.success) {
           this.props.onSearch(response.data.success);
         } else {
-          console.error(response.data.error);
+          this.setState({error: response.data.error});
         }
       })
       .catch((error) => {
-        console.error(error);
+        this.setState({error: error});
       })
       .then(() => {
         this.setState({searching: false});
@@ -301,7 +302,6 @@ result = {'result': result, 'count': len(result), 'type': 'Frame'}
           minLines={1}
           maxLines={20}
           highlightActiveLine={false}
-          showGutter={false}
           showPrintMargin={false}
           onChange={this._onCodeChange}
           defaultValue={this.query}
@@ -335,6 +335,11 @@ result = {'result': result, 'count': len(result), 'type': 'Frame'}
            </Rb.Panel>
          : <div />}
         {this.state.showSchema ? <SchemaView /> : <div />}
+        {this.state.error !== null
+        ? <Rb.Alert bsStyle="danger">
+          <pre>{this.state.error}</pre>
+        </Rb.Alert>
+         : <div />}
       </Rb.Form>
     );
   }

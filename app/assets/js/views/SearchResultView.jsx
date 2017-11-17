@@ -172,6 +172,11 @@ class ClipView extends React.Component {
     return window.search_result.frames[this.props.clip[ty + '_frame']]
   }
 
+  componentWillReceiveProps() {
+    // Always collapse when props change
+    this.setState({expand: false});
+  }
+
   componentWillUnmount() {
     document.removeEventListener('keypress', this._onKeyPress);
   }
@@ -206,21 +211,23 @@ class ClipView extends React.Component {
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}
            onClick={this._onClick}>
-        {this.state.loadingVideo || this.state.showVideo
-         ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
-           <source src={`/system_media/${video.path}`} />
-         </video>
-         : <div />}
-        {this.state.loadingVideo
-         ? <div className='loading-video'><img className='spinner' /></div>
-         : <div />}
-        <FrameView
+        <div className='media-container'>
+          {this.state.loadingVideo || this.state.showVideo
+           ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
+             <source src={`/system_media/${video.path}`} />
+           </video>
+           : <div />}
+          {this.state.loadingVideo
+           ? <div className='loading-video'><img className='spinner' /></div>
+           : <div />}
+          <FrameView
             bboxes={clip.objects}
             width={video.width}
             height={video.height}
             onClick={this.props.onBoxClick}
             expand={this.state.expand}
             path={path} />
+        </div>
         <table className='search-result-meta' style={{width: img_width}}>
           <tbody>
             {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>

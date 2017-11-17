@@ -6,7 +6,7 @@ import SearchInputView from './SearchInputView.jsx';
 import _ from 'lodash';
 
 class SearchResult {
-  @observable result = [];
+  @observable result = null;
   videos = {};
   frames = {};
   labelers = {};
@@ -53,8 +53,10 @@ export default class Home extends React.Component {
     return (
       <div className='home'>
         <SearchInputView onSearch={this._onSearch} clickedBox={this.state.clickedBox} />
-        {window.search_result.result.length > 0
-         ? <SearchResultView />
+        {window.search_result.result !== null
+         ? (window.search_result.result.length > 0
+           ? <SearchResultView />
+           : <div>No results matching query.</div>)
          : <div />}
       </div>
     );

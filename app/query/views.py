@@ -291,7 +291,12 @@ def search2(request):
         try:
             sample = result[0]
         except IndexError:
-            return []
+            return {
+                'result': [],
+                'count': 0,
+                'type': ''
+            }
+
 
         count = result.count()
 
@@ -365,9 +370,11 @@ def search2(request):
             intervals = [(r['video'], r['start_frame'], r['end_frame']) for r in materialized_result]
             points = []
             for (video, start, end) in intervals:
-                points.extend([(video, Frame.objects.get(id=start).number, start, False),
-                               (video, Frame.objects.get(id=end).number, end, True)])
-            points.sort(key=itemgetter(0, 1))
+                start_num = Frame.objects.get(id=start).number
+                end_num = Frame.objects.get(id=end).number
+                points.extend([(video, start_num, start, False),
+                               (video, end_num, end, True)])
+            points.sort(key=itemgetter(0, 1, 3))
 
             pprint(points)
             sys.stdout.flush()
