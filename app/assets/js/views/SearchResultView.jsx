@@ -50,7 +50,7 @@ class ClipsView extends React.Component {
           <Rb.ButtonGroup>
             <Rb.Button onClick={this._prevPage}>&larr;</Rb.Button>
             <Rb.Button onClick={this._nextPage}>&rarr;</Rb.Button>
-            <span className='page-count'>{this.state.page + 1}/{this._numPages()}</span>
+            <span className='page-count'>{this.state.page + 1}/{this._numPages() + 1}</span>
           </Rb.ButtonGroup>
         </div>
       </div>
@@ -309,7 +309,7 @@ class MetadataView extends React.Component {
     return <div className='metadata'>
       <h2>Metadata</h2>
       <div className='meta-block colors'>
-        <strong>Labelers</strong>
+        <strong>Labelers</strong><br />
         {_.values(window.search_result.labelers).map((labeler, i) =>
           <div key={i}>
             {labeler.name}: &nbsp;

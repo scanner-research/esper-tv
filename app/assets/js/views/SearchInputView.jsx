@@ -93,33 +93,6 @@ export default class SearchInputView extends React.Component {
   exampleQueries = [
     ["All videos",
      "result = qs_to_result(Frame.objects.filter(number=0))"],
-    ["Pose",
-`
-def pose_filter(fn, used, kp):
-    for k in used:
-        if kp[k][2] == 0: return False
-    return fn(kp)
-
-def has_feet(kp):
-    return True
-
-poses = Pose.objects.filter(bbox_score__gte=0).select_related('frame', 'frame__video')
-filtered = []
-for pose in poses[:10000:10]:
-    if pose_filter(has_feet, [10, 13], pose.pose_keypoints()):
-        filtered.append(pose)
-
-result = {
-    'result': [
-        {'video': p.frame.video.id,
-        'start_frame': p.frame.id,
-        'objects': [pose_to_dict(p)]}
-        for p in filtered
-    ],
-    'count': '?',
-    'type': 'Pose'
-}
-`],
     ["Fox News videos",
      "result = qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))"],
     ["Faces",
@@ -131,16 +104,46 @@ result = {
     ["'Talking heads' on Poppy Harlow",
      "result = qs_to_result(Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(height__gte=0.3, frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='female'), group=True, stride=24)"],
     ["Two female faces on Poppy Harlow",
-`result = []
+`r = []
 for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
     for frame in Frame.objects.filter(video=video).annotate(n=F('number')%math.ceil(video.fps)).filter(n=0)[:1000:10]:
-        faces = list(Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame=frame, gender__name='female', height__gte=0.2))
+        faces = list(Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(labeler__name='mtcnn', frame=frame, gender__name='female', height__gte=0.2))
         if len(faces) == 2:
-            result.append({
+            r.append({
                 'video': frame.video.id,
                 'start_frame': frame.id,
-                'bboxes': [bbox_to_dict(f) for f in faces]
-            })`],
+                'objects': [bbox_to_dict(f) for f in faces]
+            })
+result = {'result': r, 'count': '?', 'type': 'Frame'}`],
+    ["Poses with feet", `
+def pose_filter(fn, used, kp):
+    for k in used:
+        if kp[k][2] == 0: return False
+    return fn(kp)
+
+def has_feet(kp):
+    return True
+
+def hands_above_head(kp):
+    return kp[Pose.LWrist][1] < kp[Pose.Nose][1] and kp[Pose.RWrist][1] < kp[Pose.Nose][1]
+
+poses = Pose.objects.filter(bbox_score__gte=0).select_related('frame', 'frame__video').order_by('?')
+filtered = []
+for pose in poses[:1000]:
+    if pose_filter(hands_above_head, [Pose.LWrist, Pose.Nose, Pose.RWrist], pose.pose_keypoints()):
+    #if pose_filter(has_feet, [Pose.LAnkle, Pose.RAnkle], pose.pose_keypoints()):
+        filtered.append(pose)
+
+result = {
+    'result': [
+        {'video': p.frame.video.id,
+        'start_frame': p.frame.id,
+        'objects': [pose_to_dict(pp) for pp in Pose.objects.filter(frame=p.frame)][:100]}
+        for p in filtered
+    ],
+    'count': '?',
+    'type': 'Pose'
+}`],
     ["Faces like Poppy Harlow",
      `id = 4457280
 FaceFeatures.dropTempFeatureModel()
@@ -152,11 +155,14 @@ FaceFeatures.dropTempFeatureModel()
 FaceFeatures.getTempFeatureModel([id])
 result = qs_to_result(Face.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by('facefeaturestemp__distto_{}'.format(id)))`],
     ["Differing bounding boxes", `labeler_names = [l['labeler__name'] for l in Face.objects.values('labeler__name').distinct()]
-print(labeler_names)
 
 videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-for frame in Frame.objects.filter(Q(video__show='Situation Room With Wolf Blitzer') | Q(video__show='Special Report With Bret Baier')).select_related('video')[:10000:10]:
-    faces = Face.objects.filter(frame=frame).select_related('labeler')
+for frame in Frame.objects.filter(Q(video__show='Situation Room With Wolf Blitzer') | Q(video__show='Special Report With Bret Baier')).filter(face__labeler__name='handlabeled').select_related('video')[:50000:5]:
+    faces = list(Face.objects.filter(frame=frame).select_related('labeler'))
+    has_mtcnn = any([f.labeler.name == 'mtcnn' for f in faces])
+    has_handlabeled = any([f.labeler.name == 'handlabeled' for f in faces])
+    if not has_mtcnn or not has_handlabeled:
+        continue
     for face in faces:
         videos[frame.video.id][frame.id][face.labeler.name].append(face)
 
@@ -193,8 +199,11 @@ for video, frames in list(mistakes.iteritems())[:100]:
         result.append({
             'video': video,
             'start_frame': frame,
-            'bboxes': [bbox_to_dict(f) for f in faces + other_faces]
-        })`]
+            'objects': [bbox_to_dict(f) for f in faces + other_faces]
+        })
+
+result = {'result': result, 'count': '?', 'type': 'Frame'}
+`]
   ]
 
   query = `result = qs_to_result(Face.objects.all())`

@@ -37,7 +37,6 @@ export default class Home extends React.Component {
     window.search_result.labelers = results.labelers;
     window.search_result.dataset = results.dataset;
     window.search_result.count = results.count;
-    console.log(results.count);
 
     // We have to set clips last, because when we set it that triggers a re-render.
     // If we don't set it last, then the views will see inconsistent state in the search results.

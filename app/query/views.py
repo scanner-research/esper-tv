@@ -249,6 +249,15 @@ def search2(request):
     def bbox_dist(f1, f2):
         return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
 
+    def group_result(materialized_result):
+        grouped_result = defaultdict(list)
+        for r in materialized_result:
+            grouped_result[(r['video'], r['start_frame'])].extend(r['objects'])
+
+        flat_result = [{'video': t1, 'start_frame': t2, 'objects': r}
+                               for (t1, t2), r in grouped_result.iteritems()]
+        return sorted(flat_result, key=itemgetter('video', 'start_frame'))
+
     def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
         try:
             sample = result[0]
@@ -317,13 +326,7 @@ def search2(request):
             materialized_result.sort(key=itemgetter('video', 'start_frame'))
 
         if group:
-            grouped_result = defaultdict(list)
-            for r in materialized_result:
-                grouped_result[(r['video'], r['start_frame'])].extend(r['objects'])
-
-            flat_result = [{'video': t1, 'start_frame': t2, 'objects': r}
-                                   for (t1, t2), r in grouped_result.iteritems()]
-            materialized_result = sorted(flat_result, key=itemgetter('video', 'start_frame'))
+            materialized_result = group_result(materialized_result)
 
         if segment:
             tracks = [r['track'] for r in materialized_result]
