@@ -100,7 +100,7 @@ export default class SearchInputView extends React.Component {
      "result = qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))"],
 
 
-    ["Face tracks",
+    ["Talking heads face tracks",
      "result = qs_to_result(FaceTrack.objects.filter(id__in=Face.objects.annotate(height=F('bbox_y2')-F('bbox_y1')).filter(frame__video__id=791, labeler__name='mtcnn', height__gte=0.3).distinct('track').values('track')), segment=True)"],
 
 
@@ -129,7 +129,7 @@ for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
             })
 result = simple_result(r, 'Frame')`],
 
-    ["Man left of woman",
+    ["Frames with a man left of a woman",
      `frames = []
 frames_qs = Frame.objects.annotate(c=Subquery(Face.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values('c'))).filter(c__gt=0).order_by('id').select_related('video')
 for frame in frames_qs[:100000:10]:
@@ -329,8 +329,13 @@ result = {'result': result, 'count': len(result), 'type': 'Frame'}
          ? <Rb.Panel className='example-queries'>
            <strong>Example queries</strong><br />
            {this.exampleQueries.map((q, i) => {
-              return (<span key={i}><a href="#" onClick={() => {this.query = q[1]; this.forceUpdate()}}>{q[0]}</a>
-              <br /></span>);
+              return (<span key={i}>
+                <a href="#" onClick={() => {
+                    this.query = `# ${q[0]}\n\n${q[1]}`;
+                    this.forceUpdate();
+                }}>{q[0]}</a>
+                <br />
+              </span>);
            })}
            </Rb.Panel>
          : <div />}

@@ -172,9 +172,10 @@ class ClipView extends React.Component {
     return window.search_result.frames[this.props.clip[ty + '_frame']]
   }
 
-  componentWillReceiveProps() {
-    // Always collapse when props change
-    this.setState({expand: false});
+  componentWillReceiveProps(props) {
+    if (this.props.clip != props.clip) {
+      this.setState({expand: false});
+    }
   }
 
   componentWillUnmount() {

@@ -237,7 +237,8 @@ class ProgressiveImage extends React.Component {
   }
 
   render() {
-    let imgStyle = {display: this.state.loaded ? 'inline-block' : 'none'};
+    let imgStyle = this.props.style;
+    imgStyle.display = this.state.loaded ? 'inline-block' : 'none';
     return (
       <div>
         {this.state.loaded
@@ -373,8 +374,8 @@ export class FrameView extends React.Component {
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'
-           onMouseDown={this._onMouseDown}
-           onMouseUp={this._onMouseUp}
+           /*onMouseDown={this._onMouseDown}
+           onMouseUp={this._onMouseUp}*/
            onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
