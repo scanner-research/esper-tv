@@ -52,6 +52,21 @@
         }
     }
 
+    .group {
+        &.flat {
+            float: left;
+
+            .group-label { display: none; }
+        }
+
+        &.contiguous {
+            float: left;
+            padding: 5px;
+            margin: 5px;
+            border: 2px solid #ccc;
+        }
+    }
+
     .search-result {
         $img-height: 100px;
 

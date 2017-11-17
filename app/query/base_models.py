@@ -202,6 +202,9 @@ class Instance(models.Model):
     bbox_y2 = models.FloatField()
     bbox_score = models.FloatField()
 
+    def height(self):
+        return self.bbox_y2 - self.bbox_y1
+
     def save(self, *args, **kwargs):
         self.validate_unique()
         super(Instance, self).save(*args, **kwargs)

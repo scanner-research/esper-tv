@@ -258,6 +258,35 @@ def search2(request):
                                for (t1, t2), r in grouped_result.iteritems()]
         return sorted(flat_result, key=itemgetter('video', 'start_frame'))
 
+    def simple_result(result, ty):
+        return {
+            'result': [
+                {'type': 'flat',
+                 'elements': [r]}
+                for r in result
+            ],
+            'count': len(result),
+            'type': ty
+        }
+
+    def filter_poses(ty, fn, used_kps, poses=None):
+        filtered = []
+        if poses is None:
+            poses = Pose.objects.all().order_by('id').select_related('frame', 'frame__video')[:100000:10]
+        for pose in poses:
+            kps = getattr(pose, '{}_keypoints'.format(ty))()
+            bad = False
+            for k in used_kps:
+                if kps[k][2] == 0: 
+                    bad = True
+                    break
+            if bad:
+                continue
+
+            if fn(kps):
+                filtered.append(pose)
+        return filtered
+
     def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
         try:
             sample = result[0]
@@ -343,6 +372,7 @@ def search2(request):
             intervals_active = 0
             boundaries = []
             i = 0
+            intvl_id = 0
             while i < len(points):
                 num_intervals = 1
                 (_, _, frame, is_end) = points[i]
@@ -358,19 +388,35 @@ def search2(request):
 
                 if not is_end:
                     intervals_active += num_intervals
-                    boundaries.append((frame, points[i+1][2]))
+                    boundaries.append((frame, points[i+1][2], intvl_id))
                 else:
                     intervals_active -= num_intervals
                     if intervals_active > 0:
-                        boundaries.append((frame, points[i+1][2]))
+                        boundaries.append((frame, points[i+1][2], intvl_id))
+                    else:
+                        intvl_id += 1
 
                 i += 1
 
-            # pprint(boundaries)
-            # sys.stdout.flush()
-
+            groups = []
             materialized_result = []
-            for (start, end) in boundaries:
+            cur_intvl_id = boundaries[0][2]
+            for (start, end, intvl_id) in boundaries:
+                if intvl_id != cur_intvl_id:
+                    video = Video.objects.get(id=materialized_result[0]['video'])
+                    intvl_start = materialized_result[0]['start_frame']
+                    intvl_end = materialized_result[-1]['end_frame']
+                    format_time = lambda t: time.strftime('%H:%M:%S', time.gmtime(math.floor(t / video.fps)))
+
+                    groups.append({
+                        'type': 'contiguous',
+                        'label': '{} -- {}'.format(format_time(Frame.objects.get(id=intvl_start).number), 
+                                                   format_time(Frame.objects.get(id=intvl_end).number)),
+                        'elements': materialized_result
+                    })
+                    materialized_result = []
+                    cur_intvl_id = intvl_id
+
                 f = Frame.objects.filter(id=start).select_related('video').get()
                 materialized_result.append({
                     'video': f.video.id,
@@ -379,9 +425,15 @@ def search2(request):
                     #'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
                     'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
                 })
+        else:
+            groups = [{
+                'type': 'flat',
+                'label': '',
+                'elements': [r]
+            } for r in materialized_result]
 
         return {
-            'result': materialized_result,
+            'result': groups,
             'count': count,
             'type': cls_name
         }
@@ -407,16 +459,17 @@ def search2(request):
     video_ids = set()
     frame_ids = set()
     labeler_ids = set()
-    for obj in result['result']:
-        video_ids.add(obj['video'])
-        frame_ids.add(obj['start_frame'])
-        if 'end_frame' in obj:
-            frame_ids.add(obj['end_frame'])
+    for group in result['result']:
+        for obj in group['elements']:
+            video_ids.add(obj['video'])
+            frame_ids.add(obj['start_frame'])
+            if 'end_frame' in obj:
+                frame_ids.add(obj['end_frame'])
 
-        for bbox in obj['objects']:
-            labeler_ids.add(bbox['labeler'])
+            for bbox in obj['objects']:
+                labeler_ids.add(bbox['labeler'])
 
-        #obj['objects'] = bboxes_to_json(obj['objects'])
+            #obj['objects'] = bboxes_to_json(obj['objects'])
 
     def to_dict(qs):
         return {t.id: model_to_dict(t) for t in qs}
@@ -424,12 +477,6 @@ def search2(request):
     videos = to_dict(Video.objects.filter(id__in=video_ids))
     frames = to_dict(Frame.objects.filter(id__in=frame_ids))
     labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
-
-    for r in result['result']:
-        path = Video.objects.get(id=r['video']).path
-        frame = r['start_frame']
-        number = Frame.objects.get(id=frame).number
-
 
     return JsonResponse({'success': {
         'dataset': params['dataset'],

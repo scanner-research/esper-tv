@@ -15,9 +15,8 @@ class Options {
 
 window.OPTIONS = new Options;
 
-// Displays results with basic pagination
 @observer
-class ClipsView extends React.Component {
+class GroupsView extends React.Component {
   state = {
     page: 0
   }
@@ -38,12 +37,12 @@ class ClipsView extends React.Component {
 
   render () {
     return (
-      <div className='clips'>
+      <div className='groups'>
         <div>
           {_.range(window.OPTIONS.results_per_page * this.state.page,
                    Math.min(window.OPTIONS.results_per_page * (this.state.page + 1),
                             window.search_result.result.length))
-            .map((i) => <ClipView key={i} clip={window.search_result.result[i]} />)}
+            .map((i) => <GroupView key={i} group={window.search_result.result[i]} />)}
           <div className='clearfix' />
         </div>
         <div className='page-buttons'>
@@ -52,6 +51,26 @@ class ClipsView extends React.Component {
             <Rb.Button onClick={this._nextPage}>&rarr;</Rb.Button>
             <span className='page-count'>{this.state.page + 1}/{this._numPages() + 1}</span>
           </Rb.ButtonGroup>
+        </div>
+      </div>
+    );
+  }
+
+}
+
+// Displays results with basic pagination
+@observer
+class GroupView extends React.Component {
+  render () {
+    let group = this.props.group;
+    return (
+      <div className={'group ' + group.type}>
+        <div>
+          <div className='group-label'>{group.label}</div>
+          <div className='group-elements'>
+            {group.elements.map((clip, i) => <ClipView key={i} clip={clip} />)}
+            <div className='clearfix' />
+          </div>
         </div>
       </div>
     );
@@ -336,7 +355,7 @@ export default class SearchResultView extends React.Component {
         <div className='sidebar right'>
           <OptionsView />
         </div>
-        <ClipsView />
+        <GroupsView />
       </div>
     )
   }
