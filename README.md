@@ -29,9 +29,18 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 
 ## Creating a dataset
+Outside the container:
 ```
-TODO(wcrichto)
+youtube-dl "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f mp4 -o app/example.mp4
+echo "example.mp4" > app/paths
 ```
+
+Then enter the container with `dc exec app bash`. Within the container, run:
+```
+esper-run query/datasets/tvnews/ingest.py
+```
+
+Then visit [http://localhost](http://localhost).
 
 
 ## Development

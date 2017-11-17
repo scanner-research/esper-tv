@@ -87,6 +87,7 @@ def main():
     else:
         device = 'cpu'
     config.services.app.build.args.device = device
+    config.services.app.build.args.device2 = device
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
     if base_config.database.type == 'google':

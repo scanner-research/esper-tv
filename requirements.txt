@@ -4,3 +4,4 @@ docker-compose
 nvidia-docker-compose
 dotmap
 flask
+youtube-dl

@@ -1,5 +1,6 @@
 ARG device=cpu
 FROM scannerresearch/scanner:${device}
+ARG device2=cpu
 ARG cores=1
 ARG https_proxy
 ENV DJANGO_CONFIGURATION Docker
@@ -47,7 +48,8 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 
 # Python dependencies
 ADD requirements.txt .
-RUN pip install -r requirements.txt && \
+RUN (if [ "$device2" = "cpu" ]; then pip install tensorflow==1.2.0; else pip install tensorflow-gpu==1.2.0; fi) && \
+    pip install -r requirements.txt && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
 
