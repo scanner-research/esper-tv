@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {observer} from 'mobx-react';
 import {observable, autorun} from 'mobx';
@@ -123,7 +122,7 @@ class BoxView extends React.Component {
       width: (box.bbox_x2-box.bbox_x1) * this.props.width,
       height: (box.bbox_y2-box.bbox_y1) * this.props.height,
       borderColor: window.search_result.labeler_colors[box.labeler],
-      opacity: window.OPTIONS.annotation_opacity
+      opacity: DISPLAY_OPTIONS.annotation_opacity
     };
 
     return <div onMouseOver={this._onMouseOver}
@@ -159,17 +158,17 @@ class PoseView extends React.Component {
     let w = this.props.width;
     let h = this.props.height;
     let all_kp = this.props.pose.keypoints;
-    let opacity = window.OPTIONS.annotation_opacity;
+    let opacity = DISPLAY_OPTIONS.annotation_opacity;
     let kp_sets = [];
 
     // Conditionally draw each part of the keypoints depending on our options
-    if (window.OPTIONS.show_pose) {
+    if (DISPLAY_OPTIONS.show_pose) {
       kp_sets.push([all_kp.pose, POSE_PAIRS, POSE_COLOR]);
     }
-    if (window.OPTIONS.show_face) {
+    if (DISPLAY_OPTIONS.show_face) {
       kp_sets.push([all_kp.face, FACE_PAIRS, FACE_COLOR]);
     }
-    if (window.OPTIONS.show_hands) {
+    if (DISPLAY_OPTIONS.show_hands) {
       kp_sets = kp_sets.concat([
         [all_kp.hand_left, HAND_PAIRS, HAND_LEFT_COLOR],
         [all_kp.hand_right, HAND_PAIRS, HAND_RIGHT_COLOR],
@@ -183,7 +182,7 @@ class PoseView extends React.Component {
       let color = kp_set[2];
       // Normally color is just the one in the kp_set, but we special case drawing
       // the left side of the pose a different color if the option is enabled
-      if (window.OPTIONS.show_lr &&
+      if (DISPLAY_OPTIONS.show_lr &&
           kp_set[0].length == all_kp.pose.length &&
           (_.includes(POSE_LEFT, pair[0]) || _.includes(POSE_LEFT, pair[1]))) {
         color = POSE_LEFT_COLOR;
@@ -237,14 +236,46 @@ class ProgressiveImage extends React.Component {
   }
 
   render() {
-    let imgStyle = this.props.style;
-    imgStyle.display = this.state.loaded ? 'inline-block' : 'none';
+    let width = this.props.width;
+    let height = this.props.height;
+    let target_width = this.props.target_width;
+    let target_height = this.props.target_height;
+    let crop  = this.props.crop;
+    let cropStyle;
+    if (crop !== null) {
+      let bbox_width = crop.bbox_x2 - crop.bbox_x1;
+      let bbox_height = crop.bbox_y2 - crop.bbox_y1;
+      let scale;
+      if (this.props.target_height !== null) {
+        scale = this.props.target_height / (bbox_height * height);
+      } else {
+        scale = this.props.target_width / (bbox_width * width);
+      }
+      cropStyle = {
+        backgroundImage: `url(${this.props.src})`,
+        backgroundPosition: `-${crop.bbox_x1 * width * scale}px -${crop.bbox_y1 * height * scale}px`,
+        backgroundSize: `${width * scale}px ${height * scale}px`,
+        backgroundStyle: 'no-repeat',
+        width: bbox_width * width * scale,
+        height: bbox_height * height * scale
+      }
+    } else {
+      cropStyle = {};
+    }
+    let imgStyle = {
+      display: (this.state.loaded && crop === null) ? 'inline-block' : 'none',
+      width: target_width === null ? 'auto' : target_width,
+      height: target_height === null ? 'auto' : target_height
+    };
     return (
       <div>
         {this.state.loaded
          ? <div />
          : <img className='spinner' />}
-        <img {...this.props} onLoad={this._onLoad} onError={this._onError} style={imgStyle}  />
+        <img src={this.props.src} draggable={false} onLoad={this._onLoad} onError={this._onError} style={imgStyle} />
+        {crop !== null
+         ? <div style={cropStyle} />
+         : <div />}
       </div>
     );
   }
@@ -254,6 +285,7 @@ class ProgressiveImage extends React.Component {
 let SMALL_WIDTH = 100;
 let FULL_WIDTH = 780;
 
+@observer
 export class FrameView extends React.Component {
   state = {
     startX: -1,
@@ -346,15 +378,15 @@ export class FrameView extends React.Component {
   _makeBox() {
     let {width, height} = this._getDimensions();
     return new Face({
-       bbox: {
-         x1: this.state.startX/width,
-         y1: this.state.startY/height,
-         x2: this.state.curX/width,
-         y2: this.state.curY/height,
-         labeler: 'handlabeled'
-       },
-       track: null,
-       gender: '0'
+      bbox: {
+        x1: this.state.startX/width,
+        y1: this.state.startY/height,
+        x2: this.state.curX/width,
+        y2: this.state.curY/height,
+        labeler: 'handlabeled'
+      },
+      track: null,
+      gender: '0'
     });
   }
 
@@ -370,39 +402,54 @@ export class FrameView extends React.Component {
   }
 
   render() {
-    let imgStyle = this.props.expand ? {width: `${FULL_WIDTH}px`, height: 'auto'} : {};
+    let target_width = this.props.expand ? FULL_WIDTH : null;
+    let target_height = this.props.expand ? null : 100;
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'
-           /*onMouseDown={this._onMouseDown}
+        /*onMouseDown={this._onMouseDown}
            onMouseUp={this._onMouseUp}*/
            onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
-        {this.state.imageLoaded
-         ? <div>
-        {this.state.startX != -1
-         ? <BoxView box={this._makeBox()} width={width} height={height} />
-         : <div />}
-        {this.props.bboxes.map((box, i) => {
-          if (box.type == 'bbox') {
-            return <BoxView box={box} key={i} i={i} width={width} height={height}
-                            onClick={this.props.onClick}
-                            onDelete={this._onDelete}
-                            onChange={this._onChange}
-                            onTrack={this._onTrack}
-                            onSetTrack={this._onSetTrack}
-                            onDeleteTrack={this._onDeleteTrack}/>;
-          } else if (box.type == 'pose') {
-            return <PoseView pose={box} key={i} width={width} height={height} expand={this.props.expand} />;
-          }})}
-         </div>
-         : <div />}
-        <ProgressiveImage
-            src={this.props.path}
-            draggable={false}
-            style={imgStyle}
-            onLoad={() => this.setState({imageLoaded: true})} />
+        {DISPLAY_OPTIONS.crop_bboxes
+         ? <ProgressiveImage
+             src={this.props.path}
+             crop={this.props.bboxes[0]}
+             width={width}
+             height={height}
+             target_width={width}
+             target_height={height}
+             onLoad={() => this.setState({imageLoaded: true})} />
+         : <div>
+           {this.state.imageLoaded
+            ? <div>
+              {this.state.startX != -1
+               ? <BoxView box={this._makeBox()} width={width} height={height} />
+               : <div />}
+              {this.props.bboxes.map((box, i) => {
+                 if (box.type == 'bbox') {
+                   return <BoxView box={box} key={i} i={i} width={width} height={height}
+                                   onClick={this.props.onClick}
+                                   onDelete={this._onDelete}
+                                   onChange={this._onChange}
+                                   onTrack={this._onTrack}
+                                   onSetTrack={this._onSetTrack}
+                                   onDeleteTrack={this._onDeleteTrack} />;
+                 } else if (box.type == 'pose') {
+                   return <PoseView pose={box} key={i} width={width} height={height} expand={this.props.expand} />;
+                 }})}
+            </div>
+            : <div />}
+           <ProgressiveImage
+             src={this.props.path}
+             width={width}
+             height={height}
+             crop={null}
+             target_width={width}
+             target_height={height}
+             onLoad={() => this.setState({imageLoaded: true})} />
+         </div>}
       </div>
     );
   }

@@ -258,7 +258,7 @@ result = {'result': result, 'count': len(result), 'type': 'Frame'}
 `]
   ]
 
-  query = "result = qs_to_result(Frame.objects.filter(number=0))"
+  query = "# All videos\nresult = qs_to_result(Frame.objects.filter(number=0))"
 
   _onSearch = (e) => {
     e.preventDefault();
@@ -331,7 +331,7 @@ result = {'result': result, 'count': len(result), 'type': 'Frame'}
            {this.exampleQueries.map((q, i) => {
               return (<span key={i}>
                 <a href="#" onClick={() => {
-                    this.query = `# ${q[0]}\n\n${q[1]}`;
+                    this.query = `# ${q[0]}\n${q[1]}`;
                     this.forceUpdate();
                 }}>{q[0]}</a>
                 <br />

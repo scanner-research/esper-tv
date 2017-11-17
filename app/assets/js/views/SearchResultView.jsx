@@ -4,16 +4,17 @@ import {observer} from 'mobx-react';
 import {observable} from 'mobx';
 import {Box, FrameView} from './FrameView.jsx';
 
-class Options {
+class DisplayOptions {
   @observable results_per_page = 50;
   @observable annotation_opacity = 1.0;
   @observable show_pose = true;
   @observable show_face = true;
   @observable show_hands = true;
   @observable show_lr = false;
+  @observable crop_bboxes = false;
 }
 
-window.OPTIONS = new Options;
+window.DISPLAY_OPTIONS = new DisplayOptions;
 
 @observer
 class GroupsView extends React.Component {
@@ -22,7 +23,7 @@ class GroupsView extends React.Component {
   }
 
   _numPages = () => {
-    return Math.floor((window.search_result.result.length - 1)/ window.OPTIONS.results_per_page);
+    return Math.floor((window.search_result.result.length - 1)/ DISPLAY_OPTIONS.results_per_page);
   }
 
   _prevPage = (e) => {
@@ -39,8 +40,8 @@ class GroupsView extends React.Component {
     return (
       <div className='groups'>
         <div>
-          {_.range(window.OPTIONS.results_per_page * this.state.page,
-                   Math.min(window.OPTIONS.results_per_page * (this.state.page + 1),
+          {_.range(DISPLAY_OPTIONS.results_per_page * this.state.page,
+                   Math.min(DISPLAY_OPTIONS.results_per_page * (this.state.page + 1),
                             window.search_result.result.length))
             .map((i) => <GroupView key={i} group={window.search_result.result[i]} />)}
           <div className='clearfix' />
@@ -247,78 +248,75 @@ class ClipView extends React.Component {
 }
 
 class OptionsView extends React.Component {
-  _onChangeOpacity = (e) => {
-    window.OPTIONS.annotation_opacity = e.target.value;
-  }
-
-  _onChangeShowHands = (e) => {
-    window.OPTIONS.show_hands = e;
-  }
+  fields = [
+    {
+      name: 'Results per page',
+      key: 'results_per_page',
+      type: 'number',
+      opts: {
+        min: 1,
+        max: 500
+      }
+    },
+    {
+      name: 'Annotation opacity',
+      key: 'annotation_opacity',
+      type: 'range',
+      opts: {
+        min: 0,
+        max: 1,
+        step: 0.1
+      },
+    },
+    {
+      name: 'Show hands',
+      key: 'show_hands',
+      type: 'radio',
+    },
+    {
+      name: 'Show pose',
+      key: 'show_pose',
+      type: 'radio',
+    },
+    {
+      name: 'Show face',
+      key: 'show_face',
+      type: 'radio',
+    },
+    {
+      name: 'Show left/right (blue/red)',
+      key: 'show_lr',
+      type: 'radio'
+    },
+    {
+      name: 'Crop bboxes',
+      key: 'crop_bboxes',
+      type: 'radio'
+    }
+  ]
 
   render() {
-    let fields = [
-      {
-        name: 'Results per page',
-        key: 'results_per_page',
-        type: 'number',
-        opts: {
-          min: 1,
-          max: 500
-        }
-      },
-      {
-        name: 'Annotation opacity',
-        key: 'annotation_opacity',
-        type: 'range',
-        opts: {
-          min: 0,
-          max: 1,
-          step: 0.1
-        },
-      },
-      {
-        name: 'Show hands',
-        key: 'show_hands',
-        type: 'radio',
-      },
-      {
-        name: 'Show pose',
-        key: 'show_pose',
-        type: 'radio',
-      },
-      {
-        name: 'Show face',
-        key: 'show_face',
-        type: 'radio',
-      },
-      {
-        name: 'Show left/right (blue/red)',
-        key: 'show_lr',
-        type: 'radio'
-      }
-    ]
-
     return <div className='options'>
       <h2>Options</h2>
       <form>
-        {fields.map((field, i) =>
+        {this.fields.map((field, i) =>
            <Rb.FormGroup key={i}>
              <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
              {{
                 range: () => (
                   <input type="range" min={field.opts.min} max={field.opts.max}
-                         step={field.opts.step} defaultValue={window.OPTIONS[field.key]}
-                         onChange={(e) => {window.OPTIONS[field.key] = e.target.value}} />),
+                         step={field.opts.step} defaultValue={DISPLAY_OPTIONS[field.key]}
+                         onChange={(e) => {DISPLAY_OPTIONS[field.key] = e.target.value}} />),
                 number: () => (
                   <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
-                         defaultValue={window.OPTIONS[field.key]}
+                         defaultValue={DISPLAY_OPTIONS[field.key]}
                          onKeyPress={(e) => {if (e.key === 'Enter') {
-                             window.OPTIONS[field.key] = e.target.value; e.preventDefault();
+                             DISPLAY_OPTIONS[field.key] = e.target.value; e.preventDefault();
                            }}} />),
                 radio: () => (
                   <Rb.ButtonToolbar>
-                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={window.OPTIONS[field.key]}
-                                          onChange={(e) => {window.OPTIONS[field.key] = e}}>
+                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={DISPLAY_OPTIONS[field.key]}
+                                          onChange={(e) => {DISPLAY_OPTIONS[field.key] = e}}>
                       <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
                       <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
                     </Rb.ToggleButtonGroup>
