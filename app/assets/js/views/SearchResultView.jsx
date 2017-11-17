@@ -323,22 +323,32 @@ class OptionsView extends React.Component {
   }
 }
 
+@observer
 class MetadataView extends React.Component {
   render() {
+    (window.search_result.result); // ensure that we re-render when search result changes
     return <div className='metadata'>
       <h2>Metadata</h2>
+      <div className='meta-block'>
+        <div className='meta-key'>Type</div>
+        <div className='meta-val'>{window.search_result.type}</div>
+      </div>
       <div className='meta-block colors'>
-        <strong>Labelers</strong><br />
-        {_.values(window.search_result.labelers).map((labeler, i) =>
-          <div key={i}>
-            {labeler.name}: &nbsp;
-            <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
-                         width: '10px', height: '10px', display: 'inline-box'}} />
-          </div>
-        )}
+        <div className='meta-key'>Labelers</div>
+        <div className='meta-val'>
+          {_.values(window.search_result.labelers).map((labeler, i) =>
+            <div key={i}>
+              {labeler.name}: &nbsp;
+              <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
+                           width: '10px', height: '10px', display: 'inline-box'}} />
+            </div>
+          )}
+          <div className='clearfix' />
+        </div>
       </div>
       <div className='meta-block'>
-        <strong>Count:</strong> {window.search_result.count}
+        <div className='meta-key'>Count</div>
+        <div className='meta-val'>{window.search_result.count}</div>
       </div>
     </div>;
   }

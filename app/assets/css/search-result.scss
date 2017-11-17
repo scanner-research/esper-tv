@@ -39,8 +39,12 @@
                 margin-bottom: 10px;
             }
 
+            .meta-key {
+                font-weight: bold;
+            }
+
             .colors {
-                > div {
+                .meta-val > div {
                     display: inline-block;
                     margin-right: 20px;
 

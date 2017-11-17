@@ -353,9 +353,12 @@ def search2(request):
                     break
 
             materialized_result.sort(key=itemgetter('video', 'start_frame'))
+        
+        ty_name = cls_name
 
         if group:
             materialized_result = group_result(materialized_result)
+            ty_name = 'Frame grouped by {}'.format(ty_name)
 
         if segment:
             tracks = [r['track'] for r in materialized_result]
@@ -425,6 +428,8 @@ def search2(request):
                     #'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
                     'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
                 })
+                
+            ty_name = '{} (segmented)'.format(ty_name)
         else:
             groups = [{
                 'type': 'flat',
@@ -435,7 +440,7 @@ def search2(request):
         return {
             'result': groups,
             'count': count,
-            'type': cls_name
+            'type': ty_name
         }
 
     ############### WARNING: DANGER -- REMOTE CODE EXECUTION ###############
