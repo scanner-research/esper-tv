@@ -1,4 +1,6 @@
+from sklearn.neighbors import NearestNeighbors
 from django.db import models, connection
+from django.db.models import F
 from django.db.models.base import ModelBase
 from django_bulk_update.manager import BulkUpdateManager
 from scannerpy import ProtobufGenerator, Config
@@ -37,6 +39,9 @@ class ProtoField(models.BinaryField):
 def CharField(*args, **kwargs):
     return models.CharField(*args, max_length=MAX_STR_LEN, **kwargs)
 
+def _print(args):
+    print(args)
+    sys.stdout.flush()
 
 current_dataset = None
 datasets = {}
@@ -212,6 +217,10 @@ class Instance(models.Model):
     class Meta:
         abstract = True
 
+
+feat_nn = None
+feat_ids = None
+
 class Features(models.Model):
     __metaclass__ = BaseMeta
 
@@ -220,6 +229,9 @@ class Features(models.Model):
     def save(self, *args, **kwargs):
         self.validate_unique()
         super(Features, self).save(*args, **kwargs)
+
+    def load_features(self):
+        return np.array(json.loads(str(self.features)))
 
     @classmethod
     def getTempFeatureModel(cls, instance_ids):
@@ -248,34 +260,65 @@ class Features(models.Model):
                     # because it is a temporary table
                     warnings.simplefilter("ignore")
                     tempmodel = type(cls_name, (Features, ), model_params)
-                testfeatures = {}
-                for i in cls.objects.filter(face_id__in=instance_ids).all():
-                    testfeatures[i.face_id] = np.array(json.loads(str(i.features)))
 
-                it = cls.objects.all()
-                batch_size = 1000
+                # testfeatures = {}
+                # for i in cls.objects.filter(face_id__in=instance_ids).all():
+                #     testfeatures[i.face_id] = np.array(json.loads(str(i.features)))
+
+                global feat_nn
+                global feat_ids
+
+                it = cls.objects.annotate(height=F('face__bbox_y2')-F('face__bbox_y1')).filter(height__gte=0.2)
+                if feat_nn is None:
+                    _print('Loading features...')
+                    feats = list(it[::5])
+                    feat_ids = np.array([f.id for f in feats])
+                    feat_vectors = [f.load_features() for f in feats]
+                    X = np.vstack(feat_vectors)
+                    _print('Constructing KNN tree...')
+                    feat_nn = NearestNeighbors(n_neighbors=50).fit(X)
+                    _print('Done!')
+                    
+                inst_id = instance_ids[0]
+                
+                dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()])
+
                 batch = []
-                feature_batch = []
-                for feat in it:
+                for dist, feat_id in zip(dists[0], feat_ids[indices[0]]):
+                    feat = cls.objects.get(id=feat_id)
                     newfeat = tempmodel()
                     newfeat.id = feat.id
-                    #newfeat.features = feat.features
                     newfeat.labeler_id = feat.labeler_id
                     newfeat.instance_id = feat.face_id
-                    print(newfeat.instance_id)
-                    sys.stdout.flush()
-                    featarr = np.array(json.loads(str(feat.features)))
-                    #TODO better distance computation
-                    for i in instance_ids:
-                        if i not in testfeatures: continue
-                        setattr(newfeat, 'distto_{}'.format(i),
-                                np.sum(np.square(featarr - testfeatures[i])))
+                    setattr(newfeat, 'distto_{}'.format(inst_id), dist)
                     batch.append(newfeat)
-                    if len(batch) == batch_size:
-                        tempmodel.objects.bulk_create(batch)
-                        batch = []
                 tempmodel.objects.bulk_create(batch)
+                    
                 return tempmodel
+
+                # batch_size = 1000
+                # batch = []
+                # feature_batch = []
+                # for feat in it:
+                #     newfeat = tempmodel()
+                #     newfeat.id = feat.id
+                #     #newfeat.features = feat.features
+                #     newfeat.labeler_id = feat.labeler_id
+                #     newfeat.instance_id = feat.face_id
+                #     print(newfeat.instance_id)
+                #     sys.stdout.flush()
+                #     featarr = np.array(json.loads(str(feat.features)))
+                #     #TODO better distance computation
+                #     for i in instance_ids:
+                #         if i not in testfeatures: continue
+                #         setattr(newfeat, 'distto_{}'.format(i),
+                #                 np.sum(np.square(featarr - testfeatures[i])))
+                #     batch.append(newfeat)
+                #     if len(batch) == batch_size:
+                #         tempmodel.objects.bulk_create(batch)
+                #         batch = []
+                # tempmodel.objects.bulk_create(batch)
+                # return tempmodel
 
     @classmethod
     def dropTempFeatureModel(cls):

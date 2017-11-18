@@ -282,7 +282,7 @@ class ProgressiveImage extends React.Component {
 }
 
 // TODO(wcrichto): can we link these with the equivalent values in the CSS?
-let SMALL_WIDTH = 100;
+let SMALL_HEIGHT = 100;
 let FULL_WIDTH = 780;
 
 @observer
@@ -370,8 +370,8 @@ export class FrameView extends React.Component {
 
   _getDimensions() {
     return {
-      width: this.props.expand ? FULL_WIDTH : (this.props.width * (SMALL_WIDTH / this.props.height)),
-      height: this.props.expand ? (this.props.height * (FULL_WIDTH / this.props.width)) : SMALL_WIDTH
+      width: this.props.expand ? FULL_WIDTH : (this.props.width * (SMALL_HEIGHT / this.props.height)),
+      height: this.props.expand ? (this.props.height * (FULL_WIDTH / this.props.width)) : SMALL_HEIGHT
     };
   }
 
@@ -403,7 +403,7 @@ export class FrameView extends React.Component {
 
   render() {
     let target_width = this.props.expand ? FULL_WIDTH : null;
-    let target_height = this.props.expand ? null : 100;
+    let target_height = this.props.expand ? null : SMALL_HEIGHT;
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'
