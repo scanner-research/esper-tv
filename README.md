@@ -47,7 +47,7 @@ Then visit [http://localhost](http://localhost).
 
 While editing the SASS or JSX files, use the Webpack watcher:
 ```
-./scripts/build-frontend.sh
+dc exec app npm run watch
 ```
 
 This will automatically rebuild all the frontend files into `assets/bundles` when you change a relevant file.

@@ -1,5 +1,6 @@
 ARG device=cpu
 FROM scannerresearch/scanner:${device}
+# ARGS before FROM aren't accessible after the FROM, so we need to replicate the device arg.
 ARG device2=cpu
 ARG cores=1
 ARG https_proxy

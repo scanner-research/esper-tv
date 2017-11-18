@@ -2,7 +2,7 @@
 
 # Set up frontend and database
 npm install
-./node_modules/.bin/webpack --config webpack.config.js
+npm run build
 python manage.py migrate
 
 mkdir deps

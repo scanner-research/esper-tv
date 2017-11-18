@@ -1,15 +1,12 @@
 node_modules
-static
 deps
-pickle
 nets
 scanner_db
-cluster_images
 assets/bundles
 assets/thumbnails
 assets/audio
-webpack-stats.json
 .scanner.toml
 service-key.json
 .ipynb_checkpoints
 **/yapf*.py
+npm-debug.log

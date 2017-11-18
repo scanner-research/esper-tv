@@ -12,6 +12,10 @@
     "url": "https://github.com/scanner-research/esper/issues"
   },
   "homepage": "https://github.com/scanner-research/esper#readme",
+  "scripts": {
+    "build": "webpack",
+    "watch": "webpack -w"
+  },
   "devDependencies": {
     "axios": "^0.16.1",
     "babel-core": "^6.24.1",

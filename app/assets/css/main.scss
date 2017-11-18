@@ -1,3 +1,7 @@
+@import '~bootstrap/dist/css/bootstrap.min.css'; // tilde means "non-relative import"
+@import 'search-input';
+@import 'search-result';
+
 body {
     background: #fefefe;
     font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
@@ -16,6 +20,3 @@ body {
 .clearfix {
     clear: both;
 }
-
-@import 'search-input';
-@import 'search-result';
