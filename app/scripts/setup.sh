@@ -20,10 +20,12 @@ mkdir models
 #model should be downloaded and placed here manually (has to be downloaded from google drive)
 popd
 
+mkdir openpose-models
+cp /opt/openpose/models/getModels.sh openpose-models
+pushd openpose-models
+./getModels.sh
 popd
 
-pushd /opt/openpose/models
-./getModels.sh
 popd
 
 # Get face detection network

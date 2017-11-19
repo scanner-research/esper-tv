@@ -39,7 +39,7 @@ services:
 """.format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=multiprocessing.cpu_count())))
 
 db_local = DotMap(yaml.load("""
-image: postgres
+image: postgres:9.5
 environment:
   - POSTGRES_USER=will
   - POSTGRES_PASSWORD=foobar
