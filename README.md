@@ -17,7 +17,7 @@ If you have a GPU and are running on Linux:
 Next, you will need to configure your Esper installation. If you are using Google Cloud, follow the instructions in [Getting started with Google Cloud](https://github.com/scanner-research/esper/blob/master/guides/google.md) and replace `local.toml` with `google.toml` below. Otherwise, edit any relevant configuration values in `config/local.toml`. Then run:
 
 ```
-alias dc=docker-compose
+echo "\nalias dc=docker-compose" >> $HOME/.profile && source $HOME/.profile
 pip install -r requirements.txt
 python configure.py --config config/local.toml --dataset default
 dc pull

@@ -22,6 +22,10 @@ popd
 
 popd
 
+pushd /opt/openpose/models
+./getModels.sh
+popd
+
 # Get face detection network
 cp -r /opt/scanner/nets .
 ./nets/get_caffe_facenet.sh -f

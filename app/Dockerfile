@@ -22,7 +22,6 @@ RUN git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose/ && \
     cd openpose && \
     mv ../Makefile.config . && \
     make all -j${cores} && \
-    cd models && ./getModels.sh && cd .. && \
     mv .build_release /tmp/openpose && \
     cp -r include models /tmp/openpose && \
     rm -rf /opt/openpose && \
@@ -49,7 +48,8 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 
 # Python dependencies
 ADD requirements.txt .
-RUN (if [ "$device2" = "cpu" ]; then pip install tensorflow==1.2.0; else pip install tensorflow-gpu==1.2.0; fi) && \
+ENV TF_VERSION=1.2.0
+RUN (if [ "$device2" = "cpu" ]; then pip install tensorflow==${TF_VERSION}; else pip install tensorflow-gpu==${TF_VERSION}; fi) && \
     pip install -r requirements.txt && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
