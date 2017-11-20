@@ -41,7 +41,7 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 
 ## Demo
-First, enter the container with `dc exec app bash`. Then run: outside the container, run:
+First, enter the Esper application container with `dc exec app bash`. Then run:
 ```
 wget https://storage.googleapis.com/esper/example-dataset.tar.gz
 tar -xf example-dataset.tar.gz
