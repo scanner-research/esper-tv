@@ -26,7 +26,6 @@ RUN git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose/ && \
     rm -rf /opt/openpose && \
     mv /tmp/openpose /opt
 
-WORKDIR /app/deps
 RUN git clone https://github.com/scanner-research/openpose-scanner.git && \
     cd openpose-scanner && \
     mkdir build && \

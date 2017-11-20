@@ -16,7 +16,7 @@ class Command(BaseCommand):
 
         pose_labeler, _ = Labeler.objects.get_or_create(name='openpose')
         with Database() as db:
-            db.load_op('deps/openpose/build/libopenpose_op.so')
+            db.load_op('/opt/openpose-scanner/build/libopenpose_op.so')
 
             frame = db.ops.FrameInput()
             frame_sampled = frame.sample()
@@ -26,25 +26,32 @@ class Command(BaseCommand):
             jobs = [
                 Job(op_args={
                     frame: db.table(video.path).column('frame'),
-                    frame_sampled: db.sampler.strided(video.get_stride()),
+                    frame_sampled: db.sampler.strided(int(math.ceil(video.fps)/2)),
                     output: video.path + '_poses'
                 })
                 for video in videos
             ]
             bulk_job = BulkJob(output=output, jobs=jobs)
-            outputs = db.run(bulk_job, force=True)
+            # outputs = db.run(bulk_job, force=True)
             outputs = [db.table(video.path + '_poses') for video in videos]
             print('Scanner computation finished.')
 
             kp_size = (Pose.POSE_KEYPOINTS + Pose.FACE_KEYPOINTS + 2 * Pose.HAND_KEYPOINTS) * 3
-            poses = []
+
             for (video, output) in zip(videos, outputs):
+                poses = []
                 print(video.path)
+                frames = list(Frame.objects.filter(video=video).order_by('number'))
                 for i, buf in output.column('pose').load():
                     if len(buf) == 1: continue
+                    # if video.fps > 30:
+                    #     if i % 2 == 1: continue
+                    #     frame = frames[(i/2)*video.get_stride()]
+                    # else:
+                    #     frame = frames[i*video.get_stride()]
+                    frame = frames[i*(int(math.ceil(video.fps)/2))]
                     all_kp = np.frombuffer(buf, dtype=np.float32)
                     for j in range(0, len(all_kp), kp_size):
-                        frame = Frame.objects.get(video=video, number=i*video.get_stride())
                         pose = Pose(keypoints=all_kp[j:(j+kp_size)].tobytes(),
                                     frame=frame, labeler=pose_labeler)
 
@@ -67,4 +74,4 @@ class Command(BaseCommand):
                         pose.bbox_y2 = ymax
                         pose.bbox_score = min(p[16, 2], p[17, 2], p[0, 2])
                         poses.append(pose)
-            Pose.objects.bulk_create(poses)
+                Pose.objects.bulk_create(poses)

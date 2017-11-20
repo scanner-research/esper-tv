@@ -12,3 +12,6 @@ class Labeler(base.Labeler):
 
 class Face(base.Concept):
     pass
+
+class Pose(base.Concept, base.Pose):
+    pass
