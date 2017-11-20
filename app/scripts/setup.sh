@@ -32,6 +32,4 @@ cp -r /opt/scanner/nets .
 ./nets/get_caffe_facenet.sh -f
 
 # Setup default dataset
-python manage.py new_dataset default
-python manage.py makemigrations
 python manage.py migrate

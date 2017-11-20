@@ -29,13 +29,9 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 
 ## Demo
-First, outside the container, run:
+First, enter the container with `dc exec app bash`. Then run: outside the container, run:
 ```
-scp https://storage.googleapis.com/esper/example-dataset.tar.gz app/
-```
-
-Then enter the container within `dc exec app bash`. Within the container, run:
-```
+wget https://storage.googleapis.com/esper/example-dataset.tar.gz
 tar -xf example-dataset.tar.gz
 esper-run query/datasets/default/import.py
 ```
