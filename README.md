@@ -29,6 +29,8 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 ### Troubleshooting
 
+* **Cannot connect to the Docker daemon**: make sure that Docker is actually running (e.g. `docker ps` should not fail). On Linux, make sure you have non-sudo permissions (run `sudo adduser $USER docker`). On OS X, make sure the Docker application is open (should see a whale in your icon tray).
+
 * **Permissions errors with pip**: either run pip with `sudo` or consider using a [virtualenv](https://virtualenv.pypa.io/en/stable/installation/).
 
 * **`os.getcwd()` fails**: please file an issue w/ reproducible steps if this happens. Should only occur on OS X.
@@ -41,7 +43,7 @@ tar -xf example-dataset.tar.gz
 esper-run query/datasets/default/import.py
 ```
 
-Then visit [http://localhost](http://localhost).
+Then visit [http://localhost](http://localhost). Try running some queries!
 
 
 ## Development
