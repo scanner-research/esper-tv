@@ -25,7 +25,10 @@ dc up -d
 dc exec app ./scripts/setup.sh
 ```
 
-You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend and [http://localhost:8888](http://localhost:8888) to see the Jupyter notebook. To log into the Jupyter notebook, get the token by running `./scripts/jupyter-token.sh`.
+You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend.
+
+
+[http://localhost:8888](http://localhost:8888) to see the Jupyter notebook. To log into the Jupyter notebook, get the token by running `./scripts/jupyter-token.sh`.
 
 ### Troubleshooting
 
@@ -33,7 +36,7 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 * **Permissions errors with pip**: either run pip with `sudo` or consider using a [virtualenv](https://virtualenv.pypa.io/en/stable/installation/).
 
-* **`os.getcwd()` fails**: please file an issue w/ reproducible steps if this happens. Should only occur on OS X.
+* **`sh: 0: getcwd() failed: No such file or directory`**: please file an issue w/ reproducible steps if this happens. Should only occur on OS X.
 
 ## Demo
 First, enter the container with `dc exec app bash`. Then run: outside the container, run:
@@ -44,13 +47,3 @@ esper-run query/datasets/default/import.py
 ```
 
 Then visit [http://localhost](http://localhost). Try running some queries!
-
-
-## Development
-
-While editing the SASS or JSX files, use the Webpack watcher:
-```
-dc exec app npm run watch
-```
-
-This will automatically rebuild all the frontend files into `assets/bundles` when you change a relevant file.
