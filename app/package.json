@@ -13,14 +13,15 @@
   },
   "homepage": "https://github.com/scanner-research/esper#readme",
   "scripts": {
-    "build": "webpack",
-    "watch": "webpack -w"
+    "build": "webpack -p",
+    "watch": "webpack -p -w"
   },
   "devDependencies": {
     "axios": "^0.16.1",
     "babel-core": "^6.24.1",
     "babel-loader": "^7.0.0",
     "babel-plugin-transform-decorators-legacy": "^1.3.4",
+    "babel-preset-env": "^1.6.1",
     "babel-preset-react": "^6.24.1",
     "babel-preset-stage-0": "^6.24.1",
     "bootstrap": "^3.3.7",

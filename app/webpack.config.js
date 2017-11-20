@@ -1,4 +1,4 @@
-var path = require("path");
+var path = require('path');
 var BundleTracker = require('webpack-bundle-tracker');
 var ExtractTextPlugin = require('extract-text-webpack-plugin');
 
@@ -26,7 +26,7 @@ module.exports = {
 
     // ExtractTextPlugin allows us to separate CSS output files from JS.
     // See: https://github.com/webpack-contrib/extract-text-webpack-plugin
-    new ExtractTextPlugin("[name].css"),
+    new ExtractTextPlugin("[name].css")
   ],
 
   module: {
@@ -58,7 +58,7 @@ module.exports = {
         loader: 'babel-loader',
         options: {
           plugins: ['transform-decorators-legacy'],
-          presets: ['stage-0', 'react']
+          presets: ['env', 'stage-0', 'react']
         }
       }]
     }]

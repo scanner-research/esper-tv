@@ -63,6 +63,7 @@ def index(request):
         schemas.append([name, schema])
 
     return render(request, 'index.html', {'schemas': json.dumps({
+        'bucket': BUCKET,
         'selected': os.environ.get('DATASET'),
         'schemas': schemas
     })})
@@ -277,7 +278,7 @@ def search2(request):
             kps = getattr(pose, '{}_keypoints'.format(ty))()
             bad = False
             for k in used_kps:
-                if kps[k][2] == 0: 
+                if kps[k][2] == 0:
                     bad = True
                     break
             if bad:
@@ -358,7 +359,7 @@ def search2(request):
                     break
 
             materialized_result.sort(key=itemgetter('video', 'start_frame'))
-        
+
         ty_name = cls_name
 
         if group:
@@ -420,7 +421,7 @@ def search2(request):
 
                     groups.append({
                         'type': 'contiguous',
-                        'label': '{} -- {}'.format(format_time(Frame.objects.get(id=intvl_start).number), 
+                        'label': '{} -- {}'.format(format_time(Frame.objects.get(id=intvl_start).number),
                                                    format_time(Frame.objects.get(id=intvl_end).number)),
                         'elements': materialized_result
                     })
@@ -435,7 +436,7 @@ def search2(request):
                     #'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
                     'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
                 })
-                
+
             ty_name = '{} (segmented)'.format(ty_name)
         else:
             groups = [{
