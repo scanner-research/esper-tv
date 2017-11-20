@@ -3,7 +3,7 @@
 Esper is a tool for exploratory analysis of large video collections.
 
 * [Setup](https://github.com/scanner-research/esper#setup)
-* [Creating a dataset](https://github.com/scanner-research/esper#creating-a-dataset)
+* [Demo](https://github.com/scanner-research/esper#demo)
 * [Development](https://github.com/scanner-research/esper#development)
 
 
