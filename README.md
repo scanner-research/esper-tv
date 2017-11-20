@@ -6,6 +6,8 @@ Esper is a tool for exploratory analysis of large video collections.
 * [Demo](https://github.com/scanner-research/esper#demo)
 * [Development](https://github.com/scanner-research/esper#development)
 
+![Esper interface](https://user-images.githubusercontent.com/663326/33038924-e656a51a-cdfb-11e7-835d-9d215b3dd93c.png)
+
 
 ## Setup
 First, install [Docker](https://docs.docker.com/engine/installation/#supported-platforms), [Python 2.7](https://www.python.org/downloads/), and [pip](https://pip.pypa.io/en/stable/installing/).
