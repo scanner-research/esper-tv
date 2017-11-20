@@ -24,6 +24,8 @@ Configure `google.project` to your project ID in `config/google.toml`.
 
 All databases/servers are created in some region. You should pick the region that's closest to you (but the more important thing is to be consistent--all resources should be in the same region/zone). You can find a list of regions and zone here: [https://cloud.google.com/compute/docs/regions-zones/](https://cloud.google.com/compute/docs/regions-zones/)
 
+Note that if you intend to use GPUs for video processing, only a select subset of zones contain machines with GPUs. See the list here: [https://cloud.google.com/compute/docs/gpus/](https://cloud.google.com/compute/docs/gpus/)
+
 Pick a region/zone and run:
 ```
 gcloud compute project-info add-metadata --metadata google-compute-default-region=<your region, e.g. us-west1>,google-compute-default-zone=<your zone, e.g. us-west1-b>
@@ -120,10 +122,6 @@ sudo add-apt-repository \
     stable"
 sudo apt-get -y update
 sudo apt-get -y install docker-ce
-```
-
-To run Docker without sudo, you will need to add yourself to the docker group:
-```
 sudo adduser $USER docker
 ```
 
@@ -142,11 +140,11 @@ gcloud iam service-accounts keys create service-key.json --iam-account=esper@<pr
 
 ## 10. Install Esper
 
-Follow the instructions in the README: [https://github.com/scanner-research/esper](https://github.com/scanner-research/esper), replacing `config/local.toml` with `config/google.toml` at the configuration step.
+Follow the instructions in the [README](https://github.com/scanner-research/esper), replacing `config/local.toml` with `config/google.toml` at the configuration step.
 
-If you then run
+If you then run:
 ```
 gcloud compute instances list
 ```
 
-You will find the external IP for the machine you just created. If you want a static IP for your Esper server, [follow the instructions here](https://cloud.google.com/compute/docs/ip-addresses/reserve-static-external-ip-address). Visit the provided external IP, and you should see a running Esper server.
+You will find the external IP for your machine. Visit the provided external IP in your browser, and you should see a running Esper server. If you want a static IP for your Esper server, [follow the instructions here](https://cloud.google.com/compute/docs/ip-addresses/reserve-static-external-ip-address).
