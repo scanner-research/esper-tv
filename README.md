@@ -8,7 +8,7 @@ Esper is a tool for exploratory analysis of large video collections.
 
 
 ## Setup
-First, [install Docker](https://docs.docker.com/engine/installation/#supported-platforms).
+First, install [Docker](https://docs.docker.com/engine/installation/#supported-platforms), [Python 2.7](https://www.python.org/downloads/), and [pip](https://pip.pypa.io/en/stable/installing/).
 
 If you have a GPU and are running on Linux:
 * [Install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start)
@@ -25,8 +25,13 @@ dc up -d
 dc exec app ./scripts/setup.sh
 ```
 
-You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend and [http://localhost:8888](http://localhost:8888) to see the Jupyter notebook.
+You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend and [http://localhost:8888](http://localhost:8888) to see the Jupyter notebook. To log into the Jupyter notebook, get the token by running `./scripts/jupyter-token.sh`.
 
+### Troubleshooting
+
+* **Permissions errors with pip**: either run pip with `sudo` or consider using a [virtualenv](https://virtualenv.pypa.io/en/stable/installation/).
+
+* **`os.getcwd()` fails**: please file an issue w/ reproducible steps if this happens. Should only occur on OS X.
 
 ## Demo
 First, enter the container with `dc exec app bash`. Then run: outside the container, run:
