@@ -1,6 +1,6 @@
 # Developing Esper
 
-If you're developing features for Esper, first talk to [Will](mailto:wcrichto@cs.stanford.edu) and join our [cmugraphics.slack.com](Slack channel).
+If you're developing features for Esper, first talk to [Will](mailto:wcrichto@cs.stanford.edu) and join our [Slack channel](https://cmugraphics.slack.com).
 
 
 ## Frontend

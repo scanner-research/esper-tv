@@ -12,7 +12,7 @@ Esper is a framework for exploratory analysis of large video collections. Esper 
 ## Setup
 First, install [Docker](https://docs.docker.com/engine/installation/#supported-platforms), [Python 2.7](https://www.python.org/downloads/), and [pip](https://pip.pypa.io/en/stable/installing/).
 
-If you have a GPU and are running on Linux, then [install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start). For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.
+If you have a GPU and are running on Linux, then [install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start) For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.
 
 Next, you will need to configure your Esper installation. If you are using Google Cloud, follow the instructions in [Getting started with Google Cloud](https://github.com/scanner-research/esper/blob/master/guides/google.md) and replace `local.toml` with `google.toml` below. Otherwise, edit any relevant configuration values in `config/local.toml`. Then run:
 
