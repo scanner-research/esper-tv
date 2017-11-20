@@ -27,7 +27,7 @@ dc exec app ./scripts/setup.sh
 
 You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend. You will see a query interface, but we can't do anything with it until we get some data. Go through the [Demo](https://github.com/scanner-research/esper#demo) below to visualize some sample videos and metadata we have provided.
 
-
+**Warning: Esper is a tool for programmers. It uses a programmatic query interface, which means we use *REMOTE CODE EXECUTION* to run queries. DO NOT expose this interface publicly, or else risk having a hacker trash your computer, data, and livelihood.**
 
 ### Troubleshooting
 
