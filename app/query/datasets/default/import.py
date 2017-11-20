@@ -1,9 +1,14 @@
 from query.datasets.prelude import *
 import pexpect
 import os
+import sys
 
 if not os.path.isfile('db-dump.sql'):
     print('Error: missing file db-dump.sql')
+    exit()
+
+if not query_yes_no('This will erase your current database. Are you sure you want to proceed?', 'no'):
+    print('Exiting')
     exit()
 
 def send_command(cmd, db):
