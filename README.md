@@ -28,16 +28,16 @@ dc exec app ./scripts/setup.sh
 You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend and [http://localhost:8888](http://localhost:8888) to see the Jupyter notebook.
 
 
-## Creating a dataset
-Outside the container:
+## Demo
+First, outside the container, run:
 ```
-youtube-dl "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f mp4 -o app/example.mp4
-echo "example.mp4" > app/paths
+scp https://storage.googleapis.com/esper/example-dataset.tar.gz app/
 ```
 
-Then enter the container with `dc exec app bash`. Within the container, run:
+Then enter the container within `dc exec app bash`. Within the container, run:
 ```
-esper-run query/datasets/tvnews/ingest.py
+tar -xf example-dataset.tar.gz
+esper-run query/datasets/default/import.py
 ```
 
 Then visit [http://localhost](http://localhost).
