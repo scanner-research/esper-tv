@@ -1,10 +1,10 @@
 # Esper [![Build Status](https://travis-ci.org/scanner-research/esper.svg?branch=master)](https://travis-ci.org/scanner-research/esper)
 
-Esper is a tool for exploratory analysis of large video collections.
+Esper is a framework for exploratory analysis of large video collections. Esper takes as input set of videos and a database of metadata about the videos (e.g. bounding boxes, poses, tracks). Esper provides a web UI (shown below) and a programmatic interface ([Jupyter](http://jupyter.org/) notebook) for visualizing and analyzing this metadata.
 
 * [Setup](https://github.com/scanner-research/esper#setup)
 * [Demo](https://github.com/scanner-research/esper#demo)
-* [Development](https://github.com/scanner-research/esper#development)
+* [Getting started](https://github.com/scanner-research/esper#demo)
 
 ![Esper interface](https://user-images.githubusercontent.com/663326/33038924-e656a51a-cdfb-11e7-835d-9d215b3dd93c.png)
 
@@ -27,10 +27,9 @@ dc up -d
 dc exec app ./scripts/setup.sh
 ```
 
-You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend.
+You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend. You will see a query interface, but we can't do anything with it until we get some data. Go through the [Demo](https://github.com/scanner-research/esper#demo) below to visualize some sample videos and metadata we have provided.
 
 
-[http://localhost:8888](http://localhost:8888) to see the Jupyter notebook. To log into the Jupyter notebook, get the token by running `./scripts/jupyter-token.sh`.
 
 ### Troubleshooting
 
@@ -40,6 +39,7 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 * **`sh: 0: getcwd() failed: No such file or directory`**: please file an issue w/ reproducible steps if this happens. Should only occur on OS X.
 
+
 ## Demo
 First, enter the container with `dc exec app bash`. Then run: outside the container, run:
 ```
@@ -48,4 +48,11 @@ tar -xf example-dataset.tar.gz
 esper-run query/datasets/default/import.py
 ```
 
-Then visit [http://localhost](http://localhost). Try running some queries!
+Then visit [http://localhost](http://localhost) to see the web UI. Try running some queries!
+
+Next, check out the Jupyter programming environment by visiting [http://localhost:8888/notebooks/notebooks/example.ipynb](http://localhost:8888/notebooks/notebooks/example.ipynb). To log into the Jupyter notebook, get the token by running `./scripts/jupyter-token.sh` outside the container.
+
+
+## Getting started
+
+TODO(wcrichto): getting started with your own dataset
