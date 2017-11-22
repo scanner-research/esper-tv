@@ -92,8 +92,7 @@ export default class SearchInputView extends React.Component {
     error: null
   }
 
-  //query = "# All videos\nresult = qs_to_result(Frame.objects.filter(number=0))"
-  query = "result = qs_to_result(FaceTrack.objects.all())"
+  query = null
 
   _onSearch = (e) => {
     e.preventDefault();
@@ -129,6 +128,10 @@ export default class SearchInputView extends React.Component {
 
   render() {
     let exampleQueries = GLOBALS.queries[DATASET];
+    if (this.query === null) {
+      this.query = exampleQueries[0][1];
+    }
+
     return (
       <Rb.Form className='search-input' onSubmit={this._onSearch} ref={(n) => {this._form = n;}} inline>
         <AceEditor
