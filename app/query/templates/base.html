@@ -4,7 +4,7 @@
     <title>Esper</title>
     <script>
      var CSRF_TOKEN = "{{ csrf_token }}";
-     var SCHEMAS = JSON.parse('{{ schemas|safe }}');
+     var GLOBALS = {{ globals|safe }};
     </script>
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
     <link href="/static/bundles/styles.css" rel="stylesheet" />

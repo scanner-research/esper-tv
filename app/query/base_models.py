@@ -67,8 +67,8 @@ class Dataset(object):
         return ['Video', 'Frame', 'Labeler'] + self.other + sum([[c, c + 'Track', c + 'Features']
                                                                for c in self.concepts], [])
 
-def ForeignKey(model, name, **kwargs):
-    return models.ForeignKey(model, related_query_name=name.lower(), on_delete=models.CASCADE, **kwargs)
+def ForeignKey(model, name, on_delete=models.CASCADE, **kwargs):
+    return models.ForeignKey(model, related_query_name=name.lower(), on_delete=on_delete, **kwargs)
 
 
 class BaseMeta(ModelBase):
@@ -133,7 +133,7 @@ def register_concept(name, attrs, bases):
     inst_cls_name = name
     inst_methods = {
         '__module__': current_dataset.Video.__module__,
-        'track': ForeignKey(track_cls, inst_cls_name, null=True),
+        'track': ForeignKey(track_cls, inst_cls_name, null=True, on_delete=models.SET_NULL),
         'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
         'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
         'Meta': Meta
@@ -278,9 +278,9 @@ class Features(models.Model):
                     _print('Constructing KNN tree...')
                     feat_nn = NearestNeighbors(n_neighbors=50).fit(X)
                     _print('Done!')
-                    
+
                 inst_id = instance_ids[0]
-                
+
                 dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()])
 
                 batch = []
@@ -293,7 +293,7 @@ class Features(models.Model):
                     setattr(newfeat, 'distto_{}'.format(inst_id), dist)
                     batch.append(newfeat)
                 tempmodel.objects.bulk_create(batch)
-                    
+
                 return tempmodel
 
                 # batch_size = 1000

@@ -21,7 +21,7 @@ class SearchResult {
   };
 };
 
-window.DATASET = observable(SCHEMAS.selected);
+window.DATASET = observable(GLOBALS.selected);
 
 @observer
 export default class Home extends React.Component {

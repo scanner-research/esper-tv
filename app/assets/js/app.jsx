@@ -22,7 +22,7 @@ export default class App extends React.Component {
     super();
 
     // Hacky way for us to publicly expose a demo while reducing remote code execution risk.
-    if (SCHEMAS.bucket === 'esper') {
+    if (GLOBALS.bucket === 'esper') {
       let img = new Image();
       img.onerror = (() => this.setState({valid: false})).bind(this);
       img.src = "https://storage.cloud.google.com/esper/do_not_delete.jpg";
