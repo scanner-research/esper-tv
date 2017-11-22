@@ -11,7 +11,7 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl && \
+    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # OpenPose

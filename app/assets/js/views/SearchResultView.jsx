@@ -85,6 +85,7 @@ class ClipView extends React.Component {
     showVideo: false,
     loadingVideo: false,
     expand: false,
+    loopVideo: false
   }
 
   fullScreen = false
@@ -97,6 +98,16 @@ class ClipView extends React.Component {
 
   _onFullScreen = () => {
     this.fullScreen = !this.fullScreen;
+
+    if (this.fullScreen && this.state.showVideo) {
+      this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
+      this._video.pause();
+      setTimeout(() => {
+        if (this._video) {
+          this._video.play();
+        }
+      }, 1000);
+    }
   }
 
   _onKeyPress = (e) => {
@@ -104,7 +115,14 @@ class ClipView extends React.Component {
     if (chr == 'p') {
       this.setState({
         showVideo: false,
-        loadingVideo: true
+        loadingVideo: true,
+        loopVideo: false
+      });
+    } else if (chr == 'l') {
+      this.setState({
+        showVideo: false,
+        loadingVideo: true,
+        loopVideo: true
       });
     } else if (chr == 'f') {
       this.setState({expand: !this.state.expand});
@@ -150,7 +168,7 @@ class ClipView extends React.Component {
   }
 
   _onTimeUpdate = () => {
-    if (!this.fullScreen &&
+    if (this.state.loopVideo &&
         this._frameMeta('end') !== undefined &&
         this._video.currentTime >= this._toSeconds(this._frameMeta('end').number)) {
       this._video.currentTime = this._toSeconds(this._frameMeta('start').number);

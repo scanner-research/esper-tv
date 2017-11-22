@@ -17,7 +17,11 @@ cp -r /tmp/inception_gender_checkpoint ./rude-carnie/
 git clone https://github.com/davidsandberg/facenet.git
 pushd facenet
 mkdir models
-#model should be downloaded and placed here manually (has to be downloaded from google drive)
+pushd models
+gsutil cp gs://esper/models/20170512-110547.zip .
+unzip 20170512-110547.zip
+rm 20170512-110547.zip
+popd
 popd
 
 cp -r /opt/openpose/models openpose-models
