@@ -1,10 +1,10 @@
 # Esper [![Build Status](https://travis-ci.org/scanner-research/esper.svg?branch=master)](https://travis-ci.org/scanner-research/esper)
 
-Esper is a framework for exploratory analysis of large video collections. Esper takes as input set of videos and a database of metadata about the videos (e.g. bounding boxes, poses, tracks). Esper provides a web UI (shown below) and a programmatic interface ([Jupyter](http://jupyter.org/) notebook) for visualizing and analyzing this metadata.
+Esper is a framework for exploratory analysis of large video collections. Esper takes as input set of videos and a database of metadata about the videos (e.g. bounding boxes, poses, tracks). Esper provides a web UI (shown below) and a programmatic interface ([Jupyter](http://jupyter.org/) notebook) for visualizing and analyzing this metadata. Computer vision researchers may find Esper a useful tool for understanding and debugging the accuracy of their trained models.
 
 * [Setup](https://github.com/scanner-research/esper#setup)
 * [Demo](https://github.com/scanner-research/esper#demo)
-* [Getting started](https://github.com/scanner-research/esper#demo)
+* [Getting started](https://github.com/scanner-research/esper#getting-started)
 
 ![Esper interface](https://user-images.githubusercontent.com/663326/33038924-e656a51a-cdfb-11e7-835d-9d215b3dd93c.png)
 
@@ -39,6 +39,9 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 
 ## Demo
+
+We have premade a sample database of frames and annotations (faces and poses) for [this video](https://www.youtube.com/watch?v=dQw4w9WgXcQ). This demo will have you load this database into your local copy of Esper and run a few example queries against it.
+
 First, enter the Esper application container with `dc exec app bash`. Then run:
 ```
 wget https://storage.googleapis.com/esper/example-dataset.tar.gz
@@ -46,7 +49,7 @@ tar -xf example-dataset.tar.gz
 esper-run query/datasets/default/import.py
 ```
 
-Then visit [http://localhost](http://localhost) to see the web UI. Try running some queries!
+Then visit [http://localhost](http://localhost) to see the web UI. A query has been pre-filled in the search box at the top--click "Search" to see the results, in this case to show all the detected faces in the video. Click "Show example queries" to see and run more examples.
 
 Next, check out the Jupyter programming environment by visiting [http://localhost:8888/notebooks/notebooks/example.ipynb](http://localhost:8888/notebooks/notebooks/example.ipynb). To log into the Jupyter notebook, get the token by running `./scripts/jupyter-token.sh` outside the container.
 

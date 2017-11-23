@@ -29,6 +29,9 @@ def query(name):
 
     return wrapper
 
+@query("All faces")
+def all_faces():
+    return qs_to_result(Face.objects.all(), group=True)
 
 @query("All videos")
 def all_videos():

@@ -147,11 +147,11 @@ export default class SearchInputView extends React.Component {
           editorProps={{$blockScrolling: Infinity}}
           ref={(n) => {this._editor = n;}} />
         <Rb.Button type="submit" disabled={this.state.searching}>Search</Rb.Button>
-        <Rb.Button onClick={() => {this.setState({showSchema: !this.state.showSchema})}}>
-          {this.state.showSchema ? 'Hide' : 'Show'} Schema
+        <Rb.Button onClick={() => {this.setState({showSchema: !this.state.showSchema})}} active={this.state.showSchema}>
+          {this.state.showSchema ? 'Hide' : 'Show'} schema
         </Rb.Button>
-        <Rb.Button onClick={() => {this.setState({showExampleQueries: !this.state.showExampleQueries})}}>
-          {this.state.showExampleQueries ? 'Hide' : 'Show'} Example Queries
+        <Rb.Button onClick={() => {this.setState({showExampleQueries: !this.state.showExampleQueries})}} active={this.state.showExampleQueries}>
+          {this.state.showExampleQueries ? 'Hide' : 'Show'} example queries
         </Rb.Button>
         <Rb.FormGroup>
           <Rb.ControlLabel>Dataset:</Rb.ControlLabel>

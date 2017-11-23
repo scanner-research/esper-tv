@@ -168,7 +168,7 @@ def schema(request):
     cls = getattr(m, params['cls_name'])
     result = [
         r[params['field']]
-        for r in cls.objects.values(params['field']).distinct().order_by(params['field'])[:LIMIT]
+        for r in cls.objects.values(params['field']).distinct().order_by(params['field'])[:100]
     ]
     try:
         json.dumps(result)

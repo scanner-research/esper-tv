@@ -15,3 +15,8 @@ class Face(base.Concept):
 
 class Pose(base.Concept, base.Pose):
     pass
+
+class Gender(base.Model):
+    name = base.CharField()
+    labeler = base.ForeignKey(Labeler, 'Gender')
+    face = base.ForeignKey(Face, 'Gender')

@@ -10,8 +10,11 @@ pushd deps
 
 # Get rude_carnie gender recognition
 git clone https://github.com/MattPerron/rude-carnie.git
-# tmp solution (this is not downloaded anywhere)
-cp -r /tmp/inception_gender_checkpoint ./rude-carnie/
+pushd rude-carnie
+gsutil cp gs://esper/models/21936-20171110T010513Z-001.zip .
+unzip 21936-20171110T010513Z-001.zip
+rm 21936-20171110T010513Z-001.zip
+popd
 
 # Get facenet
 git clone https://github.com/davidsandberg/facenet.git

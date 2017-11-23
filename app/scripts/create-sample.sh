@@ -8,6 +8,7 @@ python manage.py cleanup FaceTrack
 esper-run query/datasets/default/ingest.py
 python manage.py face_detect paths
 python manage.py pose_detect paths
+python manage.py gender_scanner paths
 python manage.py embed_faces_scanner paths tinyfaces
 python manage.py track_face paths
 esper-run query/datasets/default/export.py
