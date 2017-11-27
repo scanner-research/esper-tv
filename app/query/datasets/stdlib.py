@@ -11,8 +11,13 @@ import time
 import math
 import numpy as np
 import traceback
+from timeit import default_timer as now
 
 from query.base_models import ModelDelegator
+
+def fprint(*args):
+    print(*args)
+    sys.stdout.flush()
 
 
 def load_stdlib_models(dataset):
@@ -158,22 +163,20 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
         #     .annotate(min_frame=Subquery(sq.values('min_frame'))) \
         #     .values()
 
-        for t in result:
-            bounds = Face.objects.filter(track=t).aggregate(
+        for t in result.values('id')[:1000]:
+            bounds = Face.objects.filter(track=t['id']).aggregate(
                 min_frame=Min('frame__number'), max_frame=Max('frame__number'))
-            print(t.id)
-            sys.stdout.flush()
             assert (bounds['min_frame'] is not None)
             if bounds['min_frame'] == bounds['max_frame']:
                 continue
 
-            min_face = Face.objects.filter(frame__number=bounds['min_frame'], track=t)[0]
+            min_face = Face.objects.filter(frame__number=bounds['min_frame'], track=t['id'])[0]
             video = min_face.frame.video.id
             materialized_result.append({
                 'video':
                 video,
                 'track':
-                t.id,
+                t['id'],
                 'start_frame':
                 Frame.objects.get(video_id=video, number=bounds['min_frame']).id,
                 'end_frame':

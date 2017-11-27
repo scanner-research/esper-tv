@@ -1,7 +1,8 @@
 from sklearn.neighbors import NearestNeighbors
 from django.db import models, connection
-from django.db.models import F
+from django.db.models import F, ExpressionWrapper
 from django.db.models.base import ModelBase
+from django.db.models.functions import Cast
 from django_bulk_update.manager import BulkUpdateManager
 from scannerpy import ProtobufGenerator, Config
 import sys
@@ -122,6 +123,9 @@ def register_concept(name, attrs, bases):
     track_cls_name = '{}Track'.format(name)
     track_methods = {
         '__module__': current_dataset.Video.__module__,
+        'video': ForeignKey(current_dataset.Video, track_cls_name),
+        'min_frame': models.IntegerField(),
+        'max_frame': models.IntegerField(),
     }
     track_methods.update(attrs)
     track_cls = type(track_cls_name, (Track, ), track_methods)
@@ -158,10 +162,8 @@ def register_concept(name, attrs, bases):
         '__module__': current_dataset.Video.__module__,
         'labeler': ForeignKey(current_dataset.Labeler, feat_cls_name),
         name.lower(): ForeignKey(inst_cls, feat_cls_name),
+        'distto': models.FloatField(null=True),
         'Meta': Meta,
-        '_datasetName': current_dataset.name,
-        '_trackName': track_cls_name,
-        '_conceptName': inst_cls_name
     })
 
     return inst_cls
@@ -195,6 +197,12 @@ class Concept(object):
 class Track(models.Model):
     __metaclass__ = BaseMeta
 
+    @staticmethod
+    def duration():
+        return ExpressionWrapper(
+            Cast(F('max_frame')-F('min_frame'), models.FloatField())/F('video__fps'), 
+            models.FloatField())
+
 class Model(models.Model):
     __metaclass__ = BaseMeta
 
@@ -210,9 +218,18 @@ class Instance(models.Model):
     def height(self):
         return self.bbox_y2 - self.bbox_y1
 
+    @staticmethod
+    def height_expr():
+        return ExpressionWrapper(
+            F('bbox_y2') - F('bbox_y1'),
+            models.FloatField())
+
     def save(self, *args, **kwargs):
         self.validate_unique()
         super(Instance, self).save(*args, **kwargs)
+
+    def bbox_to_numpy(self):
+        return np.array([self.bbox_x1, self.bbox_x2, self.bbox_y1, self.bbox_y2, self.bbox_score])
 
     class Meta:
         abstract = True
@@ -234,97 +251,27 @@ class Features(models.Model):
         return np.array(json.loads(str(self.features)))
 
     @classmethod
-    def getTempFeatureModel(cls, instance_ids):
-        with connection.cursor() as cursor:
-            with Dataset(cls._datasetName):
-                col_def = ''.join(
-                    [', distto_{} double precision NULL'.format(inst) for inst in instance_ids])
-                print(cls._meta.db_table + "temp")
-                #MYSQL can fuck off with its bullshit about not being able to use a temporary table more than once
-                cursor.execute(
-                    "CREATE TABLE IF NOT EXISTS {} (id integer NOT NULL PRIMARY KEY, features bytea, instance_id integer NOT NULL, labeler_id integer NOT NULL {})".
-                    format(cls._meta.db_table + "temp", col_def))
-                current_dataset = datasets[cls._datasetName]
-                cls_name = cls._conceptName + "FeaturesTemp"
-                model_params = {
-                    '__module__': cls.__module__,
-                    #'features': models.BinaryField(),
-                    'labeler': ForeignKey(current_dataset.Labeler, cls_name),
-                    'instance': ForeignKey(getattr(current_dataset, cls._conceptName), cls_name)
-                }
+    def compute_distances(cls, inst_id):
+        global feat_nn
+        global feat_ids
 
-                for instance_id in instance_ids:
-                    model_params['distto_{}'.format(instance_id)] = models.FloatField(null=True)
-                with warnings.catch_warnings():
-                    # we ignore the warning indicating we are reloading a model
-                    # because it is a temporary table
-                    warnings.simplefilter("ignore")
-                    tempmodel = type(cls_name, (Features, ), model_params)
+        it = cls.objects.annotate(height=F('face__bbox_y2')-F('face__bbox_y1')).filter(height__gte=0.2)
+        if feat_nn is None:
+            _print('Loading features...')
+            feats = list(it[::5])
+            feat_ids = np.array([f.id for f in feats])
+            feat_vectors = [f.load_features() for f in feats]
+            X = np.vstack(feat_vectors)
+            _print('Constructing KNN tree...')
+            feat_nn = NearestNeighbors().fit(X)
+            _print('Done!')
 
-                # testfeatures = {}
-                # for i in cls.objects.filter(face_id__in=instance_ids).all():
-                #     testfeatures[i.face_id] = np.array(json.loads(str(i.features)))
+        dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()], 1000)
 
-                global feat_nn
-                global feat_ids
-
-                it = cls.objects.annotate(height=F('face__bbox_y2')-F('face__bbox_y1')).filter(height__gte=0.2)
-                if feat_nn is None:
-                    _print('Loading features...')
-                    feats = list(it[::5])
-                    feat_ids = np.array([f.id for f in feats])
-                    feat_vectors = [f.load_features() for f in feats]
-                    X = np.vstack(feat_vectors)
-                    _print('Constructing KNN tree...')
-                    feat_nn = NearestNeighbors(n_neighbors=50).fit(X)
-                    _print('Done!')
-
-                inst_id = instance_ids[0]
-
-                dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()])
-
-                batch = []
-                for dist, feat_id in zip(dists[0], feat_ids[indices[0]]):
-                    feat = cls.objects.get(id=feat_id)
-                    newfeat = tempmodel()
-                    newfeat.id = feat.id
-                    newfeat.labeler_id = feat.labeler_id
-                    newfeat.instance_id = feat.face_id
-                    setattr(newfeat, 'distto_{}'.format(inst_id), dist)
-                    batch.append(newfeat)
-                tempmodel.objects.bulk_create(batch)
-
-                return tempmodel
-
-                # batch_size = 1000
-                # batch = []
-                # feature_batch = []
-                # for feat in it:
-                #     newfeat = tempmodel()
-                #     newfeat.id = feat.id
-                #     #newfeat.features = feat.features
-                #     newfeat.labeler_id = feat.labeler_id
-                #     newfeat.instance_id = feat.face_id
-                #     print(newfeat.instance_id)
-                #     sys.stdout.flush()
-                #     featarr = np.array(json.loads(str(feat.features)))
-                #     #TODO better distance computation
-                #     for i in instance_ids:
-                #         if i not in testfeatures: continue
-                #         setattr(newfeat, 'distto_{}'.format(i),
-                #                 np.sum(np.square(featarr - testfeatures[i])))
-                #     batch.append(newfeat)
-                #     if len(batch) == batch_size:
-                #         tempmodel.objects.bulk_create(batch)
-                #         batch = []
-                # tempmodel.objects.bulk_create(batch)
-                # return tempmodel
-
-    @classmethod
-    def dropTempFeatureModel(cls):
-        with connection.cursor() as cursor:
-            # cursor.execute("DELETE FROM {}".format(cls._meta.db_table + "temp"))
-            cursor.execute("DROP TABLE IF EXISTS {};".format(cls._meta.db_table + "temp"))
+        for dist, feat_id in zip(dists[0], feat_ids[indices[0]]):
+            feat = cls.objects.get(id=feat_id)
+            feat.distto = dist
+            feat.save()
 
 
 class Pose(object):

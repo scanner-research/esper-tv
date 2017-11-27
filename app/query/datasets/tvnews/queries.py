@@ -135,3 +135,73 @@ def differing_bounding_boxes():
             })
 
     return {'result': result, 'count': len(result), 'type': 'Frame'}
+
+@query("People sitting")
+def people_sitting():
+    def is_sitting(kp):
+        def ang(v):
+            return math.atan2(v[1], v[0]) / math.pi * 180
+        def is_angled(v):
+            v /= np.linalg.norm(v)
+            v[1] = -v[1]  # correct for image coordinates
+            a = ang(v)
+            return a > 0 or a < -140
+        return is_angled(kp[Pose.LKnee] - kp[Pose.LHip]) or is_angled(kp[Pose.RKnee] - kp[Pose.RHip])
+        
+    frames_qs = Frame.objects.filter(video__channel='CNN') \
+        .annotate(
+            pose_count=Subquery(
+                Pose.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values('c')), 
+            woman_count=Subquery(
+                Face.objects.filter(frame=OuterRef('pk'), gender__name='female').values('frame').annotate(c=Count('*')).values('c'), 
+                output_field=models.IntegerField())) \
+        .filter(pose_count__gt=0, pose_count__lt=6, woman_count__gt=0).order_by('id').select_related('video')
+        
+    frames = []        
+    for frame in frames_qs[:100000:10]:
+        filtered = filter_poses('pose', is_sitting, [Pose.LAnkle, Pose.LKnee, Pose.RAnkle, Pose.RKnee, Pose.RHip, Pose.LHip], poses=Pose.objects.filter(frame=frame))
+        
+        if len(filtered) > 0:
+            frames.append((frame, filtered))
+
+    return simple_result([{
+        'video': frame.video.id,
+        'start_frame': frame.id,
+        'objects': [pose_to_dict(p) for p in poses]
+    } for (frame, poses) in frames], 'Frame')
+
+@query("Obama pictures")
+def obama_pictures():
+    id = 3938394
+    FaceFeatures.compute_distances(id)
+    sq = Face.objects.filter(track=OuterRef('pk'), labeler__name='mtcnn', facefeatures__distto__lte=1.0).values('track').annotate(c=Count('*'))
+    out_tracks = []
+
+    def close(x, y):
+        return abs(x - y) < 0.02
+
+    tracks = list(FaceTrack.objects.annotate(duration=Track.duration(), c=Subquery(sq.values('c'), models.IntegerField())).filter(duration__gt=0, c__gt=0))
+    faces = list(Face.objects.filter(track__in=tracks).select_related('frame'))
+    face_tracks = {t.id: (t, []) for t in tracks}
+    for f in faces:
+        face_tracks[f.track_id][1].append(f)
+
+    for track, faces in face_tracks.values():
+        faces.sort(lambda a, b: a.frame.number - b.frame.number)
+        valid = True
+        for i in range(len(faces)-1):
+            if not (close(faces[i].bbox_x1, faces[i+1].bbox_x1) and
+                close(faces[i].bbox_y1, faces[i+1].bbox_y1) and
+                close(faces[i].bbox_x2, faces[i+1].bbox_x2) and
+                close(faces[i].bbox_y2, faces[i+1].bbox_y2)):
+                valid = False
+                break
+        if valid:
+            out_tracks.append((track, faces[0]))
+
+    return simple_result([{
+        'video': t.video_id,
+        'start_frame': Frame.objects.get(video=t.video, number=t.min_frame).id,
+        'end_frame': Frame.objects.get(video=t.video, number=t.max_frame).id,
+        'objects': [bbox_to_dict(f)]
+    } for (t, f) in out_tracks], 'FaceTrack')
