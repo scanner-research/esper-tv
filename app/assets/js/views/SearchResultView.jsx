@@ -19,7 +19,76 @@ window.DISPLAY_OPTIONS = new DisplayOptions;
 @observer
 class GroupsView extends React.Component {
   state = {
-    page: 0
+    page: 0,
+    selected_start: -1,
+    selected_end: -1,
+    positive_ex: new Set(),
+    negative_ex: new Set()
+  }
+
+  constructor() {
+    super();
+    document.addEventListener('keypress', this._onKeyPress);
+  }
+
+  getColorClass(i){
+    if (this.state.selected_start == i || (this.state.selected_start <= i && i <= this.state.selected_end)){
+      return 'selected ';
+    }else if (this.state.positive_ex.has(i)){
+      return 'positive ';
+    }else if (this.state.negative_ex.has(i)){
+      return 'negative';
+    }
+    return ''
+  }
+
+  _onKeyPress = (e) => {
+    let chr = String.fromCharCode(e.which);
+    let positive_ex = this.state.positive_ex;
+    let negative_ex = this.state.negative_ex;
+    if (chr == '1'){
+      for(let i = this.state.selected_start; i < this.state.selected_end; i++){
+        if (i < 0) continue;
+        if (negative_ex.has(i)){
+          negative_ex.delete(i);
+        }
+        positive_ex.add(i);
+      }
+      this.setState({positive_ex:positive_ex, negative_ex:negative_ex, selected_start:-1, selected_end:-1});
+    } else if (chr == '2'){
+      for (let i = this.state.selected_start; i <= this.state.selected_end; i++){
+        if (i < 0) continue;
+        if (positive_ex.has(i)){
+          positive_ex.delete(i);
+        }
+        negative_ex.add(i);
+      }
+      this.setState({positive_ex:positive_ex, negative_ex:negative_ex, selected_start:-1, selected_end:-1});
+    } else if (chr == 'c') {
+      this.setState({
+        selected_start: -1,
+        selected_end: -1
+      });
+    }else if (chr == 'p'){
+      let pos = [];
+      let neg = [];
+      for (let x of positive_ex) pos.push(window.search_result.result[x].elements[0].objects[0].id);
+      for (let x of negative_ex) neg.push(window.search_result.result[x].elements[0].objects[0].id);
+      console.log('pos = ['+pos.join(', ') + ']');
+      console.log('neg = ['+neg.join(', ') + ']');
+    }
+  }
+
+  _onSelect = (e) => {
+    if (this.state.selected_start == -1){
+      this.setState({
+        selected_start: e
+      });
+    }else if (this.state.selected_start >=0 && e >= this.state.selected_start){
+      this.setState({
+        selected_end: e
+      });
+    }
   }
 
   _numPages = () => {
@@ -43,7 +112,7 @@ class GroupsView extends React.Component {
           {_.range(DISPLAY_OPTIONS.results_per_page * this.state.page,
                    Math.min(DISPLAY_OPTIONS.results_per_page * (this.state.page + 1),
                             window.search_result.result.length))
-            .map((i) => <GroupView key={i} group={window.search_result.result[i]} />)}
+            .map((i) => <GroupView key={i} group={window.search_result.result[i]} group_id={i} onSelect={this._onSelect} colorClass={this.getColorClass(i)}/>)}
           <div className='clearfix' />
         </div>
         <div className='page-buttons'>
@@ -65,11 +134,11 @@ class GroupView extends React.Component {
   render () {
     let group = this.props.group;
     return (
-      <div className={'group ' + group.type}>
+      <div className={'group selected ' + group.type}>
         <div>
           <div className='group-label'>{group.label}</div>
           <div className='group-elements'>
-            {group.elements.map((clip, i) => <ClipView key={i} clip={clip} />)}
+            {group.elements.map((clip, i) => <ClipView key={i} clip={clip} group_id={this.props.group_id} onSelect={this.props.onSelect} colorClass={this.props.colorClass}/>)}
             <div className='clearfix' />
           </div>
         </div>
@@ -126,6 +195,8 @@ class ClipView extends React.Component {
       });
     } else if (chr == 'f') {
       this.setState({expand: !this.state.expand});
+    } else if (chr == 's') {
+      this.props.onSelect(this.props.group_id);
     }
   }
 
@@ -227,7 +298,7 @@ class ClipView extends React.Component {
     let td_style = {width: `${100 / meta_per_row}%`};
 
     return (
-      <div className={'search-result ' + (this.state.expand ? 'expanded' : '')}
+      <div className={'search-result ' + this.props.colorClass + (this.state.expand ? 'expanded' : '')}
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}
            onClick={this._onClick}>
