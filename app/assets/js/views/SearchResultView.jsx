@@ -422,6 +422,11 @@ class OptionsView extends React.Component {
 class MetadataView extends React.Component {
   render() {
     (window.search_result.result); // ensure that we re-render when search result changes
+    let keys = [
+      ['f', 'expand thumbnail'],
+      ['p', 'play clip'],
+      ['l', 'play clip in loop']
+    ];
     return <div className='metadata'>
       <h2>Metadata</h2>
       <div className='meta-block'>
@@ -444,6 +449,11 @@ class MetadataView extends React.Component {
       <div className='meta-block'>
         <div className='meta-key'>Count</div>
         <div className='meta-val'>{window.search_result.count}</div>
+      </div>
+      <h3>Help</h3>
+      <div className='help'>
+        {keys.map((entry) =>
+          <div><code>{entry[0]}</code> - {entry[1]}</div>)}
       </div>
     </div>;
   }
