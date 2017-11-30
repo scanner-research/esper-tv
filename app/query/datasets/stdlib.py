@@ -15,6 +15,7 @@ from timeit import default_timer as now
 
 from query.base_models import ModelDelegator
 
+
 def fprint(*args):
     print(*args)
     sys.stdout.flush()
@@ -118,7 +119,7 @@ LIMIT = 500
 STRIDE = 1
 
 
-def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
+def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False, custom_order=False):
     try:
         sample = result[0]
     except IndexError:
@@ -129,10 +130,12 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
     if shuffle:
         result = result.order_by('?')
 
+    # TODO(wcrichto): do something if custom_order=True
+
     materialized_result = []
     cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
     if cls_name == 'Frame':
-        for frame in result[:LIMIT * stride:stride]:
+        for frame in result.order_by('video', 'number')[:LIMIT * stride:stride]:
             materialized_result.append({
                 'video': frame.video.id,
                 'start_frame': frame.id,
@@ -140,7 +143,7 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
             })
 
     elif cls_name == 'Face' or cls_name == 'Pose':
-        for inst in result[:LIMIT * stride:stride]:
+        for inst in result.order_by('frame__video', 'frame__number')[:LIMIT * stride:stride]:
             r = {
                 'video': inst.frame.video.id,
                 'start_frame': inst.frame.id,
@@ -163,7 +166,7 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False):
         #     .annotate(min_frame=Subquery(sq.values('min_frame'))) \
         #     .values()
 
-        for t in result.values('id')[:1000]:
+        for t in result.values('id').order_by('video', 'min_frame')[:1000]:
             bounds = Face.objects.filter(track=t['id']).aggregate(
                 min_frame=Min('frame__number'), max_frame=Max('frame__number'))
             assert (bounds['min_frame'] is not None)
