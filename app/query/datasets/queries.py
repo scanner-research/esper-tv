@@ -4,6 +4,7 @@ import inspect
 
 queries = defaultdict(list)
 
+
 def query(name):
     frame = inspect.stack()[1]
     module = inspect.getmodule(frame[0])
@@ -29,9 +30,11 @@ def query(name):
 
     return wrapper
 
+
 @query("All faces")
 def all_faces():
     return qs_to_result(Face.objects.all(), group=True)
+
 
 @query("All videos")
 def all_videos():
@@ -68,20 +71,6 @@ def man_left_of_woman():
         'start_frame': frame.id,
         'objects': [bbox_to_dict(f) for f in faces]
     } for (frame, faces) in frames], 'Frame')
-
-
-@query("Poses with two hands above head")
-def two_hands_above_head():
-    def hands_above_head(kp):
-        return kp[Pose.LWrist][1] < kp[Pose.Nose][1] and kp[Pose.RWrist][1] < kp[Pose.Nose][1]
-
-    filtered = filter_poses('pose', hands_above_head, [Pose.LWrist, Pose.Nose, Pose.RWrist])
-
-    return simple_result([{
-        'video': p.frame.video.id,
-        'start_frame': p.frame.id,
-        'objects': [pose_to_dict(p)]
-    } for p in filtered], 'Pose')
 
 
 @query("Frames with two poses with two hands above head")
