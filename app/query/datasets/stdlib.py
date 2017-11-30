@@ -119,7 +119,13 @@ LIMIT = 500
 STRIDE = 1
 
 
-def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False, custom_order=False):
+def qs_to_result(result,
+                 group=False,
+                 segment=False,
+                 stride=1,
+                 shuffle=False,
+                 custom_order=False,
+                 frame_major=False):
     try:
         sample = result[0]
     except IndexError:
@@ -135,7 +141,10 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False, cu
     materialized_result = []
     cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
     if cls_name == 'Frame':
-        for frame in result.order_by('video', 'number')[:LIMIT * stride:stride]:
+        if not shuffle and not custom_order:
+            result = result.order_by('video', 'number')
+
+        for frame in result[:LIMIT * stride:stride]:
             materialized_result.append({
                 'video': frame.video.id,
                 'start_frame': frame.id,
@@ -143,16 +152,37 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False, cu
             })
 
     elif cls_name == 'Face' or cls_name == 'Pose':
-        for inst in result.order_by('frame__video', 'frame__number')[:LIMIT * stride:stride]:
-            r = {
-                'video': inst.frame.video.id,
-                'start_frame': inst.frame.id,
-            }
-            if cls_name == 'Face':
-                r['objects'] = [bbox_to_dict(inst)]
-            elif cls_name == 'Pose':
-                r['objects'] = [pose_to_dict(inst)]
-            materialized_result.append(r)
+        if not shuffle and not custom_order:
+            result = result.order_by('frame__video', 'frame__number')
+
+        if cls_name == 'Face':
+            fn = bbox_to_dict
+        elif cls_name == 'Pose':
+            fn = pose_to_dict
+
+        if frame_major:
+            frames = set()
+            for inst in result.values('frame__video', 'frame')[:LIMIT * stride:stride]:
+                frames.add((inst['frame__video'], inst['frame']))
+            frames = list(frames)
+            frames.sort(key=itemgetter(0, 1))
+            for (video, frame) in frames:
+                materialized_result.append({
+                    'video':
+                    video,
+                    'start_frame':
+                    frame,
+                    'objects': [fn(inst) for inst in result.filter(frame=frame)]
+                })
+
+        else:
+            for inst in result[:LIMIT * stride:stride]:
+                r = {
+                    'video': inst.frame.video.id,
+                    'start_frame': inst.frame.id,
+                    'objects': [fn(inst)]
+                }
+                materialized_result.append(r)
 
     elif cls_name == 'FaceTrack':
         # tracks = list(result[:LIMIT*stride:stride])
@@ -166,7 +196,10 @@ def qs_to_result(result, group=False, segment=False, stride=1, shuffle=False, cu
         #     .annotate(min_frame=Subquery(sq.values('min_frame'))) \
         #     .values()
 
-        for t in result.values('id').order_by('video', 'min_frame')[:1000]:
+        if not shuffle and not custom_order:
+            result = result.order_by('video', 'min_frame')
+
+        for t in result.values('id')[:1000]:
             bounds = Face.objects.filter(track=t['id']).aggregate(
                 min_frame=Min('frame__number'), max_frame=Max('frame__number'))
             assert (bounds['min_frame'] is not None)

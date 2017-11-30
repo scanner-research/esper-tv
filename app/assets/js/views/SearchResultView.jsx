@@ -452,6 +452,7 @@ class MetadataView extends React.Component {
       </div>
       <h3>Help</h3>
       <div className='help'>
+        On hover over a clip:
         {keys.map((entry) =>
           <div><code>{entry[0]}</code> - {entry[1]}</div>)}
       </div>

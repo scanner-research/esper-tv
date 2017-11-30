@@ -33,7 +33,7 @@ def query(name):
 
 @query("All faces")
 def all_faces():
-    return qs_to_result(Face.objects.all(), group=True)
+    return qs_to_result(Face.objects.filter(labeler__name='mtcnn'), frame_major=True, stride=1000)
 
 
 @query("All videos")
