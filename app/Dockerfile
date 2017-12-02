@@ -49,6 +49,8 @@ ADD requirements.txt .
 ENV TF_VERSION=1.2.0
 RUN (if [ "$device2" = "cpu" ]; then pip install tensorflow==${TF_VERSION}; else pip install tensorflow-gpu==${TF_VERSION}; fi) && \
     pip install -r requirements.txt && \
+    jupyter nbextension install --sys-prefix --py vega && \
+    jupyter nbextension enable vega --py --sys-prefix && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     python -c "import matplotlib"
 
