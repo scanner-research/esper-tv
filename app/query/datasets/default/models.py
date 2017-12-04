@@ -1,22 +1,44 @@
 from django.db import models
 import query.base_models as base
 
+
 class Video(base.Video):
-    pass
+    def get_stride(self):
+        return int(math.ceil(self.fps) / 2)
+
 
 class Frame(base.Frame):
     pass
 
+
 class Labeler(base.Labeler):
     pass
 
-class Face(base.Concept):
+
+class PersonTrack(base.Track):
     pass
 
-class Pose(base.Concept, base.Pose):
-    pass
+
+class Person(base.Noun):
+    tracks = base.ManyToManyField(PersonTrack)
+
+
+class Pose(base.Attribute, base.Pose):
+    person = base.ForeignKey(Person)
+
+
+class Face(base.Attribute, base.BoundingBox):
+    person = base.ForeignKey(Person)
+
 
 class Gender(base.Model):
     name = base.CharField()
-    labeler = base.ForeignKey(Labeler, 'Gender')
-    face = base.ForeignKey(Face, 'Gender')
+
+
+class FaceGender(base.Attribute):
+    face = base.ForeignKey(Face)
+    gender = base.ForeignKey(Gender)
+
+
+class FaceFeatures(base.Attribute, base.Features):
+    face = base.ForeignKey(Face)

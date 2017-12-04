@@ -13,7 +13,7 @@ def dist(feat1, feat2):
 
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
-Video, Labeler, FaceFeatures, Face, FaceTrack = models.Video, models.Labeler, models.FaceFeatures, models.Face, models.FaceTrack
+models.import_all(globals())
 
 # TODO(matt): clean this up, seems like there's a lot of redundant/commented code
 # The 5-tuple that's stored in "recent_features" should be a dict for human-readable keys
@@ -56,6 +56,7 @@ class Command(BaseCommand):
 
         bbox_labeler = Labeler.objects.get(name=options['bbox_labeler'])
         feature_labeler = Labeler.objects.get(name=options['feature_labeler'])
+        track_labeler, _ = Labeler.objects.get_or_create(name='featuretrack')
 
         for path in paths:
             if path == '':
@@ -63,9 +64,9 @@ class Command(BaseCommand):
             print path
             video = Video.objects.filter(path=path).get()
             face_features = FaceFeatures.objects.filter(
-                face__frame__video=video,
+                face__person__frame__video=video,
                 face__labeler=bbox_labeler,
-                labeler=feature_labeler).order_by('face__frame__number').all()
+                labeler=feature_labeler).order_by('face__person__frame__number').all()
             fps = video.fps
 
             # [first_frame, last_frame, all_features, avg_feature, sum_feature]
@@ -81,7 +82,7 @@ class Command(BaseCommand):
                 curr_face = face_features[face_idx]
                 curr_feature = np.array(json.loads(str(curr_face.features)))
                 curr_face_id = curr_face.face.id
-                curr_frame_id = curr_face.face.frame.number
+                curr_frame_id = curr_face.face.person.frame.number
                 confidence = curr_face.face.bbox_score
                 #                if confidence < .98:
                 #                    low_confidence += 1
@@ -103,17 +104,17 @@ class Command(BaseCommand):
                                 if (seq_len < min_feat_threshold):
                                     short_seq += len(item[2])
                                     continue
-                                track = FaceTrack()
-                                track.labeler = bbox_labeler
+                                track = PersonTrack(min_frame=0, max_frame=0, video=video)
+                                track.labeler = track_labeler
                                 track.save()
                                 last_frame = None
                                 for seq_face_id in item[2]:
                                     seq_face = Face.objects.get(id=seq_face_id)
-                                    if seq_face.frame.number == last_frame: continue
-                                    seq_face.track = track
+                                    if seq_face.person.frame.number == last_frame: continue
+                                    seq_face.person.tracks.add(track)
                                     in_seq += 1
                                     seq_face.save()
-                                    last_frame = seq_face.frame.number
+                                    last_frame = seq_face.person.frame.number
 
                     old_frame_id = curr_frame_id
                 best_match = -1
@@ -140,17 +141,17 @@ class Command(BaseCommand):
                 if (seq_len < min_feat_threshold):
                     short_seq += len(item[2])
                     continue
-                track = FaceTrack()
-                track.labeler = bbox_labeler
+                track = PersonTrack(min_frame=0, max_frame=0, video=video)
+                track.labeler = track_labeler
                 track.save()
                 last_frame = None
                 for seq_face_id in item[2]:
                     seq_face = Face.objects.get(id=seq_face_id)
-                    if seq_face.frame.number == last_frame: continue
-                    seq_face.track = track
+                    if seq_face.person.frame.number == last_frame: continue
+                    seq_face.person.tracks.add(track)
                     in_seq += 1
                     seq_face.save()
-                    last_frame = seq_face.frame.number
+                    last_frame = seq_face.person.frame.number
             print 'total faces: ', faces_len
             print 'in output seq: ', in_seq
             print 'dropped in short seq: ', short_seq

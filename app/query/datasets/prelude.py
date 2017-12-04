@@ -24,7 +24,7 @@ proto = ProtobufGenerator(cfg)
 
 def progress_bar(n):
     return progressbar.ProgressBar(max_value=n, widgets=[
-        progressbar.Percentage(), ' ',
+        progressxbar.Percentage(), ' ',
         '(', progressbar.SimpleProgress(), ')',
         ' ', progressbar.Bar(), ' ',
         progressbar.AdaptiveETA(),

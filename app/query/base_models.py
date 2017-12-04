@@ -9,50 +9,36 @@ import sys
 import numpy as np
 import json
 import warnings
-cfg = Config()
-proto = ProtobufGenerator(cfg)
+
 MAX_STR_LEN = 256
-
-class ProtoField(models.BinaryField):
-    def __init__(self, proto, *args, **kwargs):
-        self._proto = proto
-        super(ProtoField, self).__init__(*args, **kwargs)
-
-    def get_prep_value(self, value):
-        return value.SerializeToString()
-
-    def from_db_value(self, value, expression, connection, context):
-        return self.to_python(value)
-
-    def to_python(self, value):
-        v = self._proto()
-        try:
-            v.ParseFromString(value)
-            return v
-        except TypeError:
-            return None
-
-    def deconstruct(self):
-        name, path, args, kwargs = super(ProtoField, self).deconstruct()
-        return name, path, [self._proto] + args, kwargs
-
-
-def CharField(*args, **kwargs):
-    return models.CharField(*args, max_length=MAX_STR_LEN, **kwargs)
-
-def _print(args):
-    print(args)
-    sys.stdout.flush()
 
 current_dataset = None
 datasets = {}
 
 
+def _print(args):
+    print(args)
+    sys.stdout.flush()
+
+
+def CharField(*args, **kwargs):
+    return models.CharField(*args, max_length=MAX_STR_LEN, **kwargs)
+
+
+class ForeignKey(object):
+    def __init__(self, model, on_delete=models.CASCADE, **kwargs):
+        self._make_key = lambda name: models.ForeignKey(model, related_query_name=name.lower(), on_delete=on_delete, **kwargs)
+
+
+class ManyToManyField(object):
+    def __init__(self, model, **kwargs):
+        self._make_key = lambda name: models.ManyToManyField(model, related_query_name=name.lower(), **kwargs)
+
+
 class Dataset(object):
     def __init__(self, name):
         self.name = name
-        self.concepts = []
-        self.other = []
+        self.models = []
         if name not in datasets:
             datasets[name] = self
 
@@ -64,112 +50,76 @@ class Dataset(object):
         global current_dataset
         current_dataset = None
 
+    def register_model(self, name, cls):
+        self.models.append(name)
+        setattr(self, name, cls)
+
     def all_models(self):
-        return ['Video', 'Frame', 'Labeler'] + self.other + sum([[c, c + 'Track', c + 'Features']
-                                                               for c in self.concepts], [])
-
-def ForeignKey(model, name, on_delete=models.CASCADE, **kwargs):
-    return models.ForeignKey(model, related_query_name=name.lower(), on_delete=on_delete, **kwargs)
+        return self.models
 
 
-class BaseMeta(ModelBase):
+class DatasetMeta(ModelBase):
     def __new__(cls, name, bases, attrs):
         global current_dataset
-        base = bases[0]
-        is_base_class = base is models.Model or base is object
+        primary_base = bases[0]
+        mixins = bases[1:]
 
-        if is_base_class:
-            if not 'Meta' in attrs:
+        # Don't modify base models (i.e. the ones in this file)
+        if current_dataset is None:
+            # Don't create a table for base models
+            class Meta:
+                abstract = True
 
-                class Meta:
-                    abstract = True
-
-                attrs['Meta'] = Meta
-
+            attrs['Meta'] = Meta
             attrs['objects'] = BulkUpdateManager()
-            child_name = name
+            return super(DatasetMeta, cls).__new__(cls, name, bases, attrs)
 
-        else:
-            if base.__name__ == 'Frame':
-                attrs['video'] = ForeignKey(current_dataset.Video, name)
+        # Model-specific fields
+        if primary_base is Frame:
+            attrs['video'] = ForeignKey(current_dataset.Video)
 
-                class Meta:
-                    unique_together = ('video', 'number')
+            class Meta:
+                unique_together = ('video', 'number')
 
-                attrs['Meta'] = Meta
+            attrs['Meta'] = Meta
 
-            child_name = '{}_{}'.format(current_dataset.name, name)
+        if primary_base is Noun:
+            attrs['frame'] = ForeignKey(current_dataset.Frame)
 
-        if base.__name__ != 'Concept':
-            new_cls = super(BaseMeta, cls).__new__(cls, child_name, bases, attrs)
+        elif primary_base is Attribute:
+            attrs['labeler'] = ForeignKey(current_dataset.Labeler)
 
-        if not is_base_class:
-            if base.__name__ == 'Concept':
-                new_cls = register_concept(name, attrs, list(bases[1:]))
-            elif base.__name__ == 'Model':
-                current_dataset.other.append(name)
+        elif primary_base is Track:
+            attrs['video'] = ForeignKey(current_dataset.Video)
+            attrs['labeler'] = ForeignKey(current_dataset.Labeler)
 
-            setattr(current_dataset, name, new_cls)
+        # Add mixins
+        for mixin in mixins:
+            for k, v in mixin.__dict__.iteritems():
+                if not hasattr(super(mixin), k) and k not in [
+                        '__dict__', '__weakref__', '__module__'
+                ]:
+                    attrs[k] = v
+
+        # Initialize foreign keys with class name
+        for key, val in attrs.iteritems():
+            if isinstance(val, ForeignKey) or isinstance(val, ManyToManyField):
+                attrs[key] = val._make_key(name)
+
+        # Prefix class name with dataset name to avoid clashes across datasets
+        namespaced_name = '{}_{}'.format(current_dataset.name, name)
+
+        # Call out to Django ModelBase to create the class/table
+        new_cls = super(DatasetMeta, cls).__new__(cls, namespaced_name, tuple(bases), attrs)
+
+        # Remember the created class on our Dataset object
+        current_dataset.register_model(name, new_cls)
 
         return new_cls
 
 
-def register_concept(name, attrs, bases):
-    global current_datset
-
-    current_dataset.concepts.append(name)
-
-    # Create the ConceptTrack class
-    track_cls_name = '{}Track'.format(name)
-    track_methods = {
-        '__module__': current_dataset.Video.__module__,
-        'video': ForeignKey(current_dataset.Video, track_cls_name),
-        'min_frame': models.IntegerField(),
-        'max_frame': models.IntegerField(),
-    }
-    track_methods.update(attrs)
-    track_cls = type(track_cls_name, (Track, ), track_methods)
-
-    # Create the Concept class
-    class Meta:
-        unique_together = ('track', 'frame', 'labeler')
-
-    inst_cls_name = name
-    inst_methods = {
-        '__module__': current_dataset.Video.__module__,
-        'track': ForeignKey(track_cls, inst_cls_name, null=True, on_delete=models.SET_NULL),
-        'frame': ForeignKey(current_dataset.Frame, inst_cls_name),
-        'labeler': ForeignKey(current_dataset.Labeler, inst_cls_name),
-        'Meta': Meta
-    }
-    inst_methods.update(attrs)
-
-    # Multi-class inheritance doesn't seem to work with the Django magic, so we just explicitly
-    # copy data members and methods into the derived class.
-    for base in bases:
-        for k, v in base.__dict__.iteritems():
-            if not hasattr(super(base), k) and k not in ['__dict__', '__weakref__', '__module__']:
-                inst_methods[k] = v
-
-    inst_cls = type(inst_cls_name, (Instance, ), inst_methods)
-
-    # Create the ConceptFeatures class
-    class Meta:
-        unique_together = ('labeler', inst_cls_name.lower())
-
-    feat_cls_name = '{}Features'.format(name)
-    type(feat_cls_name, (Features, ), {
-        '__module__': current_dataset.Video.__module__,
-        'labeler': ForeignKey(current_dataset.Labeler, feat_cls_name),
-        name.lower(): ForeignKey(inst_cls, feat_cls_name),
-        'distto': models.FloatField(null=True),
-        'Meta': Meta,
-    })
-
-    return inst_cls
-
 class Video(models.Model):
-    __metaclass__ = BaseMeta
+    __metaclass__ = DatasetMeta
     path = CharField(db_index=True)
     num_frames = models.IntegerField()
     fps = models.FloatField()
@@ -178,37 +128,40 @@ class Video(models.Model):
 
 
 class Frame(models.Model):
-    __metaclass__ = BaseMeta
+    __metaclass__ = DatasetMeta
     number = models.IntegerField(db_index=True)
-
-    def save(self, *args, **kwargs):
-        self.validate_unique()
-        super(Frame, self).save(*args, **kwargs)
 
 
 class Labeler(models.Model):
-    __metaclass__ = BaseMeta
-    name = CharField(db_index=True)
+    __metaclass__ = DatasetMeta
+    name = CharField()
 
 
-class Concept(object):
-    __metaclass__ = BaseMeta
+class Noun(models.Model):
+    __metaclass__ = DatasetMeta
+
 
 class Track(models.Model):
-    __metaclass__ = BaseMeta
+    __metaclass__ = DatasetMeta
+    min_frame = models.IntegerField()
+    max_frame = models.IntegerField()
 
     @staticmethod
     def duration():
         return ExpressionWrapper(
-            Cast(F('max_frame')-F('min_frame'), models.FloatField())/F('video__fps'), 
+            Cast(F('max_frame') - F('min_frame'), models.FloatField()) / F('video__fps'),
             models.FloatField())
 
+
+class Attribute(models.Model):
+    __metaclass__ = DatasetMeta
+
+
 class Model(models.Model):
-    __metaclass__ = BaseMeta
+    __metaclass__ = DatasetMeta
 
-class Instance(models.Model):
-    __metaclass__ = BaseMeta
 
+class BoundingBox(object):
     bbox_x1 = models.FloatField()
     bbox_x2 = models.FloatField()
     bbox_y1 = models.FloatField()
@@ -220,32 +173,19 @@ class Instance(models.Model):
 
     @staticmethod
     def height_expr():
-        return ExpressionWrapper(
-            F('bbox_y2') - F('bbox_y1'),
-            models.FloatField())
-
-    def save(self, *args, **kwargs):
-        self.validate_unique()
-        super(Instance, self).save(*args, **kwargs)
+        return ExpressionWrapper(F('bbox_y2') - F('bbox_y1'), models.FloatField())
 
     def bbox_to_numpy(self):
         return np.array([self.bbox_x1, self.bbox_x2, self.bbox_y1, self.bbox_y2, self.bbox_score])
-
-    class Meta:
-        abstract = True
 
 
 feat_nn = None
 feat_ids = None
 
-class Features(models.Model):
-    __metaclass__ = BaseMeta
 
+class Features(object):
     features = models.BinaryField()
-
-    def save(self, *args, **kwargs):
-        self.validate_unique()
-        super(Features, self).save(*args, **kwargs)
+    distto = models.FloatField(null=True)
 
     def load_features(self):
         return np.array(json.loads(str(self.features)))
@@ -255,7 +195,8 @@ class Features(models.Model):
         global feat_nn
         global feat_ids
 
-        it = cls.objects.annotate(height=F('face__bbox_y2')-F('face__bbox_y1')).filter(height__gte=0.2)
+        it = cls.objects.annotate(height=F('face__bbox_y2') - F('face__bbox_y1')).filter(
+            height__gte=0.2)
         if feat_nn is None:
             _print('Loading features...')
             feats = list(it[::5])
@@ -279,7 +220,7 @@ class Pose(object):
 
     def _format_keypoints(self):
         kp = np.frombuffer(self.keypoints, dtype=np.float32)
-        return kp.reshape((kp.shape[0]/3, 3))
+        return kp.reshape((kp.shape[0] / 3, 3))
 
     POSE_KEYPOINTS = 18
     FACE_KEYPOINTS = 70
@@ -311,11 +252,11 @@ class Pose(object):
 
     def face_keypoints(self):
         kp = self._format_keypoints()
-        return kp[self.POSE_KEYPOINTS:(self.POSE_KEYPOINTS+self.FACE_KEYPOINTS), :]
+        return kp[self.POSE_KEYPOINTS:(self.POSE_KEYPOINTS + self.FACE_KEYPOINTS), :]
 
     def hand_keypoints(self):
         kp = self._format_keypoints()
-        base = kp[self.POSE_KEYPOINTS+self.FACE_KEYPOINTS:, :]
+        base = kp[self.POSE_KEYPOINTS + self.FACE_KEYPOINTS:, :]
         return [base[:self.HAND_KEYPOINTS, :], base[self.HAND_KEYPOINTS:, :]]
 
 
