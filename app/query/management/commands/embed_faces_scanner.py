@@ -41,9 +41,9 @@ class Command(BaseCommand):
             for path in paths:
                 video = Video.objects.get(path=path)
 
-                faces = Face.objects.filter(frame__video=video, labeler=face_labeler) \
-                                            .select_related('frame') \
-                                            .order_by('frame__video__id', 'frame__number')
+                faces = Face.objects.filter(person__frame__video=video, labeler=face_labeler) \
+                                            .select_related('person__frame') \
+                                            .order_by('person__frame__video__id', 'person__frame__number')
                 faces = [f for f in faces if f.bbox_x2 - f.bbox_x1 >= .04]
 
                 frame_numbers = []
@@ -51,10 +51,10 @@ class Command(BaseCommand):
                 cur_frame = None
                 insts = []
                 for f in faces:
-                    if f.frame.id != cur_frame:
-                        cur_frame = f.frame.id
+                    if f.person.frame.id != cur_frame:
+                        cur_frame = f.person.frame.id
                         rows.append([])
-                        frame_numbers.append(f.frame.number)
+                        frame_numbers.append(f.person.frame.number)
 
                     rows[-1].append(db.protobufs.BoundingBox(
                         x1=f.bbox_x1, x2=f.bbox_x2, y1=f.bbox_y1, y2=f.bbox_y2))

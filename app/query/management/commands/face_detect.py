@@ -9,7 +9,7 @@ import random
 
 DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
-Video, Labeler, Face, Frame = models.Video, models.Labeler, models.Face, models.Frame
+models.import_all(globals())
 
 
 class Command(BaseCommand):

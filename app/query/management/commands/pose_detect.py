@@ -52,8 +52,10 @@ class Command(BaseCommand):
                     frame = frames[i*(int(math.ceil(video.fps)/2))]
                     all_kp = np.frombuffer(buf, dtype=np.float32)
                     for j in range(0, len(all_kp), kp_size):
-                        pose = Pose(keypoints=all_kp[j:(j+kp_size)].tobytes(),
-                                    frame=frame, labeler=pose_labeler)
+                        person = Person(frame=frame)
+                        person.save()
+
+                        pose = Pose(keypoints=all_kp[j:(j+kp_size)].tobytes(), labeler=pose_labeler, person=person)
 
                         p = pose.pose_keypoints()
                         l = p[16, :2]
