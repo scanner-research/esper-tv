@@ -19,7 +19,7 @@ Next, you will need to configure your Esper installation. If you are using Googl
 ```
 git clone https://github.com/scanner-research/esper
 cd esper
-echo '\nalias dc=docker-compose' >> $HOME/.profile && source $HOME/.profile
+echo -e '\nalias dc=docker-compose' >> $HOME/.profile && source $HOME/.profile
 pip install -r requirements.txt
 python configure.py --config config/local.toml --dataset default
 dc pull
