@@ -11,6 +11,7 @@ DATASET = os.environ.get('DATASET')
 models = ModelDelegator(DATASET)
 Video, Labeler, Face, Frame = models.Video, models.Labeler, models.Face, models.Frame
 
+
 class Command(BaseCommand):
     help = 'Detect faces in videos'
 
@@ -32,48 +33,43 @@ class Command(BaseCommand):
                     video = Video.objects.get(path=path)
                 except Video.DoesNotExist:
                     continue
-                if len(Face.objects.filter(frame__video=video, labeler=labeler)) > 0:
+                if len(Face.objects.filter(person__frame__video=video, labeler=labeler)) > 0:
                     continue
                 filtered.append(path)
 
             stride = 24
 
             # Run the detector via Scanner
-            faces_c = pipelines.detect_faces(
-                db, [db.table(path).column('frame') for path in filtered],
-                db.sampler.strided(stride),
-                'tmp_faces')
+            faces_c = pipelines.detect_faces(db,
+                                             [db.table(path).column('frame') for path in filtered],
+                                             db.sampler.strided(stride), 'tmp_faces')
 
             for path, video_faces_table in zip(filtered, faces_c):
                 video = Video.objects.filter(path=path).get()
 
                 table = db.table(path)
                 imgs = table.load(['frame'], rows=range(0, table.num_rows(), stride))
-                video_faces = video_faces_table.load(['bboxes'], lambda lst, db :parsers.bboxes(lst[0], db.protobufs))
+                video_faces = video_faces_table.load(
+                    ['bboxes'], lambda lst, db: parsers.bboxes(lst[0], db.protobufs))
 
                 for (i, frame_faces), (_, img) in zip(video_faces, imgs):
-                    frame = Frame.objects.get(video=video, number=i*stride)
+                    frame = Frame.objects.get(video=video, number=i * stride)
                     for bbox in frame_faces:
-                        if labeler.name == 'dummy' and random.randint(0,10) == 1:
-                           # generate dummy labels, sometimes
-                           # TODO: add boundary checks, shouldn't matter much thouhg.
-                           bbox.x1 += 50
-                           bbox.x2 += 50
-                           bbox.y1 += 50
-                           bbox.y2 += 50
+                        if labeler.name == 'dummy' and random.randint(0, 10) == 1:
+                            # generate dummy labels, sometimes
+                            # TODO: add boundary checks, shouldn't matter much thouhg.
+                            bbox.x1 += 50
+                            bbox.x2 += 50
+                            bbox.y1 += 50
+                            bbox.y2 += 50
 
-                        f = Face()
-                        f.frame = frame
-                        f.bbox_x1 = bbox.x1/video.width
-                        f.bbox_x2 = bbox.x2/video.width
-                        f.bbox_y1 = bbox.y1/video.height
-                        f.bbox_y2 = bbox.y2/video.height
+                        p = Person(frame=frame)
+                        p.save()
+                        f = Face(person=p)
+                        f.bbox_x1 = bbox.x1 / video.width
+                        f.bbox_x2 = bbox.x2 / video.width
+                        f.bbox_y1 = bbox.y1 / video.height
+                        f.bbox_y2 = bbox.y2 / video.height
                         f.bbox_score = bbox.score
                         f.labeler = labeler
                         f.save()
-
-                        thumbnail_path = 'assets/thumbnails/face_{}.jpg'.format(f.id)
-                        thumbnail = img[0][int(bbox.y1):int(bbox.y2),
-                                           int(bbox.x1):int(bbox.x2)]
-
-                        cv2.imwrite(thumbnail_path, cv2.cvtColor(thumbnail, cv2.COLOR_RGB2BGR))
