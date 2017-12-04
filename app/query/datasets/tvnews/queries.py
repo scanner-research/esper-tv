@@ -10,26 +10,36 @@ def fox_news_videos():
 @query("Talking heads face tracks")
 def talking_heads_tracks():
     return qs_to_result(
-        FaceTrack.objects.filter(id__in=Face.objects.annotate(
-            height=F('bbox_y2') - F('bbox_y1')).filter(
-                frame__video__id=791, labeler__name='mtcnn',
-                height__gte=0.3).distinct('track').values('track')),
+        PersonTrack.objects.filter(
+            id__in=Person.objects.filter(frame__video__id=791) \
+            .annotate(
+                c=Subquery(
+                    Face.objects.filter(person=OuterRef('pk')) \
+                    .annotate(height=F('bbox_y2') - F('bbox_y1')) \
+                    .filter(labeler__name='mtcnn', height__gte=0.3) \
+                    .values('person') \
+                    .annotate(c=Count('*')) \
+                    .values('c'),
+                    models.IntegerField())) \
+            .filter(c__gt=0) \
+            .values('tracks')),
         segment=True)
 
 
 @query("Faces on Poppy Harlow")
 def faces_on_poppy_harlow():
     return qs_to_result(
-        Face.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow'),
+        Face.objects.filter(person__frame__video__show='CNN Newsroom With Poppy Harlow'),
         group=True,
         stride=24)
 
 
 @query("Female faces on Poppy Harlow")
 def female_faces_on_poppy_harlow():
-    returnqs_to_result(
+    return qs_to_result(
         Face.objects.filter(
-            frame__video__show='CNN Newsroom With Poppy Harlow', gender__name='fem ale'),
+            person__frame__video__show='CNN Newsroom With Poppy Harlow',
+            facegender__gender__name='female'),
         group=True,
         stride=24)
 
@@ -39,8 +49,8 @@ def talking_heads_on_poppy_harlow():
     return qs_to_result(
         Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
             height__gte=0.3,
-            frame__video__show='CNN Newsroom With Poppy Harlow',
-            gender__name='female'),
+            person__frame__video__show='CNN Newsroom With Poppy Harlow',
+            facegender__gender__name='female'),
         group=True,
         stride=24)
 
@@ -50,10 +60,13 @@ def two_female_faces_on_poppy_harlow():
     r = []
     for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
         for frame in Frame.objects.filter(video=video).annotate(
-                n=F('number') % math.ceil(video.fps)).filter(n=0)[:1000:10]:
+                n=F('number') % math.ceil(video.fps)).filter(n=0)[:10000:20]:
             faces = list(
                 Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
-                    labeler__name='mtcnn', frame=frame, gender__name='female', height__gte=0.2))
+                    labeler__name='mtcnn',
+                    person__frame=frame,
+                    facegender__gender__name='female',
+                    height__gte=0.2))
             if len(faces) == 2:
                 r.append({
                     'video': frame.video.id,
@@ -66,19 +79,15 @@ def two_female_faces_on_poppy_harlow():
 @query("Faces like Poppy Harlow")
 def faces_like_poppy_harlow():
     id = 4457280
-    FaceFeatures.dropTempFeatureModel()
-    FaceFeatures.getTempFeatureModel([id])
-    result = qs_to_result(Face.objects.all().order_by('facefeaturestemp__distto_{}'.format(id)))
+    FaceFeatures.compute_distances(id)
+    return qs_to_result(Face.objects.all().order_by('facefeatures__distto'))
 
 
 @query("Faces unlike Poppy Harlow")
 def faces_unlike_poppy_harlow():
     id = 4457280
-    FaceFeatures.dropTempFeatureModel()
-    FaceFeatures.getTempFeatureModel([id])
-    result = qs_to_result(
-        Face.objects.filter(**{'facefeaturestemp__distto_{}__gte'.format(id): 1.7}).order_by(
-                                   'facefeaturestemp__distto_{}'.format(id)))
+    FaceFeatures.compute_distances(id)
+    return qs_to_result(Face.objects.all().order_by('-facefeatures__distto'))
 
 
 @query("MTCNN missed face bboxes vs. handlabeled")
@@ -87,10 +96,12 @@ def mtcnn_vs_handlabeled():
 
     videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for frame in Frame.objects.filter(
-            Q(video__show='Situation Room With Wolf Blitzer') |
-            Q(video__show='Special Report With Bret Baier')).filter(
-                face__labeler__name='handlabeled').select_related('video').order_by('id')[:50000:5]:
-        faces = list(Face.objects.filter(frame=frame).select_related('labeler'))
+            Q(video__show='Situation Room With Wolf Blitzer') | \
+            Q(video__show='Special Report With Bret Baier')) \
+        .filter(person__face__labeler__name='handlabeled') \
+        .select_related('video') \
+        .order_by('id')[:50000:5]:
+        faces = list(Face.objects.filter(person__frame=frame).select_related('labeler'))
         has_mtcnn = any([f.labeler.name == 'mtcnn' for f in faces])
         has_handlabeled = any([f.labeler.name == 'handlabeled' for f in faces])
         if not has_mtcnn or not has_handlabeled:
@@ -145,14 +156,14 @@ def mtcnn_vs_openpose():
     videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     frames = Frame.objects.all() \
         .annotate(c=Subquery(
-            Pose.objects.filter(frame=OuterRef('pk'), bbox_score__gt=0).values('frame') \
+            Pose.objects.filter(person__frame=OuterRef('pk')).values('person__frame') \
             .annotate(c=Count('*')).values('c'), models.IntegerField())) \
         .filter(c__gt=0) \
         .select_related('video') \
         .order_by('id')
     for frame in frames[:50000:5]:
-        faces = list(Face.objects.filter(frame=frame))
-        poses = list(Pose.objects.filter(frame=frame, bbox_score__gt=0))
+        faces = list(Face.objects.filter(person__frame=frame))
+        poses = list(Pose.objects.filter(person__frame=frame))
         for face in faces:
             videos[frame.video.id][frame.id]['mtcnn'].append(face)
         for pose in poses:
@@ -210,16 +221,16 @@ def people_sitting():
             a = ang(v)
             return a > 0 or a < -140
 
-        return is_angled(kp[Pose.LKnee] - kp[Pose.LHip]) or is_angled(kp[Pose.RKnee] -
-                                                                      kp[Pose.RHip])
+        return is_angled(kp[Pose.LKnee] - kp[Pose.LHip]) or is_angled(
+            kp[Pose.RKnee] - kp[Pose.RHip])
 
     frames_qs = Frame.objects.filter(video__channel='CNN') \
         .annotate(
             pose_count=Subquery(
-                Pose.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values('c')),
+                Pose.objects.filter(person__frame=OuterRef('pk')).values('person__frame').annotate(c=Count('*')).values('c')),
             woman_count=Subquery(
-                Face.objects.filter(frame=OuterRef('pk'), gender__name='female').values('frame').annotate(c=Count('*')).values('c'),
-                output_field=models.IntegerField())) \
+                Face.objects.filter(person__frame=OuterRef('pk'), facegender__gender__name='female').values('person__frame').annotate(c=Count('*')).values('c'),
+                models.IntegerField())) \
         .filter(pose_count__gt=0, pose_count__lt=6, woman_count__gt=0).order_by('id').select_related('video')
 
     frames = []
@@ -227,7 +238,7 @@ def people_sitting():
         filtered = filter_poses(
             'pose',
             is_sitting, [Pose.LAnkle, Pose.LKnee, Pose.RAnkle, Pose.RKnee, Pose.RHip, Pose.LHip],
-            poses=Pose.objects.filter(frame=frame))
+            poses=Pose.objects.filter(person__frame=frame))
 
         if len(filtered) > 0:
             frames.append((frame, filtered))
@@ -241,27 +252,31 @@ def people_sitting():
 
 @query("Obama pictures")
 def obama_pictures():
-    id = 3938394
-    FaceFeatures.compute_distances(id)
-    sq = Face.objects.filter(
-        track=OuterRef('pk'), labeler__name='mtcnn',
-        facefeatures__distto__lte=1.0).values('track').annotate(c=Count('*'))
-    out_tracks = []
-
     def close(x, y):
         return abs(x - y) < 0.02
 
-    tracks = list(
-        FaceTrack.objects.annotate(
-            duration=Track.duration(), c=Subquery(sq.values('c'), models.IntegerField())).filter(
-                duration__gt=0, c__gt=0))
-    faces = list(Face.objects.filter(track__in=tracks).select_related('frame'))
-    face_tracks = {t.id: (t, []) for t in tracks}
-    for f in faces:
-        face_tracks[f.track_id][1].append(f)
+    id = 3938394
+    FaceFeatures.compute_distances(id)
+    sq = Face.objects.filter(
+        person__tracks=OuterRef('pk'), labeler__name='mtcnn',
+        facefeatures__distto__lte=1.0).values('person__tracks').annotate(c=Count('*'))
+    out_tracks = []
+
+    face_tracks = {}  #{t.id: (t, []) for t in tracks}
+    for track in \
+        PersonTrack.objects.filter(labeler__name='featuretrack') \
+        .annotate(
+            duration=Track.duration(),
+            c=Subquery(sq.values('c'), models.IntegerField())) \
+        .filter(duration__gt=0, c__gt=0):
+
+        faces = list(
+            Face.objects.filter(person__tracks=track,
+                                labeler__name='mtcnn').select_related('person__frame'))
+        face_tracks[track.id] = (track, faces)
 
     for track, faces in face_tracks.values():
-        faces.sort(lambda a, b: a.frame.number - b.frame.number)
+        faces.sort(lambda a, b: a.person.frame.number - b.person.frame.number)
         valid = True
         for i in range(len(faces) - 1):
             if not (close(faces[i].bbox_x1, faces[i + 1].bbox_x1)

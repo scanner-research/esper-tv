@@ -13,7 +13,7 @@ import numpy as np
 import traceback
 from timeit import default_timer as now
 
-from query.base_models import ModelDelegator
+from query.base_models import ModelDelegator, Track
 
 
 def fprint(*args):
@@ -27,8 +27,8 @@ def load_stdlib_models(dataset):
 
 
 def at_fps(qs, n=1):
-    return qs.annotate(_tmp=F('number') % (Cast('video__fps', models.IntegerField()) / n)).filter(
-        _tmp=0)
+    return qs.annotate(_tmp=F('number') % (
+        Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
 
 
 def bbox_to_dict(f):
@@ -97,8 +97,8 @@ def simple_result(result, ty):
 def filter_poses(ty, fn, used_kps, poses=None):
     filtered = []
     if poses is None:
-        poses = Pose.objects.all().order_by('id').select_related('frame',
-                                                                 'frame__video')[:100000:10]
+        poses = Pose.objects.all().order_by('id').select_related('person__frame',
+                                                                 'person__frame__video')[:100000:10]
     for pose in poses:
         kps = getattr(pose, '{}_keypoints'.format(ty))()
         bad = False
@@ -153,7 +153,7 @@ def qs_to_result(result,
 
     elif cls_name == 'Face' or cls_name == 'Pose':
         if not shuffle and not custom_order:
-            result = result.order_by('frame__video', 'frame__number')
+            result = result.order_by('person__frame__video', 'person__frame__number')
 
         if cls_name == 'Face':
             fn = bbox_to_dict
@@ -162,8 +162,9 @@ def qs_to_result(result,
 
         if frame_major:
             frames = set()
-            for inst in result.values('frame__video', 'frame')[:LIMIT * stride:stride]:
-                frames.add((inst['frame__video'], inst['frame']))
+            for inst in result.values('person__frame__video',
+                                      'person__frame')[:LIMIT * stride:stride]:
+                frames.add((inst['person__frame__video'], inst['person__frame']))
             frames = list(frames)
             frames.sort(key=itemgetter(0, 1))
             for (video, frame) in frames:
@@ -172,52 +173,35 @@ def qs_to_result(result,
                     video,
                     'start_frame':
                     frame,
-                    'objects': [fn(inst) for inst in result.filter(frame=frame)]
+                    'objects': [fn(inst) for inst in result.filter(person__frame=frame)]
                 })
 
         else:
-            for inst in result[:LIMIT * stride:stride]:
+            for inst in result.select_related('person__frame')[:LIMIT * stride:stride]:
                 r = {
-                    'video': inst.frame.video.id,
-                    'start_frame': inst.frame.id,
+                    'video': inst.person.frame.video.id,
+                    'start_frame': inst.person.frame.id,
                     'objects': [fn(inst)]
                 }
                 materialized_result.append(r)
 
-    elif cls_name == 'FaceTrack':
-        # tracks = list(result[:LIMIT*stride:stride])
-
-        # TODO: move to django 1.11, enable subquery
-
-        # face_ids = [f.id for f in faces]
-        # sq = Face.objects.filter(face_id=OuterRef('pk')).annotate(min_frame=Min('frame__number'))
-        # tracks = Face \
-        #     .filter(id__in=face_ids) \
-        #     .annotate(min_frame=Subquery(sq.values('min_frame'))) \
-        #     .values()
-
+    elif cls_name == 'PersonTrack':
         if not shuffle and not custom_order:
             result = result.order_by('video', 'min_frame')
 
-        for t in result.values('id')[:1000]:
-            bounds = Face.objects.filter(track=t['id']).aggregate(
-                min_frame=Min('frame__number'), max_frame=Max('frame__number'))
-            assert (bounds['min_frame'] is not None)
-            if bounds['min_frame'] == bounds['max_frame']:
-                continue
-
-            min_face = Face.objects.filter(frame__number=bounds['min_frame'], track=t['id'])[0]
-            video = min_face.frame.video.id
+        for t in result.annotate(duration=Track.duration()).filter(duration__gt=0)[:1000]:
+            min_person = Person.objects.filter(frame__number=bounds.min_frame, track=t)[0]
+            video = min_person.frame.video.id
             materialized_result.append({
                 'video':
                 video,
                 'track':
-                t['id'],
+                t.id,
                 'start_frame':
-                Frame.objects.get(video_id=video, number=bounds['min_frame']).id,
+                Frame.objects.get(video_id=video, number=t.min_frame).id,
                 'end_frame':
-                Frame.objects.get(video_id=video, number=bounds['max_frame']).id,
-                'objects': [bbox_to_dict(min_face)]
+                Frame.objects.get(video_id=video, number=t.max_frame).id,
+                'objects': [bbox_to_dict(Face.objects.filter(person=min_person)[0])]
             })
 
             if len(materialized_result) == LIMIT:
@@ -248,10 +232,10 @@ def qs_to_result(result,
         boundaries = []
         i = 0
         intvl_id = 0
-        while i < len(points):
+        while i < len(points) - 1:
             num_intervals = 1
             (_, _, frame, is_end) = points[i]
-            while i + 1 < len(points):
+            while i < len(points) - 1:
                 if points[i + 1][2] == frame:
                     num_intervals += 1
                     i += 1
@@ -304,9 +288,10 @@ def qs_to_result(result,
                 start,
                 'end_frame':
                 end,
-                #'objects': [bbox_to_dict(face) for face in Face.objects.filter(frame=f)]
-                'objects':
-                [bbox_to_dict(face) for face in Face.objects.filter(frame=f, track__in=tracks)]
+                'objects': [
+                    bbox_to_dict(face)
+                    for face in Face.objects.filter(person__frame=f, person__tracks__in=tracks)
+                ]
             })
 
         ty_name = '{} (segmented)'.format(ty_name)

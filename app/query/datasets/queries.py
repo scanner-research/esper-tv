@@ -44,21 +44,24 @@ def all_videos():
 @query("Frames with a man left of a woman")
 def man_left_of_woman():
     frames = []
-    frames_qs = Frame.objects.annotate(c=Subquery(
-        Face.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values(
-            'c'))).filter(c__gt=0).order_by('id').select_related('video')
+    frames_qs = Frame.objects.annotate(
+        c=Subquery(
+            Face.objects.filter(person__frame=OuterRef('pk')).values('person__frame').annotate(
+                c=Count('*')).values('c'))).filter(c__gt=0).order_by('id').select_related('video')
     for frame in frames_qs[:100000:10]:
         faces = list(
-            Face.objects.filter(frame=frame, labeler__name='mtcnn').select_related('gender'))
+            FaceGender.objects.filter(
+                face__person__frame=frame, face__labeler__name='mtcnn',
+                labeler__name='rudecarnie').select_related('face', 'gender'))
         good = None
         for face1 in faces:
             for face2 in faces:
                 if face1.id == face2.id: continue
                 if face1.gender.name == 'male' and \
                     face2.gender.name == 'female' and \
-                    face1.bbox_x2 < face2.bbox_x1 and \
-                    face1.height() > 0.3 and face2.height() > 0.3:
-                    good = (face1, face2)
+                    face1.face.bbox_x2 < face2.face.bbox_x1 and \
+                    face1.face.height() > 0.3 and face2.face.height() > 0.3:
+                    good = (face1.face, face2.face)
                     break
             else:
                 continue
@@ -79,14 +82,15 @@ def two_poses_with_two_hands_above_head():
         return kp[Pose.LWrist][1] < kp[Pose.Nose][1] and kp[Pose.RWrist][1] < kp[Pose.Nose][1]
 
     frames = []
-    frames_qs = Frame.objects.annotate(c=Subquery(
-        Pose.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values(
-            'c'))).filter(c__gt=0).order_by('id').select_related('video')
+    frames_qs = Frame.objects.annotate(
+        c=Subquery(
+            Pose.objects.filter(person__frame=OuterRef('pk')).values('person__frame').annotate(
+                c=Count('*')).values('c'))).filter(c__gt=0).order_by('id').select_related('video')
     for frame in frames_qs[:100000:10]:
         filtered = filter_poses(
             'pose',
             hands_above_head, [Pose.Nose, Pose.RWrist, Pose.LWrist],
-            poses=Pose.objects.filter(frame=frame))
+            poses=Pose.objects.filter(person__frame=frame))
         if len(filtered) >= 2:
             frames.append((frame, filtered))
 

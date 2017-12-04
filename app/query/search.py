@@ -14,7 +14,7 @@ import numpy as np
 import traceback
 import datetime
 
-from base_models import ModelDelegator, Track, Concept
+from base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
 
 
