@@ -1,6 +1,7 @@
 #!/bin/bash
+set -e
 
-rm -rf example-dataset.tar.gz example.mp4 paths db-dump.sql assets/thumbnails
+rm -rf example-dataset.tar.gz example.mp4 paths db-dump.sql assets/thumbnails scanner_db
 youtube-dl "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f mp4 -o example.mp4
 echo "example.mp4" > paths
 python manage.py cleanup Video

@@ -42,19 +42,19 @@ class Command(BaseCommand):
             for path in paths:
                 video = Video.objects.get(path=path)
 
-                faces = Face.objects.filter(frame__video=video, labeler=face_labeler) \
-                                            .select_related('frame') \
-                                            .order_by('frame__video__id', 'frame__number')
+                faces = Face.objects.filter(person__frame__video=video, labeler=face_labeler) \
+                                            .select_related('person__frame') \
+                                            .order_by('person__frame__video__id', 'person__frame__number')
                 faces = [f for f in faces if f.bbox_y2 - f.bbox_y1 >= .04]
 
                 frame_numbers = []
                 rows = []
                 cur_frame = None
                 for f in faces:
-                    if f.frame.id != cur_frame:
-                        cur_frame = f.frame.id
+                    if f.person.frame.id != cur_frame:
+                        cur_frame = f.person.frame.id
                         rows.append([])
-                        frame_numbers.append(f.frame.number)
+                        frame_numbers.append(f.person.frame.number)
 
                     rows[-1].append(db.protobufs.BoundingBox(
                         x1=f.bbox_x1, x2=f.bbox_x2, y1=f.bbox_y1, y2=f.bbox_y2))
@@ -85,7 +85,7 @@ class Command(BaseCommand):
                     for i in range(0, len(g), 5):
                         (label, score) = struct.unpack('=cf', g[i:(i+5)])
                         face = insts[inst_idx]
-                        gender_models.append(Gender(name=label, labeler=gender_labeler, face=face))
+                        gender_models.append(FaceGender(gender=Gender.objects.get_or_create(name=label)[0], labeler=gender_labeler, face=face))
                         inst_idx += 1
 
-            Gender.objects.bulk_create(gender_models)
+            FaceGender.objects.bulk_create(gender_models)

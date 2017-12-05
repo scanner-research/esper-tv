@@ -32,7 +32,7 @@ class Command(BaseCommand):
                 for video in videos
             ]
             bulk_job = BulkJob(output=output, jobs=jobs)
-            # outputs = db.run(bulk_job, force=True)
+            outputs = db.run(bulk_job, force=True)
             outputs = [db.table(video.path + '_poses') for video in videos]
             print('Scanner computation finished.')
 
