@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from collections import defaultdict
 from django.db.models import Min, Max, Q, F, Count, OuterRef, Subquery
 from django.db.models.functions import Cast
+from query.datasets.stdlib import *
 from django.forms.models import model_to_dict
 from pprint import pprint
 from operator import itemgetter
@@ -68,6 +69,18 @@ def bbox_midpoint(f):
 
 def bbox_dist(f1, f2):
     return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
+
+
+def bbox_iou(f1, f2):
+    x1 = max(f1.bbox_x1, f2.bbox_x1)
+    x2 = min(f1.bbox_x2, f2.bbox_x2)
+    y1 = max(f1.bbox_y1, f2.bbox_y1)
+    y2 = min(f1.bbox_y2, f2.bbox_y2)
+
+    if x1 > x2 or y1 > y2: return 0
+
+    intersection = (x2 - x1) * (y2 - y1)
+    return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
 
 
 def group_result(materialized_result):

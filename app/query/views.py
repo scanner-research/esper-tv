@@ -15,6 +15,9 @@ import subprocess as sp
 import shlex
 import math
 import importlib
+import pysrt
+import requests
+from storehousepy import StorageConfig, StorageBackend
 
 import search
 import query.datasets.queries as queries
@@ -24,11 +27,18 @@ BUCKET = os.environ.get('BUCKET')
 DATA_PATH = os.environ.get('DATA_PATH')
 FALLBACK_ENABLED = False
 
+if ESPER_ENV == 'google':
+    storage_config = StorageConfig.make_gcs_config(BUCKET)
+else:
+    storage_config = StorageConfig.make_posix_config()
+storage = StorageBackend.make_from_config(storage_config)
+
 
 # Prints and flushes (necessary for gunicorn logs)
 def _print(*args):
     print(*args)
     sys.stdout.flush()
+
 
 # Renders home page
 def index(request):
@@ -60,15 +70,16 @@ def index(request):
             schema.append([cls, get_fields(getattr(ds, cls))])
         schemas.append([name, schema])
 
-    return render(request, 'index.html', {
-        'globals':
-        json.dumps({
-            'bucket': BUCKET,
-            'selected': os.environ.get('DATASET'),
-            'schemas': schemas,
-            'queries': queries_
+    return render(
+        request, 'index.html', {
+            'globals':
+            json.dumps({
+                'bucket': BUCKET,
+                'selected': os.environ.get('DATASET'),
+                'schemas': schemas,
+                'queries': queries_
+            })
         })
-    })
 
 
 # Write out requested thumbnails to disk
@@ -80,11 +91,12 @@ def extract(frames, dataset):
         resized = db.ops.Resize(frame=gathered, width=640, preserve_aspect=True, device=device)
         compressed = db.ops.ImageEncoder(frame=resized)
         output = db.ops.Output(columns=[compressed])
-        job = Job(op_args={
-            frame: db.table(frames[0].video.path).column('frame'),
-            gathered: db.sampler.gather([frame.number for frame in frames]),
-            output: '_ignore'
-        })
+        job = Job(
+            op_args={
+                frame: db.table(frames[0].video.path).column('frame'),
+                gathered: db.sampler.gather([frame.number for frame in frames]),
+                output: '_ignore'
+            })
 
         start = now()
         [output] = db.run(BulkJob(output=output, jobs=[job]), force=True)
@@ -176,3 +188,32 @@ def schema(request):
         return JsonResponse({'error': str(e)})
 
     return JsonResponse({'result': result})
+
+
+def srt_to_vtt(s):
+    subs = pysrt.from_string(s)
+    entry_fmt = u'{position}\n{start} --> {end}\n{text}'
+
+    def fmt_time(t):
+        return u'{:02d}:{:02d}:{:02d}.{:03d}'.format(t.hours, t.minutes, t.seconds, t.milliseconds)
+
+    entries = [
+        entry_fmt.format(
+            position=i, start=fmt_time(sub.start), end=fmt_time(sub.end), text=sub.text)
+        for i, sub in enumerate(subs)
+    ]
+
+    return u'\n\n'.join([u'WEBVTT'] + entries)
+
+
+def subtitles(request):
+    m = ModelDelegator(request.GET.get('dataset'))
+    m.import_all(locals())
+
+    path = request.GET.get('video')
+    base, _ = os.path.splitext(path)
+
+    s = storage.read('{}.cc5.srt'.format(base)).decode('utf-8')
+    vtt = srt_to_vtt(s)
+
+    return HttpResponse(vtt, content_type="text/vtt")

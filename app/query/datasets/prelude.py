@@ -1,34 +1,58 @@
 from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType
 from query.base_models import ModelDelegator, Track
-from django.db.models import Min, Max, Count, F, OuterRef, Subquery
-from django.db.models.functions import Cast
+from query.datasets.stdlib import *
+from django.db import connections
+from django.db.models.query import QuerySet
+from django.db.models import Min, Max, Count, F, OuterRef, Subquery, Sum, Avg
+from django.db.models.functions import Cast, Extract
+from django.utils import timezone
+import datetime
+from IPython.core.getipython import get_ipython
 import django.db.models as models
 import os
 import subprocess as sp
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import pandas as pd
-import qgrid
-import progressbar
 import sys
 
-plt.rc("axes.spines", top=False, right=False)
-sns.set_style('white')
-
+# Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
 m.import_all(globals())
 
+# Access to Scanner protobufs
 cfg = Config()
 proto = ProtobufGenerator(cfg)
 
+# Only run if we're in an IPython notebook
+if get_ipython() is not None:
+    # Render all DataFrames via qgrid
+    import qgrid
+    qgrid.set_grid_option('minVisibleRows', 1)
+    qgrid.enable()
+
+    # Matplotlib/seaborn config
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    plt.rc("axes.spines", top=False, right=False)
+    sns.set_style('white')
+
+
 def progress_bar(n):
-    return progressbar.ProgressBar(max_value=n, widgets=[
-        progressxbar.Percentage(), ' ',
-        '(', progressbar.SimpleProgress(), ')',
-        ' ', progressbar.Bar(), ' ',
-        progressbar.AdaptiveETA(),
-    ])
+    import progressbar
+    return progressbar.ProgressBar(
+        max_value=n,
+        widgets=[
+            progressxbar.Percentage(),
+            ' ',
+            '(',
+            progressbar.SimpleProgress(),
+            ')',
+            ' ',
+            progressbar.Bar(),
+            ' ',
+            progressbar.AdaptiveETA(),
+        ])
+
 
 # http://code.activestate.com/recipes/577058/
 def query_yes_no(question, default="yes"):
@@ -41,8 +65,7 @@ def query_yes_no(question, default="yes"):
 
     The "answer" return value is True for "yes" or False for "no".
     """
-    valid = {"yes": True, "y": True, "ye": True,
-             "no": False, "n": False}
+    valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
     if default is None:
         prompt = " [y/n] "
     elif default == "yes":
@@ -60,5 +83,15 @@ def query_yes_no(question, default="yes"):
         elif choice in valid:
             return valid[choice]
         else:
-            sys.stdout.write("Please respond with 'yes' or 'no' "
-                             "(or 'y' or 'n').\n")
+            sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
+
+
+# TODO(wcrichto): doesn't work for queries with strings
+class QuerySetExplainMixin:
+    def explain(self):
+        cursor = connections[self.db].cursor()
+        cursor.execute('EXPLAIN ANALYZE %s' % str(self.query))
+        return "\n".join(([t for (t, ) in cursor.fetchall()]))
+
+
+QuerySet.__bases__ += (QuerySetExplainMixin, )

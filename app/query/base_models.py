@@ -125,6 +125,7 @@ class Video(models.Model):
     fps = models.FloatField()
     width = models.IntegerField()
     height = models.IntegerField()
+    has_captions = models.BooleanField(default=False)
 
 
 class Frame(models.Model):

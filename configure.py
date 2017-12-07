@@ -9,7 +9,8 @@ import multiprocessing
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
 
-config = DotMap(yaml.load("""
+config = DotMap(
+    yaml.load("""
 version: '2'
 services:
   nginx:
@@ -35,10 +36,11 @@ services:
       - ${{HOME}}/.bash_history:/root/.bash_history
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
-    environment: ["IPYTHON_PORT={ipython_port}"]
+    environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter"]
 """.format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=multiprocessing.cpu_count())))
 
-db_local = DotMap(yaml.load("""
+db_local = DotMap(
+    yaml.load("""
 image: postgres:9.5
 environment:
   - POSTGRES_USER=will
@@ -48,7 +50,8 @@ volumes: ["./postgres:/var/lib/postgresql/data"]
 ports: ["5432"]
 """))
 
-db_google = DotMap(yaml.load("""
+db_google = DotMap(
+    yaml.load("""
 image: gcr.io/cloudsql-docker/gce-proxy:1.09
 volumes: ["./service-key.json:/config"]
 environment: []
@@ -77,7 +80,8 @@ def main():
         })
 
     if 'google' in base_config:
-        config.services.app.environment.append('GOOGLE_PROJECT={}'.format(base_config.google.project))
+        config.services.app.environment.append('GOOGLE_PROJECT={}'.format(
+            base_config.google.project))
 
     if 'compute' in base_config:
         if 'gpu' in base_config.compute:
@@ -104,8 +108,8 @@ def main():
         base_config.database.user if 'user' in base_config.database else 'root'))
 
     if 'password' in base_config.database:
-        config.services.app.environment.append(
-            "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
+        config.services.app.environment.append("DJANGO_DB_PASSWORD={}".format(
+            base_config.database.password))
 
     scanner_config = {'scanner_path': '/opt/scanner'}
     if base_config.storage.type == 'google':

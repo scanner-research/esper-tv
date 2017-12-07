@@ -92,7 +92,7 @@ export default class SearchInputView extends React.Component {
     error: null
   }
 
-  query = null
+  query = localStorage.getItem("lastQuery")
 
   _onSearch = (e) => {
     e.preventDefault();
@@ -121,6 +121,7 @@ export default class SearchInputView extends React.Component {
   /* Hacks to avoid code getting wiped out when setState causes the form to re-render. */
   _onCodeChange = (newCode) => {
     this.query = newCode;
+    localStorage.lastQuery = this.query;
   }
   componentDidUpdate() {
     this._editor.editor.setValue(this.query, 1);

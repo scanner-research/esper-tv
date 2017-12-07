@@ -47,11 +47,18 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 # Python dependencies
 ADD requirements.txt .
 ENV TF_VERSION=1.2.0
+ADD .deps/nbconfig /root/.jupyter/nbconfig
 RUN (if [ "$device2" = "cpu" ]; then pip install tensorflow==${TF_VERSION}; else pip install tensorflow-gpu==${TF_VERSION}; fi) && \
     pip install -r requirements.txt && \
+    jupyter nbextension enable qgrid --py --sys-prefix && \
     jupyter nbextension install --sys-prefix --py vega && \
     jupyter nbextension enable vega --py --sys-prefix && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
+    jupyter contrib nbextension install --user && \
+    jupyter nbextensions_configurator enable --user && \
+    jupyter nbextension enable hide_input/main && \
+    jupyter nbextension enable toc2/main && \
+    jupyter nbextension enable code_prettify/autopep8 && \
     python -c "import matplotlib"
 
 # Fix npm hanging on OS X
@@ -70,4 +77,5 @@ ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
+    python scripts/set-jupyter-password.py && \
     supervisord -c supervisord.conf

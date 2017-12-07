@@ -4,9 +4,17 @@ import math
 import numpy as np
 
 
+class Show(base.Model):
+    name = base.CharField()
+
+
+class Channel(base.Model):
+    name = base.CharField()
+
+
 class Video(base.Video):
-    channel = base.CharField()
-    show = base.CharField()
+    channel = base.ForeignKey(Channel)
+    show = base.ForeignKey(Show)
     time = models.DateTimeField()
 
     def get_stride(self):
@@ -53,15 +61,27 @@ class IdentityLabel(base.Attribute):
 class Pose(base.Attribute, base.Pose):
     person = base.ForeignKey(Person)
 
+    class Meta:
+        unique_together = ('labeler', 'person')
+
 
 class Face(base.Attribute, base.BoundingBox):
     person = base.ForeignKey(Person)
+
+    class Meta:
+        unique_together = ('labeler', 'person')
 
 
 class FaceGender(base.Attribute):
     face = base.ForeignKey(Face)
     gender = base.ForeignKey(Gender)
 
+    class Meta:
+        unique_together = ('labeler', 'face')
+
 
 class FaceFeatures(base.Attribute, base.Features):
     face = base.ForeignKey(Face)
+
+    class Meta:
+        unique_together = ('labeler', 'face')

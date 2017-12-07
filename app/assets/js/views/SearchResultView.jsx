@@ -74,8 +74,6 @@ class GroupsView extends React.Component {
       let neg = [];
       for (let x of positive_ex) pos.push(window.search_result.result[x].elements[0].objects[0].id);
       for (let x of negative_ex) neg.push(window.search_result.result[x].elements[0].objects[0].id);
-      console.log('pos = ['+pos.join(', ') + ']');
-      console.log('neg = ['+neg.join(', ') + ']');
     }
   }
 
@@ -150,7 +148,6 @@ class GroupView extends React.Component {
 
 class ClipView extends React.Component {
   state = {
-    hover: false,
     showVideo: false,
     loadingVideo: false,
     expand: false,
@@ -202,7 +199,6 @@ class ClipView extends React.Component {
 
   _onMouseEnter = () => {
     document.addEventListener('keypress', this._onKeyPress);
-    this.setState({hover: true});
   }
 
   _onMouseLeave = () => {
@@ -219,7 +215,9 @@ class ClipView extends React.Component {
       this._timer = null;
     }
 
-    this.setState({hover: false, showVideo: false, loadingVideo: false});
+    if (!this.state.expand) {
+      this.setState({showVideo: false, loadingVideo: false});
+    }
   }
 
   _onClick = () => {
@@ -236,6 +234,8 @@ class ClipView extends React.Component {
 
   _onLoadedData = () => {
     this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
+    this._video.textTracks[0].mode = 'showing';
+    this._video.play();
   }
 
   _onTimeUpdate = () => {
@@ -304,8 +304,13 @@ class ClipView extends React.Component {
            onClick={this._onClick}>
         <div className='media-container'>
           {this.state.loadingVideo || this.state.showVideo
-           ? <video autoPlay controls muted ref={(n) => {this._video = n;}} style={vidStyle}>
+           ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
              <source src={`/system_media/${video.path}`} />
+             {video.has_captions
+              ? <track kind="subtitles"
+                       src={`/api/subtitles?dataset=${DATASET}&video=${encodeURIComponent(video.path)}`}
+                       srclang="en" />
+              : <span />}
            </video>
            : <div />}
           {this.state.loadingVideo

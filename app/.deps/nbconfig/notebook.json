@@ -1,0 +1,25 @@
+{
+  "toc2": {
+    "skip_h1_title": false, 
+    "toc_window_display": false, 
+    "markTocItemOnScroll": false, 
+    "widenNotebook": false, 
+    "navigate_menu": false, 
+    "moveMenuLeft": false, 
+    "sideBar": false, 
+    "collapse_to_match_collapsible_headings": false, 
+    "toc_cell": true
+  }, 
+  "load_extensions": {
+    "collapsible_headings/main": false, 
+    "toc2/main": true, 
+    "nbextensions_configurator/config_menu/main": true, 
+    "codefolding/main": false, 
+    "hide_input/main": true, 
+    "code_prettify/autopep8": true, 
+    "contrib_nbextensions_help_item/main": true
+  }, 
+  "collapsible_headings": {
+    "collapse_to_match_toc": true
+  }
+}
