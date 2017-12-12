@@ -294,3 +294,52 @@ def obama_pictures():
         'end_frame': Frame.objects.get(video=t.video, number=t.max_frame).id,
         'objects': [bbox_to_dict(f)]
     } for (t, f) in out_tracks], 'FaceTrack')
+
+
+@query("Segments about immigration")
+def segments_about_immigration():
+    tracks = TopicTrack.objects.filter(topic__name='immigration').select_related('video')
+    return simple_result([{
+        'video':
+        track.video.id,
+        'start_frame':
+        Frame.objects.get(
+            number=(track.max_frame + track.min_frame) / 2 / 30 * 30, video=track.video).id,
+        'objects': []
+    } for track in tracks], 'TopicTrack')
+
+
+def panels():
+    mtcnn = Labeler.objects.get(name='mtcnn')
+    face_qs = Face.objects.annotate(height=BoundingBox.height_expr()).filter(
+        height__gte=0.25, labeler=mtcnn)
+    frames = Frame.objects.annotate(c=Subquery(
+        face_qs.filter(person__frame=OuterRef('pk')) \
+        .values('person__frame') \
+        .annotate(c=Count('*')) \
+        .values('c'), models.IntegerField())) \
+        .filter(c__gte=3, c__lte=4)
+
+    output_frames = []
+    for frame in frames[:10000:10]:
+        faces = list(face_qs.filter(person__frame=frame))
+        y = faces[0].bbox_y1
+        valid = True
+        for i in range(1, len(faces)):
+            if abs(faces[i].bbox_y1 - y) > 0.05:
+                valid = False
+                break
+        if valid:
+            output_frames.append((frame, faces))
+
+    return output_frames
+
+
+@query("Panels")
+def panels_():
+    from query.datasets.tvnews.queries import panels
+    return simple_result([{
+        'video': frame.video.id,
+        'start_frame': frame.id,
+        'objects': [bbox_to_dict(f) for f in faces]
+    } for (frame, faces) in panels()], 'Frame')

@@ -1,9 +1,9 @@
 from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType
-from query.base_models import ModelDelegator, Track
+from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
 from django.db import connections
 from django.db.models.query import QuerySet
-from django.db.models import Min, Max, Count, F, OuterRef, Subquery, Sum, Avg
+from django.db.models import Min, Max, Count, F, OuterRef, Subquery, Sum, Avg, Func
 from django.db.models.functions import Cast, Extract
 from django.utils import timezone
 import datetime
@@ -14,6 +14,7 @@ import subprocess as sp
 import numpy as np
 import pandas as pd
 import sys
+import sqlparse
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -87,11 +88,15 @@ def query_yes_no(question, default="yes"):
 
 
 # TODO(wcrichto): doesn't work for queries with strings
-class QuerySetExplainMixin:
+class QuerySetMixin:
     def explain(self):
         cursor = connections[self.db].cursor()
         cursor.execute('EXPLAIN ANALYZE %s' % str(self.query))
-        return "\n".join(([t for (t, ) in cursor.fetchall()]))
+        print("\n".join(([t for (t, ) in cursor.fetchall()])))
+
+    def print_sql(self):
+        q = str(self.query)
+        print(sqlparse.format(q, reindent=True))
 
 
-QuerySet.__bases__ += (QuerySetExplainMixin, )
+QuerySet.__bases__ += (QuerySetMixin, )

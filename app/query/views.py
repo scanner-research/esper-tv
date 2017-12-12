@@ -192,6 +192,8 @@ def schema(request):
 
 def srt_to_vtt(s):
     subs = pysrt.from_string(s)
+    subs.shift(seconds=-5)  # Seems like TV news captions are delayed by a few seconds
+
     entry_fmt = u'{position}\n{start} --> {end}\n{text}'
 
     def fmt_time(t):

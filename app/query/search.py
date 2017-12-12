@@ -1,8 +1,6 @@
 from __future__ import print_function
 from django.http import JsonResponse
 from collections import defaultdict
-from django.db.models import Min, Max, Q, F, Count, OuterRef, Subquery
-from django.db.models.functions import Cast
 import django.db.models as models
 from django.forms.models import model_to_dict
 from pprint import pprint
@@ -14,7 +12,6 @@ import numpy as np
 import traceback
 import datetime
 
-from base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
 
 
@@ -38,8 +35,8 @@ def search(params):
     ############### ^^^ DANGER -- REMOTE CODE EXECUTION ^^^ ###############
 
     if not isinstance(result, dict):
-        return make_error(
-            'Result must be a dict {{result, count, type}}, received type {}'.format(type(result)))
+        return make_error('Result must be a dict {{result, count, type}}, received type {}'.format(
+            type(result)))
 
     if not isinstance(result['result'], list):
         return make_error('Result must be a frame list')

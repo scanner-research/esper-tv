@@ -37,6 +37,14 @@ class Gender(base.Model):
     name = base.CharField()
 
 
+class Topic(base.Model):
+    name = base.CharField()
+
+
+class TopicTrack(base.Track):
+    topic = base.ForeignKey(Topic)
+
+
 class CommercialTrack(base.Track):
     pass
 

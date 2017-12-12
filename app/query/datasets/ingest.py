@@ -8,6 +8,7 @@ ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
 DATASET = os.environ.get('DATASET')
 
+
 def run(s, shell=False, output=False):
     if shell == True:
         return sp.check_output(s, shell=True)
@@ -65,18 +66,21 @@ def save_frames(video):
         .order_by('number').values('id')
     ]
     requests.post(
-        'http://localhost:8000/batch_fallback', data={'frames': ','.join(ids),
-                                                      'dataset': DATASET})
+        'http://localhost:8000/batch_fallback', data={
+            'frames': ','.join(ids),
+            'dataset': DATASET
+        })
 
 
 def ingest(paths, fun, dry_run=False):
     if not dry_run:
         with Database() as db:
             print 'Ingesting videos into Scanner...'
-            tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
-            for path, _ in failed:
-                paths.remove(path)
-            print('Scanner failed on: ', failed)
+            # tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
+            # for path, _ in failed:
+            #     paths.remove(path)
+            # print('Scanner failed on: ', failed)
+            tables = [db.table(p) for p in paths]
             all_num_frames = [table.num_rows() for table in tables]
     else:
         all_num_frames = [0 for _ in range(len(paths))]
