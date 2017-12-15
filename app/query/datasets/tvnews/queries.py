@@ -80,14 +80,16 @@ def two_female_faces_on_poppy_harlow():
 def faces_like_poppy_harlow():
     id = 4457280
     FaceFeatures.compute_distances(id)
-    return qs_to_result(Face.objects.all().order_by('facefeatures__distto'))
+    return qs_to_result(
+        Face.objects.filter(facefeatures__distto__isnull=False).order_by('facefeatures__distto'))
 
 
 @query("Faces unlike Poppy Harlow")
 def faces_unlike_poppy_harlow():
     id = 4457280
     FaceFeatures.compute_distances(id)
-    return qs_to_result(Face.objects.all().order_by('-facefeatures__distto'))
+    return qs_to_result(
+        Face.objects.filter(facefeatures__distto__isnull=False).order_by('-facefeatures__distto'))
 
 
 @query("MTCNN missed face bboxes vs. handlabeled")

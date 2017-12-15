@@ -20,6 +20,11 @@ http {
             alias /app/assets;
         }
 
+        location /frameserver {
+            rewrite ^/frameserver/(.*)$ /$1 break;
+            proxy_pass http://frameserver:7500;
+        }
+
         include /etc/nginx/${ESPER_ENV}.conf;
 
         location @fallback {

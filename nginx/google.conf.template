@@ -1,15 +1,6 @@
 # TODO(wcrichto): fallback doesn't work, 404 doesn't get caught because it's behind
 # a redirect now.
 
-location /server_media {
-    rewrite ^/server_media/(.*)$ /${BUCKET}/${DATA_PATH}/$1 break;
-    proxy_pass https://storage.cloud.google.com;
-    proxy_pass_request_headers on;
-    proxy_intercept_errors on;
-    # error_page 301 302 307 = @handle_redirect;
-    # error_page 403 404 = @fallback;
-}
-
 location /system_media {
     rewrite ^/system_media/(.*)$ /${BUCKET}/$1 break;
     proxy_pass https://storage.cloud.google.com;

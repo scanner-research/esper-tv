@@ -25,7 +25,6 @@ import query.datasets.queries as queries
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
 DATA_PATH = os.environ.get('DATA_PATH')
-FALLBACK_ENABLED = False
 
 if ESPER_ENV == 'google':
     storage_config = StorageConfig.make_gcs_config(BUCKET)
@@ -139,33 +138,6 @@ def extract(frames, dataset):
         return jpg
 
 
-# Write many frames to disk
-@csrf_exempt
-def batch_fallback(request):
-    dataset = request.POST.get('dataset')
-    m = ModelDelegator(dataset)
-    frames = [int(s) for s in request.POST.get('frames').split(',')]
-    frames = m.Frame.objects.filter(id__in=frames)
-    extract(frames, dataset)
-    return JsonResponse({'success': True})
-
-
-# Write one frame to disk
-def fallback(request):
-    if not FALLBACK_ENABLED:
-        return HttpResponse(status=501)
-
-    request_path = request.get_full_path().split('/')[3:]
-    filename, _ = os.path.splitext(request_path[-1])
-    [ty, id] = filename.split('_')
-    assert ty == 'frame'
-
-    frame = Frame.objects.get(id=id)
-    jpg = extract([frame])
-
-    return HttpResponse(jpg, content_type="image/jpeg")
-
-
 # Run search routine
 def search2(request):
     params = json.loads(request.body)
@@ -190,6 +162,7 @@ def schema(request):
     return JsonResponse({'result': result})
 
 
+# Convert captions in SRT format to WebVTT (for displaying in web UI)
 def srt_to_vtt(s):
     subs = pysrt.from_string(s)
     subs.shift(seconds=-5)  # Seems like TV news captions are delayed by a few seconds
@@ -208,6 +181,7 @@ def srt_to_vtt(s):
     return u'\n\n'.join([u'WEBVTT'] + entries)
 
 
+# Get subtitles for video
 def subtitles(request):
     m = ModelDelegator(request.GET.get('dataset'))
     m.import_all(locals())

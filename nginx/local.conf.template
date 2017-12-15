@@ -1,11 +1,4 @@
 # INSECURE - allows reads of any file in your esper directory
-
-location /server_media {
-    alias /app/assets;
-    error_page 403 404 = @fallback;
-}
-
-# TODO(wcrichto): need to verify this is correct
 location /system_media {
     alias /app;
     error_page 403 404 = @fallback;

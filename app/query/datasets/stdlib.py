@@ -56,30 +56,6 @@ def pose_to_dict(f):
     }
 
 
-def bbox_area(f):
-    return (f.bbox_x2 - f.bbox_x1) * (f.bbox_y2 - f.bbox_y1)
-
-
-def bbox_midpoint(f):
-    return np.array([(f.bbox_x1 + f.bbox_x2) / 2, (f.bbox_y1 + f.bbox_y2) / 2])
-
-
-def bbox_dist(f1, f2):
-    return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
-
-
-def bbox_iou(f1, f2):
-    x1 = max(f1.bbox_x1, f2.bbox_x1)
-    x2 = min(f1.bbox_x2, f2.bbox_x2)
-    y1 = max(f1.bbox_y1, f2.bbox_y1)
-    y2 = min(f1.bbox_y2, f2.bbox_y2)
-
-    if x1 > x2 or y1 > y2: return 0
-
-    intersection = (x2 - x1) * (y2 - y1)
-    return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
-
-
 def group_result(materialized_result):
     grouped_result = defaultdict(list)
     for r in materialized_result:
@@ -199,8 +175,8 @@ def qs_to_result(result,
         if not shuffle and not custom_order:
             result = result.order_by('video', 'min_frame')
 
-        for t in result.annotate(duration=Track.duration()).filter(duration__gt=0)[:1000]:
-            min_person = Person.objects.filter(frame__number=bounds.min_frame, track=t)[0]
+        for t in result.annotate(duration=Track.duration_expr()).filter(duration__gt=0)[:1000]:
+            min_person = Person.objects.filter(frame__number=t.min_frame, tracks=t)[0]
             video = min_person.frame.video.id
             materialized_result.append({
                 'video':
@@ -227,6 +203,7 @@ def qs_to_result(result,
 
     if segment:
         tracks = [r['track'] for r in materialized_result]
+        assert (len(tracks) > 0)
         intervals = [(r['video'], r['start_frame'], r['end_frame']) for r in materialized_result]
         points = []
         for (video, start, end) in intervals:

@@ -87,6 +87,30 @@ def query_yes_no(question, default="yes"):
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
 
 
+def bbox_area(f):
+    return (f.bbox_x2 - f.bbox_x1) * (f.bbox_y2 - f.bbox_y1)
+
+
+def bbox_midpoint(f):
+    return np.array([(f.bbox_x1 + f.bbox_x2) / 2, (f.bbox_y1 + f.bbox_y2) / 2])
+
+
+def bbox_dist(f1, f2):
+    return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
+
+
+def bbox_iou(f1, f2):
+    x1 = max(f1.bbox_x1, f2.bbox_x1)
+    x2 = min(f1.bbox_x2, f2.bbox_x2)
+    y1 = max(f1.bbox_y1, f2.bbox_y1)
+    y2 = min(f1.bbox_y2, f2.bbox_y2)
+
+    if x1 > x2 or y1 > y2: return 0
+
+    intersection = (x2 - x1) * (y2 - y1)
+    return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
+
+
 # TODO(wcrichto): doesn't work for queries with strings
 class QuerySetMixin:
     def explain(self):

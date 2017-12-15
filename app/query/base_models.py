@@ -148,10 +148,13 @@ class Track(models.Model):
     max_frame = models.IntegerField()
 
     @staticmethod
-    def duration():
+    def duration_expr():
         return ExpressionWrapper(
             Cast(F('max_frame') - F('min_frame'), models.FloatField()) / F('video__fps'),
             models.FloatField())
+
+    def duration(self):
+        return (self.max_frame - self.min_frame) / int(self.video.fps)
 
 
 class Attribute(models.Model):
@@ -197,7 +200,7 @@ class Features(object):
         global feat_ids
 
         it = cls.objects.annotate(height=F('face__bbox_y2') - F('face__bbox_y1')).filter(
-            height__gte=0.2)
+            height__gte=0.1)
         if feat_nn is None:
             _print('Loading features...')
             feats = list(it[::5])
@@ -207,6 +210,12 @@ class Features(object):
             _print('Constructing KNN tree...')
             feat_nn = NearestNeighbors().fit(X)
             _print('Done!')
+
+        # Erase distances from previous computation
+        prev = list(cls.objects.filter(distto__isnull=False))
+        for feat in prev:
+            feat.distto = None
+        cls.objects.bulk_update(prev)
 
         dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()], 1000)
 

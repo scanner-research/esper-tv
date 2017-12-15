@@ -1,5 +1,5 @@
 from query.datasets.prelude import *
-from query.datasets.ingest import ingest
+from query.datasets.ingest import ingest, ingest_scanner
 from datetime import datetime
 
 
@@ -16,4 +16,6 @@ def ingestor(video, local_path):
     video.show = Show.objects.get_or_create(name=show)[0]
 
 
-ingest([s.strip() for s in open('paths').readlines()], ingestor)
+ingest_scanner([s.strip() for s in open('paths').readlines()])
+print('Done!')
+#ingest([s.strip() for s in open('paths').readlines()], ingestor)

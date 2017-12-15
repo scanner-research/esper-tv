@@ -58,30 +58,20 @@ def extract_audio(video):
     run(cmd)
 
 
-def save_frames(video):
-    stride = int(math.ceil(video.fps) / 2)
-    ids = [
-        str(f['id'])
-        for f in Frame.objects.filter(video=video, number__in=range(0, video.num_frames, stride))
-        .order_by('number').values('id')
-    ]
-    requests.post(
-        'http://localhost:8000/batch_fallback', data={
-            'frames': ','.join(ids),
-            'dataset': DATASET
-        })
+def ingest_scanner(paths):
+    with Database() as db:
+        print 'Ingesting videos into Scanner...'
+        tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
+        for path, _ in failed:
+            paths.remove(path)
+        print('Scanner failed on: ', failed)
+        return paths
 
 
 def ingest(paths, fun, dry_run=False):
     if not dry_run:
         with Database() as db:
-            print 'Ingesting videos into Scanner...'
-            # tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
-            # for path, _ in failed:
-            #     paths.remove(path)
-            # print('Scanner failed on: ', failed)
-            tables = [db.table(p) for p in paths]
-            all_num_frames = [table.num_rows() for table in tables]
+            all_num_frames = [db.table(p).num_rows() for p in paths if db.has_table(p)]
     else:
         all_num_frames = [0 for _ in range(len(paths))]
 
@@ -110,8 +100,6 @@ def ingest(paths, fun, dry_run=False):
                 frames = [Frame(number=i, video=video) for i in range(video.num_frames)]
                 Frame.objects.bulk_create(frames)
 
-                save_frames(video)
-
         except:
             Video.objects.filter(path=path).delete()
             raise
@@ -119,3 +107,44 @@ def ingest(paths, fun, dry_run=False):
         finally:
             if ESPER_ENV == 'google':
                 run('rm {}'.format(local_path))
+
+
+def ingest_pose(video, table, frame_numbers):
+    kp_size = (Pose.POSE_KEYPOINTS + Pose.FACE_KEYPOINTS + 2 * Pose.HAND_KEYPOINTS) * 3
+    poses = []
+    frames = list(Frame.objects.filter(video=video).order_by('number'))
+    pose_labeler, _ = Labeler.objects.get_or_create(name='openpose')
+    for (_, buf), frame_number in zip(table.column('pose').load(), frame_numbers):
+        if len(buf) == 1: continue
+        frame = frames[frame_number]
+        all_kp = np.frombuffer(buf, dtype=np.float32)
+        for j in range(0, len(all_kp), kp_size):
+            person = Person(frame=frame)
+            person.save()
+
+            pose = Pose(
+                keypoints=all_kp[j:(j + kp_size)].tobytes(), labeler=pose_labeler, person=person)
+
+            # Estimate bounding box
+            p = pose.pose_keypoints()
+            l = p[16, :2]
+            r = p[17, :2]
+            o = p[0, :2]
+            up = o + [r[1] - l[1], l[0] - r[0]]
+            down = o + [l[1] - r[1], r[0] - l[0]]
+            face = np.array([l, r, up, down])
+
+            xmin = face[:, 0].min()
+            xmax = face[:, 0].max()
+            ymin = face[:, 1].min()
+            ymax = face[:, 1].max()
+
+            pose.bbox_x1 = xmin
+            pose.bbox_x2 = xmax
+            pose.bbox_y1 = ymin
+            pose.bbox_y2 = ymax
+            pose.bbox_score = min(p[16, 2], p[17, 2], p[0, 2])
+
+            poses.append(pose)
+
+    Pose.objects.bulk_create(poses)

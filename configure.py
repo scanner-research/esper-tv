@@ -9,6 +9,7 @@ import multiprocessing
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
 
+cores = multiprocessing.cpu_count()
 config = DotMap(
     yaml.load("""
 version: '2'
@@ -19,9 +20,15 @@ services:
     volumes:
       - ./app:/app
       - ./nginx:/tmp
-    depends_on: [app]
+    depends_on: [app, frameserver]
     ports: ["{nginx_port}:{nginx_port}"]
     environment: ["PORT={nginx_port}"]
+
+  frameserver:
+    image: scannerresearch/frameserver
+    ports: ['7500']
+    environment:
+      - 'WORKERS={workers}'
 
   app:
     build:
@@ -37,7 +44,7 @@ services:
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter"]
-""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=multiprocessing.cpu_count())))
+""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=cores, workers=cores * 2)))
 
 db_local = DotMap(
     yaml.load("""
@@ -61,23 +68,12 @@ ports: ["5432"]
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c')
+    parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
     args = parser.parse_args()
 
-    if args.config:
-        # TODO(wcrichto): validate config file
-        base_config = DotMap(toml.load(args.config))
-    else:
-        base_config = DotMap({
-            'storage': {
-                'type': 'local'
-            },
-            'database': {
-                'type': 'local',
-                'name': 'esper'
-            }
-        })
+    # TODO(wcrichto): validate config file
+    base_config = DotMap(toml.load(args.config))
 
     if 'google' in base_config:
         config.services.app.environment.append('GOOGLE_PROJECT={}'.format(
@@ -119,12 +115,10 @@ def main():
             'bucket': base_config.storage.bucket,
             'db_path': '{}/scanner_db'.format(base_config.storage.path)
         }
-        config.services.app.environment.extend([
-            'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
-            'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
-        ])
     else:
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/app/scanner_db'}
+
+    config.services.frameserver.environment.append('FILESYSTEM={}'.format(base_config.storage.type))
 
     for service in config.services.values():
         env_vars = [
@@ -133,7 +127,11 @@ def main():
         ]
 
         if base_config.storage.type == 'google':
-            env_vars.append('BUCKET={}'.format(base_config.storage.bucket))
+            env_vars.extend([
+                'BUCKET={}'.format(base_config.storage.bucket),
+                'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
+                'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
+            ])
 
         service.environment.extend(env_vars)
 

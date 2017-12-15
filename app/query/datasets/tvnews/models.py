@@ -21,6 +21,15 @@ class Video(base.Video):
         return int(math.ceil(self.fps) / 2)
 
 
+class Tag(base.Model):
+    name = base.CharField()
+
+
+class VideoTag(base.Model):
+    video = base.ForeignKey(Video)
+    tag = base.ForeignKey(Tag)
+
+
 class Frame(base.Frame):
     pass
 
