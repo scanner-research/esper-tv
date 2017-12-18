@@ -62,6 +62,10 @@ class Commercial(base.Noun):
     tracks = base.ManyToManyField(CommercialTrack)
 
 
+class Shot(base.Track):
+    pass
+
+
 class PersonTrack(base.Track):
     pass
 
