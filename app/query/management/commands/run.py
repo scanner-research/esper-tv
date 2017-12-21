@@ -8,4 +8,4 @@ class Command(BaseCommand):
         parser.add_argument('path')
 
     def handle(self, *args, **options):
-        imp.load_source('_ignore', options['path'])
+        imp.load_source('__main__', options['path'])

@@ -17,7 +17,7 @@ import math
 import importlib
 import pysrt
 import requests
-from storehousepy import StorageConfig, StorageBackend
+from storehouse import StorageConfig, StorageBackend
 
 import search
 import query.datasets.queries as queries

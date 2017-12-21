@@ -1,4 +1,5 @@
 from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType
+from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
 from django.db import connections
@@ -15,6 +16,9 @@ import numpy as np
 import pandas as pd
 import sys
 import sqlparse
+import logging
+import dill
+import json
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -23,6 +27,26 @@ m.import_all(globals())
 # Access to Scanner protobufs
 cfg = Config()
 proto = ProtobufGenerator(cfg)
+
+# Logging config
+log = logging.getLogger('esper')
+log.setLevel(logging.DEBUG)
+if not log.handlers:
+
+    class CustomFormatter(logging.Formatter):
+        def format(self, record):
+            level = record.levelname[0]
+            time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')[2:]
+            if len(record.args) > 0:
+                record.msg = '({})'.format(
+                    ', '.join([str(x) for x in [record.msg] + list(record.args)]))
+                record.args = ()
+            return '{level} {time} {filename}:{lineno:03d}] {msg}'.format(
+                level=level, time=time, **record.__dict__)
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(CustomFormatter())
+    log.addHandler(handler)
 
 # Only run if we're in an IPython notebook
 if get_ipython() is not None:
@@ -36,6 +60,16 @@ if get_ipython() is not None:
     import seaborn as sns
     plt.rc("axes.spines", top=False, right=False)
     sns.set_style('white')
+
+# Setup Storehouse
+ESPER_ENV = os.environ.get('ESPER_ENV')
+BUCKET = os.environ.get('BUCKET')
+DATA_PATH = os.environ.get('DATA_PATH')
+if ESPER_ENV == 'google':
+    storage_config = StorageConfig.make_gcs_config(BUCKET)
+else:
+    storage_config = StorageConfig.make_posix_config()
+storage = StorageBackend.make_from_config(storage_config)
 
 
 def progress_bar(n):
@@ -111,9 +145,38 @@ def bbox_iou(f1, f2):
     return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
 
 
-# TODO(wcrichto): doesn't work for queries with strings
+PICKLE_CACHE_DIR = '/app/.cache'
+
+
+class PickleCache:
+    def __init__(self):
+        if not os.path.isdir(PICKLE_CACHE_DIR):
+            os.mkdir(PICKLE_CACHE_DIR)
+
+    def _fname(self, k):
+        return '{}/{}.pkl'.format(PICKLE_CACHE_DIR, k)
+
+    def has(self, k):
+        return os.path.isfile(self._fname(k))
+
+    def set(self, k, v):
+        with open(self._fname(k), 'w') as f:
+            dill.dump(v, f)
+
+    def get(self, k):
+        if not self.has(k):
+            raise Exception('Missing cache key {}'.format(k))
+
+        with open(self._fname(k), 'r') as f:
+            return dill.load(f)
+
+
+pcache = PickleCache()
+
+
 class QuerySetMixin:
     def explain(self):
+        # TODO(wcrichto): doesn't work for queries with strings
         cursor = connections[self.db].cursor()
         cursor.execute('EXPLAIN ANALYZE %s' % str(self.query))
         print("\n".join(([t for (t, ) in cursor.fetchall()])))
@@ -121,6 +184,13 @@ class QuerySetMixin:
     def print_sql(self):
         q = str(self.query)
         print(sqlparse.format(q, reindent=True))
+
+    def exists(self):
+        try:
+            next(self)
+            return True
+        except self.model.DoesNotExist:
+            return False
 
 
 QuerySet.__bases__ += (QuerySetMixin, )

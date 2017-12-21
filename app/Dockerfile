@@ -78,4 +78,5 @@ ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
     python scripts/set-jupyter-password.py && \
+    . ./scripts/clear-proxy.sh && \
     supervisord -c supervisord.conf

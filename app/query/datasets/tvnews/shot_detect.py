@@ -1,12 +1,47 @@
 from query.datasets.prelude import *
 from scannerpy.stdlib import parsers
 from scipy.spatial import distance
+from unionfind import unionfind
+
+LABELER, _ = Labeler.objects.get_or_create(name='shot-histogram')
+
+
+def compute_histograms(videos, force=False):
+    def output_name(video):
+        return video.path + '_hist'
+
+    with Database() as db:
+        frame = db.ops.FrameInput()
+        histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
+        output = db.ops.Output(columns=[histogram])
+        jobs = [
+            Job(op_args={frame: db.table(video.path).column('frame'),
+                         output: output_name(video)}) for video in videos
+            if not db.has_table(output_name(video)) or force
+        ]
+        if len(jobs) > 0:
+            bulk_job = BulkJob(output=output, jobs=jobs)
+            logging.debug('Running Scanner histogram job on {} videos...'.format(len(jobs)))
+            db.run(bulk_job, force=True, io_packet_size=10000)
+
+        log.debug('Loading histograms...')
+        hists = [[
+            h for _, h in db.table(output_name(video)).load(['histogram'], parsers.histograms)
+        ] for video in videos]
+        log.debug('Loaded!')
+
+        return hists
+
 
 WINDOW_SIZE = 500
+STD_THRESHOLD = 1000
+GROUP_THRESHOLD = 10
+STD_DEV_FACTOR = 1
 
 
 def compute_shot_boundaries(hists):
     # Compute the mean difference between each pair of adjacent frames
+    log.debug('Computing means')
     diffs = np.array([
         np.mean([distance.chebyshev(hists[i - 1][j], hists[i][j]) for j in range(3)])
         for i in range(1, len(hists))
@@ -15,44 +50,123 @@ def compute_shot_boundaries(hists):
     n = len(diffs)
 
     # Do simple outlier detection to find boundaries between shots
+    log.debug('Detecting outliers')
     boundaries = []
     for i in range(1, n):
         window = diffs[max(i - WINDOW_SIZE, 0):min(i + WINDOW_SIZE, n)]
-        if diffs[i] - np.mean(window) > 3 * np.std(window):
+        std = np.std(window)
+        if std > STD_THRESHOLD and diffs[i] - np.mean(window) > STD_DEV_FACTOR * std:
             boundaries.append(i)
-    return boundaries
+
+    log.debug('Grouping adjacent frames')
+    u = unionfind(len(boundaries))
+    for i, bi in enumerate(boundaries):
+        for j, bj in enumerate(boundaries):
+            if abs(bi - bj) < GROUP_THRESHOLD:
+                u.unite(i, j)
+                break
+
+    grouped_boundaries = [boundaries[g[len(g) / 2]] for g in u.groups()]
+
+    return grouped_boundaries
 
 
-def main():
-    video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
-    labeler, _ = Labeler.objects.get_or_create(name='shot-histogram')
+def evaluate_boundaries(boundaries):
+    gt = [
+        226, 822, 2652, 3893, 4058, 4195, 4326, 4450, 4583, 4766, 5021, 5202, 5294, 5411, 6584,
+        7140, 7236, 7388, 7547, 7673, 7823, 7984, 8148, 8338, 8494, 8625, 8914, 9042, 9207, 9308,
+        11395, 11823, 12198, 12563, 13516, 13878, 13991, 14162, 14237, 14333, 14488, 14688, 14770,
+        14825, 15017, 15537, 15701, 15866, 16012, 16112, 16295, 16452, 16601, 16880, 17018, 17184,
+        17310, 17446, 17962, 18713, 18860, 19120, 19395, 19543, 19660, 19839, 19970, 20079, 20248,
+        20291, 20862
+    ]
+    gt = [n - 20 for n in gt]
 
-    with Database() as db:
-        frame = db.ops.FrameInput()
-        histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
-        output = db.ops.Output(columns=[histogram])
-        job = Job(
-            op_args={frame: db.table(video.path).column('frame'),
-                     output: video.path + '_hist'})
-        bulk_job = BulkJob(output=output, jobs=[job])
-        # [hists_table] = db.run(bulk_job, force=True, io_packet_size=10000)
-        hists_table = db.table(video.path + '_hist')
+    DIST_THRESHOLD = 15
+    gt_copy = gt[:]
 
-        print('Loading histograms...')
-        hists = [h for _, h in hists_table.load(['histogram'], parsers.histograms)]
-        print('Loaded!')
+    boundaries = [n for n in boundaries if n < gt[-1]]
 
-    print('Computing shot boundaries...')
-    boundaries = compute_shot_boundaries(hists)
-    print('Computed!')
-    print(len(boundaries))
+    tp = 0
+    fp = 0
+    for i in boundaries:
+        valid = None
+        for k, j in enumerate(gt_copy):
+            if abs(i - j) < DIST_THRESHOLD:
+                valid = k
+                break
+        if valid is None:
+            fp += 1
+        else:
+            tp += 1
+            gt_copy = gt_copy[:k] + gt_copy[(k + 1):]
 
+    fn = len(gt_copy)
+
+    precision = tp / float(tp + fp)
+    recall = tp / float(tp + fn)
+    log.debug('# est shots: {}, # gt shots: {}'.format(len(boundaries), len(gt)))
+    log.debug('remaining shots: {}'.format(gt_copy))
+    log.debug('tp: {}, fp: {}, fn: {}'.format(tp, fp, fn))
+
+    log.info('Precision: {:.3f}, recall: {:.3f}, #det/#gt: {:.3f}'.format(
+        precision, recall, len(boundaries) / float(len(gt))))
+
+
+def boundaries_to_shots(video, boundaries):
     shots = []
     for i in range(len(boundaries) - 1):
         start = 0 if i == 0 else boundaries[i]
         end = boundaries[i + 1] - 1
-        shots.append(Shot(video=video, labeler=labeler, min_frame=start, max_frame=end))
-    Shot.objects.bulk_create(shots)
+        shots.append(Shot(video=video, labeler=LABELER, min_frame=start, max_frame=end))
+    return shots
+
+
+# Known issues:
+# 1. Tends to miss cuts half-screen cuts (from two people to one)
+# 2. Overall low precision
+# 3. False positives in long segments with little movement
+
+# TODO:
+# Better debugging tools
+# Potentially exclude lower third and/or top of the frame
+
+def shot_detect(videos, save=True, evaluate=False, force=False):
+    if not evaluate and not force and Shot.objects.filter(
+            video=videos[0], labeler=LABELER).exists():
+        return [
+            list(Shot.objects.filter(video=video, labeler=LABELER).order_by('min_frame'))
+            for video in videos
+        ]
+
+    log.debug('Computing histograms')
+    all_hists = compute_histograms(videos, force)
+
+    log.debug('Computing shot boundaries')
+    all_boundaries = [compute_shot_boundaries(vid_hists) for vid_hists in all_hists]
+
+    log.debug('Converting to shots')
+    all_shots = [
+        boundaries_to_shots(video, vid_boundaries)
+        for video, vid_boundaries in zip(videos, all_boundaries)
+    ]
+
+    if save:
+        log.debug('Saving shots')
+        for (video, vid_shots) in zip(videos, all_shots):
+            Shot.objects.filter(video=video, labeler=LABELER).delete()
+            Shot.objects.bulk_create(vid_shots)
+
+    if evaluate:
+        log.debug('Evaluating shot results')
+        evaluate_boundaries(all_boundaries[0])
+
+    return all_shots
+
+
+def main():
+    video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
+    shot_detect([video], save=False, evaluate=True)
 
 
 if __name__ == '__main__':
