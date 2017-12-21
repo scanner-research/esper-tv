@@ -12,6 +12,7 @@ class DisplayOptions {
   @observable show_hands = true;
   @observable show_lr = false;
   @observable crop_bboxes = false;
+  @observable playback_speed = 1.0;
 }
 
 window.DISPLAY_OPTIONS = new DisplayOptions;
@@ -146,6 +147,7 @@ class GroupView extends React.Component {
 }
 
 
+@observer
 class ClipView extends React.Component {
   state = {
     showVideo: false,
@@ -155,11 +157,11 @@ class ClipView extends React.Component {
   }
 
   fullScreen = false
+  frames = []
 
   constructor() {
     super();
     document.addEventListener('webkitfullscreenchange', this._onFullScreen);
-    this._timer = null;
   }
 
   _onFullScreen = () => {
@@ -194,6 +196,12 @@ class ClipView extends React.Component {
       this.setState({expand: !this.state.expand});
     } else if (chr == 's') {
       this.props.onSelect(this.props.group_id);
+    } else if (chr == 'y') {
+      if (this.state.expand) {
+        let frame = this._fromSeconds(this._video.currentTime);
+        this.frames.push(frame);
+        console.log(JSON.stringify(this.frames));
+      }
     }
   }
 
@@ -204,18 +212,14 @@ class ClipView extends React.Component {
   _onMouseLeave = () => {
     document.removeEventListener('keypress', this._onKeyPress);
 
-    if (this._video) {
-      this._video.removeEventListener('seeked', this._onSeeked);
-      this._video.removeEventListener('loadeddata', this._onLoadedData);
-      this._video.removeEventListener('timeupdate', this._onTimeUpdate);
-    }
-
-    if (this._timer) {
-      clearTimeout(this._timer);
-      this._timer = null;
-    }
-
     if (!this.state.expand) {
+      if (this._video) {
+        this._video.removeEventListener('seeked', this._onSeeked);
+        this._video.removeEventListener('loadeddata', this._onLoadedData);
+        this._video.removeEventListener('timeupdate', this._onTimeUpdate);
+        this._video = null;
+        this.frames = [];
+      }
       this.setState({showVideo: false, loadingVideo: false});
     }
   }
@@ -228,13 +232,19 @@ class ClipView extends React.Component {
     return frame / this._videoMeta().fps;
   }
 
+  _fromSeconds = (sec) => {
+    return Math.floor(sec * this._videoMeta().fps);
+  }
+
   _onSeeked = () => {
     this.setState({showVideo: true, loadingVideo: false});
   }
 
   _onLoadedData = () => {
     this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
-    this._video.textTracks[0].mode = 'showing';
+    if (this._video.textTracks.length > 0) {
+      this._video.textTracks[0].mode = 'showing';
+    }
     this._video.play();
   }
 
@@ -247,7 +257,7 @@ class ClipView extends React.Component {
   }
 
   componentDidUpdate() {
-    if (this._video != null) {
+    if (this._video) {
       this._video.addEventListener('seeked', this._onSeeked);
       this._video.addEventListener('loadeddata', this._onLoadedData);
       this._video.addEventListener('timeupdate', this._onTimeUpdate);
@@ -278,7 +288,7 @@ class ClipView extends React.Component {
     let video = this._videoMeta();
     let frame = this._frameMeta('start');
 
-    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${clip.start_frame}`;
+    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${frame.number}`;
 
     let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
     let meta = [];
@@ -295,8 +305,18 @@ class ClipView extends React.Component {
 
     meta.push(['# objects', `${clip.objects.length}`]);
 
+    if (clip.metadata !== undefined) {
+      clip.metadata.forEach((entry) => {
+        meta.push([entry[0], entry[1]]);
+      });
+    }
+
     let meta_per_row = this.state.expand ? 4 : 2;
     let td_style = {width: `${100 / meta_per_row}%`};
+
+    if (this._video) {
+      this._video.playbackRate = DISPLAY_OPTIONS.playback_speed;
+    }
 
     return (
       <div className={'search-result ' + this.props.colorClass + (this.state.expand ? 'expanded' : '')}
@@ -342,6 +362,7 @@ class ClipView extends React.Component {
   }
 }
 
+@observer
 class OptionsView extends React.Component {
   fields = [
     {
@@ -352,6 +373,16 @@ class OptionsView extends React.Component {
         min: 1,
         max: 500
       }
+    },
+    {
+      name: 'Playback speed',
+      key: 'playback_speed',
+      type: 'range',
+      opts: {
+        min: 0,
+        max: 3,
+        step: 0.1
+      },
     },
     {
       name: 'Annotation opacity',
@@ -399,9 +430,12 @@ class OptionsView extends React.Component {
              <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
              {{
                 range: () => (
-                  <input type="range" min={field.opts.min} max={field.opts.max}
-                         step={field.opts.step} defaultValue={DISPLAY_OPTIONS[field.key]}
-                         onChange={(e) => {DISPLAY_OPTIONS[field.key] = e.target.value}} />),
+                  <span>
+                    <input type="range" min={field.opts.min} max={field.opts.max}
+                           step={field.opts.step} defaultValue={DISPLAY_OPTIONS[field.key]}
+                           onChange={(e) => {DISPLAY_OPTIONS[field.key] = e.target.value}} />
+                    {DISPLAY_OPTIONS[field.key]}
+                  </span>),
                 number: () => (
                   <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
                          defaultValue={DISPLAY_OPTIONS[field.key]}

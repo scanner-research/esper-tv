@@ -20,3 +20,4 @@ pysrt==1.1.1
 spacy==2.0.5
 textacy==0.5.0
 sqlparse==0.2.4
+unionfind==0.0.9

@@ -200,7 +200,7 @@ class Features(object):
         global feat_ids
 
         it = cls.objects.annotate(height=F('face__bbox_y2') - F('face__bbox_y1')).filter(
-            height__gte=0.1)
+            height__gte=0.1).order_by('id')
         if feat_nn is None:
             _print('Loading features...')
             feats = list(it[::5])

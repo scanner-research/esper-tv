@@ -26,49 +26,50 @@ def search(params):
     # and in the stdlib
     load_stdlib_models(params['dataset'])
 
-    ############### vvv DANGER -- REMOTE CODE EXECUTION vvv ###############
     try:
+        ############### vvv DANGER -- REMOTE CODE EXECUTION vvv ###############
         exec (params['code']) in globals(), locals()
         result = FN()
+        ############### ^^^ DANGER -- REMOTE CODE EXECUTION ^^^ ###############
+
+        if not isinstance(result, dict):
+            return make_error(
+                'Result must be a dict {{result, count, type}}, received type {}'.format(
+                    type(result)))
+
+        if not isinstance(result['result'], list):
+            return make_error('Result must be a frame list')
+
+        video_ids = set()
+        frame_ids = set()
+        labeler_ids = set()
+        for group in result['result']:
+            for obj in group['elements']:
+                video_ids.add(obj['video'])
+                frame_ids.add(obj['start_frame'])
+                if 'end_frame' in obj:
+                    frame_ids.add(obj['end_frame'])
+
+                for bbox in obj['objects']:
+                    labeler_ids.add(bbox['labeler'])
+
+        def to_dict(qs):
+            return {t.id: model_to_dict(t) for t in qs}
+
+        videos = to_dict(Video.objects.filter(id__in=video_ids))
+        frames = to_dict(Frame.objects.filter(id__in=frame_ids))
+        labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
+
+        return JsonResponse({
+            'success': {
+                'dataset': params['dataset'],
+                'count': result['count'],
+                'result': result['result'],
+                'type': result['type'],
+                'videos': videos,
+                'frames': frames,
+                'labelers': labelers,
+            }
+        })
     except Exception as e:
         return make_error(traceback.format_exc())
-    ############### ^^^ DANGER -- REMOTE CODE EXECUTION ^^^ ###############
-
-    if not isinstance(result, dict):
-        return make_error('Result must be a dict {{result, count, type}}, received type {}'.format(
-            type(result)))
-
-    if not isinstance(result['result'], list):
-        return make_error('Result must be a frame list')
-
-    video_ids = set()
-    frame_ids = set()
-    labeler_ids = set()
-    for group in result['result']:
-        for obj in group['elements']:
-            video_ids.add(obj['video'])
-            frame_ids.add(obj['start_frame'])
-            if 'end_frame' in obj:
-                frame_ids.add(obj['end_frame'])
-
-            for bbox in obj['objects']:
-                labeler_ids.add(bbox['labeler'])
-
-    def to_dict(qs):
-        return {t.id: model_to_dict(t) for t in qs}
-
-    videos = to_dict(Video.objects.filter(id__in=video_ids))
-    frames = to_dict(Frame.objects.filter(id__in=frame_ids))
-    labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
-
-    return JsonResponse({
-        'success': {
-            'dataset': params['dataset'],
-            'count': result['count'],
-            'result': result['result'],
-            'type': result['type'],
-            'videos': videos,
-            'frames': frames,
-            'labelers': labelers,
-        }
-    })

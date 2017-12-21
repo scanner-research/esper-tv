@@ -345,3 +345,57 @@ def panels_():
         'start_frame': frame.id,
         'objects': [bbox_to_dict(f) for f in faces]
     } for (frame, faces) in panels()], 'Frame')
+
+
+@query("Animated Rachel Maddow")
+def animated_rachel_maddow():
+    def pose_dist(p1, p2):
+        kp1 = p1.pose_keypoints()
+        kp2 = p2.pose_keypoints()
+
+        weights = defaultdict(float, {
+            Pose.LWrist: 0.4,
+            Pose.RWrist: 0.4,
+            Pose.Nose: 0.1,
+            Pose.LElbow: 0.05,
+            Pose.RElbow: 0.05
+        })
+        weight_vector = [weights[i] for i in range(Pose.POSE_KEYPOINTS)]
+
+        dist = np.linalg.norm(kp2[:, :2] - kp1[:, :2], axis=1)
+        weighted_dist = np.array([
+            d * w for d, s1, s2, w in zip(dist, kp1[:, 2], kp2[:, 2], weight_vector)
+            if s1 > 0 and s2 > 0
+        ])
+        return np.linalg.norm(weighted_dist)
+
+    tracks = list(PersonTrack.objects.filter(video__path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4') \
+        .annotate(c=Subquery(
+            Face.objects.filter(person__tracks=OuterRef('pk')) \
+            .filter(labeler__name='tinyfaces', facefeatures__distto__isnull=False, facefeatures__distto__lte=1.0) \
+            .values('person__tracks')
+            .annotate(c=Count('*'))
+            .values('c'), models.IntegerField()
+            )) \
+        .filter(c__gt=0))
+
+    all_dists = []
+    for track in tracks:
+        poses = list(Pose.objects.filter(person__tracks=track).order_by('person__frame__number'))
+        dists = [pose_dist(poses[i], poses[i + 1]) for i in range(len(poses) - 1)]
+        all_dists.append((track, np.mean(dists)))
+    all_dists.sort(key=itemgetter(1), reverse=True)
+
+    return simple_result([{
+        'video':
+        t.video.id,
+        'track':
+        t.id,
+        'start_frame':
+        Frame.objects.get(video=t.video, number=t.min_frame).id,
+        'end_frame':
+        Frame.objects.get(video=t.video, number=t.max_frame).id,
+        'metadata': [['score', '{:.03f}'.format(score)]],
+        'objects':
+        [bbox_to_dict(Face.objects.filter(person__frame__number=t.min_frame, person__tracks=t)[0])]
+    } for t, score in all_dists], 'PersonTrack')

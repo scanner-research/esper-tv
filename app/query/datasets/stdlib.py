@@ -10,6 +10,7 @@ import math
 import numpy as np
 import traceback
 from timeit import default_timer as now
+import query.base_models as base_models
 
 from query.datasets.prelude import *
 
@@ -125,8 +126,9 @@ def qs_to_result(result,
     # TODO(wcrichto): do something if custom_order=True
 
     materialized_result = []
-    cls_name = '_'.join(sample.__class__.__name__.split('_')[1:])
-    if cls_name == 'Frame':
+    cls = sample.__class__
+    bases = sample.__class__.__bases__
+    if bases[0] is base_models.Frame:
         if not shuffle and not custom_order:
             result = result.order_by('video', 'number')
 
@@ -137,13 +139,13 @@ def qs_to_result(result,
                 'objects': []
             })
 
-    elif cls_name == 'Face' or cls_name == 'Pose':
+    elif bases[0] is base_models.Attribute:
         if not shuffle and not custom_order:
             result = result.order_by('person__frame__video', 'person__frame__number')
 
-        if cls_name == 'Face':
+        if cls is Face:
             fn = bbox_to_dict
-        elif cls_name == 'Pose':
+        elif cls is Pose:
             fn = pose_to_dict
 
         if frame_major:
@@ -171,31 +173,37 @@ def qs_to_result(result,
                 }
                 materialized_result.append(r)
 
-    elif cls_name == 'PersonTrack':
+    elif bases[0] is base_models.Track:
         if not shuffle and not custom_order:
             result = result.order_by('video', 'min_frame')
 
-        for t in result.annotate(duration=Track.duration_expr()).filter(duration__gt=0)[:1000]:
-            min_person = Person.objects.filter(frame__number=t.min_frame, tracks=t)[0]
-            video = min_person.frame.video.id
-            materialized_result.append({
-                'video':
-                video,
-                'track':
-                t.id,
-                'start_frame':
-                Frame.objects.get(video_id=video, number=t.min_frame).id,
-                'end_frame':
-                Frame.objects.get(video_id=video, number=t.max_frame).id,
-                'objects': [bbox_to_dict(Face.objects.filter(person=min_person)[0])]
-            })
+        for t in result.annotate(duration=Track.duration_expr()).filter(duration__gt=0)[:LIMIT]:
+            if cls is PersonTrack:
+                model = Person
+            else:
+                model = None
 
-            if len(materialized_result) == LIMIT:
-                break
+            result = {
+                'video': t.video.id,
+                'track': t.id,
+                'start_frame': Frame.objects.get(video=t.video, number=t.min_frame).id,
+                'end_frame': Frame.objects.get(video=t.video, number=t.max_frame).id,
+            }
+
+            if model is not None and False:
+                min_model = model.objects.filter(frame__number=t.min_frame, tracks=t)[0]
+                result['objects'] = [pose_to_dict(Pose.objects.filter(person=min_model)[0])]
+            else:
+                result['objects'] = []
+
+            materialized_result.append(result)
 
         materialized_result.sort(key=itemgetter('video', 'start_frame'))
 
-    ty_name = cls_name
+    else:
+        raise Exception("Unsupported class")
+
+    ty_name = cls.__name__
 
     if group:
         materialized_result = group_result(materialized_result)
