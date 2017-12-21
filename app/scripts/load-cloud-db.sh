@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# FIXME(wcrichto): this script is probably broken
+
 DB_NAME=esper
 
 read -p "This will delete everything in your local database. Are you sure? [y/N] " choice

@@ -1,6 +1,8 @@
 import pexpect
 import os
 
+# This script changes Jupyter from using a random hash by default to a custom password, set in configure.py.
+
 if 'JUPYTER_PASSWORD' not in os.environ:
     exit()
 
