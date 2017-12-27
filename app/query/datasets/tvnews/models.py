@@ -31,7 +31,7 @@ class VideoTag(base.Model):
 
 
 class Frame(base.Frame):
-    pass
+    tags = base.ManyToManyField(Tag)
 
 
 class Labeler(base.Labeler):

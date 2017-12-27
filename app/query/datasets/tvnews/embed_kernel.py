@@ -4,6 +4,7 @@ import tensorflow as tf
 import facenet
 import cv2
 import json
+import os
 
 model_path = '/app/deps/facenet/models/20170512-110547/'
 

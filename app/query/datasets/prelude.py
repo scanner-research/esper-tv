@@ -7,6 +7,7 @@ from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, OuterRef, Subquery, Sum, Avg, Func
 from django.db.models.functions import Cast, Extract
 from django.utils import timezone
+from django_bulk_update.manager import BulkUpdateManager
 import datetime
 from IPython.core.getipython import get_ipython
 import django.db.models as models
@@ -145,6 +146,27 @@ def bbox_iou(f1, f2):
     return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
 
 
+def unzip(l):
+    return tuple(zip(*l))
+
+
+def group_by_frame(objs, fn_key, fn_sort, output_dict=False, include_frame=True):
+    d = defaultdict(list)
+    for obj in objs:
+        d[fn_key(obj)].append(obj)
+
+    for l in d.values():
+        l.sort(key=fn_sort)
+
+    if output_dict:
+        return dict(d)
+    else:
+        l = sorted(d.iteritems(), key=itemgetter(0))
+        if not include_frame:
+            l = [f for _, f in l]
+        return l
+
+
 PICKLE_CACHE_DIR = '/app/.cache'
 
 
@@ -192,5 +214,11 @@ class QuerySetMixin:
         except self.model.DoesNotExist:
             return False
 
-
 QuerySet.__bases__ += (QuerySetMixin, )
+
+class BulkUpdateManagerMixin:
+    def batch_create(self, objs, batch_size=1000):
+        for i in range(0, len(objs), batch_size):
+            self.bulk_create(objs[i:(i+batch_size)])
+
+BulkUpdateManager.__bases__ += (BulkUpdateManagerMixin, )

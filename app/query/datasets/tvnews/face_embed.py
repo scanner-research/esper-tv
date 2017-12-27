@@ -7,90 +7,87 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 
 
 def face_embed(videos, all_faces, force=False):
-    if not force and FaceFeatures.objects.filter(
-            face__person__frame__video=videos[0], labeler=LABELER).exists():
-        return [
-            list(FaceFeatures.objects.filter(
-                face__person__frame__video=video,
-                labeler=LABELER) \
-            .order_by('id') \
-            .select_related('face', 'face__person', 'face__person__frame')) \
-            for video in videos
-        ]
+    if force or \
+       not FaceFeatures.objects.filter(face__person__frame__video=videos[0], labeler=LABELER).exists():
 
-    def output_name(video):
-        return video.path + '_embeddings'
+        def output_name(video, frames):
+            return video.path + '_embeddings_' + str(hash(tuple(frames)))
 
-    with Database() as db:
-        db.register_op('EmbedFaces', [('frame', ColumnType.Video), 'bboxes'], ['embeddings'])
-        db.register_python_kernel('EmbedFaces', DeviceType.CPU, cwd + '/embed_kernel.py')
+        with Database() as db:
+            db.register_op('EmbedFaces', [('frame', ColumnType.Video), 'bboxes'], ['embeddings'])
+            db.register_python_kernel('EmbedFaces', DeviceType.CPU, cwd + '/embed_kernel.py')
 
-        frame = db.ops.FrameInput()
-        frame_strided = frame.sample()
-        bboxes = db.ops.Input()
-        embeddings = db.ops.EmbedFaces(frame=frame_strided, bboxes=bboxes)
-        output = db.ops.Output(columns=[embeddings])
+            frame = db.ops.FrameInput()
+            frame_strided = frame.sample()
+            bboxes = db.ops.Input()
+            embeddings = db.ops.EmbedFaces(frame=frame_strided, bboxes=bboxes)
+            output = db.ops.Output(columns=[embeddings])
 
-        jobs = []
-        face_insts = []
-        for video, vid_faces in zip(videos, all_faces):
-            frame_numbers = []
-            rows = []
-            cur_frame = None
-            insts = []
-            for f in vid_faces:
-                if f.person.frame.id != cur_frame:
-                    cur_frame = f.person.frame.id
-                    rows.append([])
-                    frame_numbers.append(f.person.frame.number)
+            jobs = []
+            all_frame_numbers = []
+            for video, vid_faces in zip(videos, all_faces):
+                frame_numbers = [frame_faces[0].person.frame.number for frame_faces in vid_faces]
+                all_frame_numbers.append(frame_numbers)
 
-                rows[-1].append(
+                unsorted_indices = np.argsort(frame_numbers)
+
+                rows = [[
                     db.protobufs.BoundingBox(
-                        x1=f.bbox_x1, x2=f.bbox_x2, y1=f.bbox_y1, y2=f.bbox_y2))
-                insts.append(f.id)
-            face_insts.append(insts)
+                        x1=f.bbox_x1, x2=f.bbox_x2, y1=f.bbox_y1, y2=f.bbox_y2) for f in frame_faces
+                ] for frame_faces in vid_faces]
+                rows = [rows[i] for i in unsorted_indices]
 
-            if db.has_table(output_name(video)) and not force:
-                continue
+                if not force and db.has_table(output_name(video, frame_numbers)):
+                    continue
 
-            bbox_table = db.new_table(
-                video.path + '_bboxes', ['bboxes'], [[r] for r in rows],
-                fn=writers.bboxes,
-                force=True)
+                bbox_table = db.new_table(
+                    video.path + '_bboxes', ['bboxes'], [[r] for r in rows],
+                    fn=writers.bboxes,
+                    force=True)
 
-            jobs.append(
-                Job(op_args={
-                    frame: db.table(video.path).column('frame'),
-                    frame_strided: db.sampler.gather(frame_numbers),
-                    bboxes: bbox_table.column('bboxes'),
-                    output: output_name(video)
+                assert (len(frame_numbers) == len(set(frame_numbers)))
+
+                jobs.append(
+                    Job(op_args={
+                        frame: db.table(video.path).column('frame'),
+                        frame_strided: db.sampler.gather(sorted(frame_numbers)),
+                        bboxes: bbox_table.column('bboxes'),
+                        output: output_name(video, frame_numbers)
                 }))
 
-        if len(jobs) > 0:
-            log.debug('Running Scanner embed jobs')
-            bulk_job = BulkJob(output=output, jobs=jobs)
-            db.run(bulk_job, force=True, pipeline_instances_per_node=1)
+            if len(jobs) > 0:
+                log.debug('Running Scanner embed jobs')
+                bulk_job = BulkJob(output=output, jobs=jobs)
 
-        output_tables = [db.table(output_name(video)) for video in videos]
+                # TODO(wcrichto): multi-gpu face embed
+                db.run(bulk_job, force=True, pipeline_instances_per_node=1)
 
-        all_features = []
-        for t, insts in zip(output_tables, face_insts):
-            vid_features = []
-            inst_idx = 0
-            embs = t.column('embeddings').load()
-            for _, emb in embs:
-                for i in range(0, len(emb), 512):
-                    e = np.frombuffer(emb[i:i + 512], dtype=np.float32)
-                    vid_features.append(
-                        FaceFeatures(
-                            features=json.dumps(e.tolist()),
-                            face_id=insts[inst_idx],
-                            labeler=LABELER))
-                    inst_idx += 1
+            output_tables = [
+                db.table(output_name(video, nums))
+                for video, nums in zip(videos, all_frame_numbers)
+            ]
 
-            for i in range(0, len(vid_features), 1000):
-                FaceFeatures.objects.bulk_create(vid_features[i:min(i + 1000, len(vid_features))])
+            for table, vid_faces, frame_numbers in zip(output_tables, all_faces, all_frame_numbers):
+                face_map = {f[0].person.frame.number: f for f in vid_faces}
+                unsorted_indices = np.argsort(frame_numbers)
+                vid_features = []
+                embs = table.column('embeddings').load()
+                for idx, (_, emb) in zip(unsorted_indices, embs):
+                    for j, face in zip(
+                            range(0, len(emb), 512), face_map[frame_numbers[idx]]):
+                        e = np.frombuffer(emb[j:(j + 512)], dtype=np.float32)
+                        vid_features.append(
+                            FaceFeatures(
+                                features=json.dumps(e.tolist()), face=face, labeler=LABELER))
 
-            all_features.append(vid_features)
+                FaceFeatures.objects.batch_create(vid_features)
 
-        return all_features
+    return [
+        group_by_frame(
+            list(
+                FaceFeatures.objects.filter(face__person__frame__video=video, labeler=LABELER)
+                .select_related('face', 'face__person', 'face__person__frame')),
+            lambda f: f.face.person.frame.number,
+            lambda f: f.face.id,
+            include_frame=False) for video in videos
+    ]

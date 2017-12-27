@@ -127,6 +127,10 @@ class Video(models.Model):
     height = models.IntegerField()
     has_captions = models.BooleanField(default=False)
 
+    def copy(self, path):
+        from query.datasets.prelude import storage
+        with open(path, 'wb') as f:
+            f.write(storage.read(self.path))
 
 class Frame(models.Model):
     __metaclass__ = DatasetMeta
