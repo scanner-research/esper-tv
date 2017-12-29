@@ -5,6 +5,7 @@ import subprocess as sp
 import shlex
 from dotmap import DotMap
 import multiprocessing
+import shutil
 
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
@@ -76,8 +77,11 @@ def main():
     base_config = DotMap(toml.load(args.config))
 
     if 'google' in base_config:
-        config.services.app.environment.append('GOOGLE_PROJECT={}'.format(
-            base_config.google.project))
+        config.services.app.environment.extend([
+            'GOOGLE_PROJECT={}'.format(base_config.google.project),
+            'GOOGLE_ZONE={}'.format(base_config.google.zone)
+        ])
+        config.services.app.ports.append('8001:8001')  # for kubectl proxy
 
     if 'compute' in base_config:
         if 'gpu' in base_config.compute:
@@ -104,8 +108,8 @@ def main():
         base_config.database.user if 'user' in base_config.database else 'root'))
 
     if 'password' in base_config.database:
-        config.services.app.environment.append("DJANGO_DB_PASSWORD={}".format(
-            base_config.database.password))
+        config.services.app.environment.append(
+            "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
 
     scanner_config = {'scanner_path': '/opt/scanner'}
     if base_config.storage.type == 'google':
@@ -140,6 +144,25 @@ def main():
 
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
+
+    if 'google' in base_config:
+        shutil.copy('app/.scanner.toml', 'kube/.scanner.toml')
+        # sp.check_call(
+        #     'docker build -t kube-base --build-arg tag=gpu -f kube/Dockerfile.base kube',
+        #     shell=True)
+        base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
+
+        def build(tag):
+            sp.check_call(
+                'docker build -t {base_url}/scanner-{tag} --build-arg tag=gpu -f kube/Dockerfile.{tag} kube'.
+                format(base_url=base_url, tag=tag),
+                shell=True)
+            sp.check_call(
+                'gcloud docker -- push {base_url}/scanner-{tag}'.format(base_url=base_url, tag=tag),
+                shell=True)
+
+        build('master')
+        build('worker')
 
     print('Successfully configured Esper.')
 

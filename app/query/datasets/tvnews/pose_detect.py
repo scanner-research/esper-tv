@@ -6,32 +6,36 @@ LABELED_TAG, _ = Tag.objects.get_or_create(name='openpose:labeled')
 
 def pose_detect(videos, all_frames, force=False):
     existing_frames = Frame.objects.filter(
-            number__in=all_frames[0], tags=LABELED_TAG).count()
+        video=videos[0], number__in=all_frames[0], tags=LABELED_TAG).count()
     needed_frames = len(all_frames[0])
     if force or existing_frames != needed_frames:
-        log.debug('Poses not cached, missing {}/{} frames'.format(needed_frames - existing_frames, needed_frames))
+        log.debug('Poses not cached, missing {}/{} frames'.format(needed_frames - existing_frames,
+                                                                  needed_frames))
 
         def output_name(video, frames):
             return video.path + '_poses_' + str(hash(tuple(frames)))
 
         with Database() as db:
-            db.load_op('/opt/openpose-scanner/build/libopenpose_op.so',
-                       '/opt/openpose-scanner/build/openpose_pb2.py')
+            ingest_if_missing(db, videos)
 
             frame = db.ops.FrameInput()
             frame_sampled = frame.sample()
             pose = db.ops.OpenPose(
                 frame=frame_sampled,
+                model_directory="/app/deps/openpose-models/",
                 hands=False,
                 face=False,
-                scales=2,
+                pose_num_scales=2,
+                pose_scale_gap=0.5,
                 batch=50,
                 device=DeviceType.GPU)
             output = db.ops.Output(columns=[pose])
 
             def remove_already_labeled(video, frames):
-                already_labeled = set(
-                    [f['number'] for f in Frame.objects.filter(tags=LABELED_TAG).values('number')])
+                already_labeled = set([
+                    f['number']
+                    for f in Frame.objects.filter(video=video, tags=LABELED_TAG).values('number')
+                ])
                 return sorted(list(set(frames) - already_labeled))
 
             all_frames = [
@@ -45,7 +49,8 @@ def pose_detect(videos, all_frames, force=False):
                     frame_sampled: db.sampler.gather(vid_frames),
                     output: output_name(video, vid_frames)
                 }) for video, vid_frames in zip(videos, all_frames)
-                if not db.has_table(output_name(video, vid_frames)) or not db.table(output_name(video, vid_frames)).committed() or force
+                if not db.has_table(output_name(video, vid_frames))
+                or not db.table(output_name(video, vid_frames)).committed() or force
             ]
             if len(jobs) > 0:
                 log.debug('Running Scanner pose jobs on {} frames'.format(

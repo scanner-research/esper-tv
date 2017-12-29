@@ -166,6 +166,12 @@ def group_by_frame(objs, fn_key, fn_sort, output_dict=False, include_frame=True)
             l = [f for _, f in l]
         return l
 
+def ingest_if_missing(db, videos):
+    needed = [video.path for video in videos if not db.has_table(video.path)]
+    if len(needed) > 0:
+        _, failed = db.ingest_videos([(p, p) for p in needed])
+        assert(len(failed) == 0)
+
 
 PICKLE_CACHE_DIR = '/app/.cache'
 

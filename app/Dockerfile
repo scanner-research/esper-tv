@@ -11,38 +11,14 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip && \
+    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip jq && \
     ln -s /usr/bin/nodejs /usr/bin/node
-
-# OpenPose
-WORKDIR /opt
-ADD .deps/Makefile.config .
-RUN git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose/ && \
-    cd openpose && \
-    mv ../Makefile.config . && \
-    make all -j${cores} && \
-    mv .build_release /tmp/openpose && \
-    cp -r include models /tmp/openpose && \
-    rm -rf /opt/openpose && \
-    mv /tmp/openpose /opt
-
-RUN git clone https://github.com/scanner-research/openpose-scanner.git && \
-    cd openpose-scanner && \
-    mkdir build && \
-    cd build && \
-    echo '\n\
-scanner_path = "/opt/scanner"\n\
-[storage]\n\
-type = "posix"\n\
-db_path = "/tmp"'  > /root/.scanner.toml && \
-    cmake .. && \
-    make
 
 # Google Cloud SDK
 RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
     tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    apt-get update && apt-get install -y google-cloud-sdk
+    apt-get update && apt-get install -y google-cloud-sdk kubectl
 
 # Python dependencies
 ADD requirements.txt .
