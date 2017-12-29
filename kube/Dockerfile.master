@@ -1,4 +1,5 @@
-FROM scannerresearch/scanner:cpu
+ARG tag
+FROM scannerresearch/scanner:${tag}
 ADD .scanner.toml /root/.scanner.toml
 WORKDIR /app
 

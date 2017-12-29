@@ -147,14 +147,11 @@ def main():
 
     if 'google' in base_config:
         shutil.copy('app/.scanner.toml', 'kube/.scanner.toml')
-        # sp.check_call(
-        #     'docker build -t kube-base --build-arg tag=gpu -f kube/Dockerfile.base kube',
-        #     shell=True)
         base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
 
         def build(tag):
             sp.check_call(
-                'docker build -t {base_url}/scanner-{tag} --build-arg tag=gpu -f kube/Dockerfile.{tag} kube'.
+                'docker build -t {base_url}/scanner-{tag} --build-arg tag=cpu -f kube/Dockerfile.{tag} kube'.
                 format(base_url=base_url, tag=tag),
                 shell=True)
             sp.check_call(

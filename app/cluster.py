@@ -20,6 +20,9 @@ ZONE = os.environ['GOOGLE_ZONE']
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
 CLUSTER_ID = 'wc-test'
 KUBE_VERSION = '1.8.4-gke.1'
+USE_GPU = False
+NUM_CPU = 2 if USE_GPU else 4
+NUM_MEM = 16
 
 CLUSTER_CMD = 'gcloud container clusters --zone {}'.format(ZONE)
 
@@ -32,6 +35,10 @@ def sigterm_handler(signum, frame):
 
 def run(s):
     return sp.check_call(shlex.split(s))
+
+
+def machine_type(cpu, mem):
+    return 'custom-{}-{}'.format(cpu, mem * 1024)
 
 
 def make_container(name):
@@ -62,25 +69,16 @@ def make_container(name):
              'value': '1'},
             {'name': 'GLOG_v',
              'value': '1'}
-        ]
+        ],
+        'resources': {
+        }
     }  # yapf: disable
     if name == 'master':
         template['ports'] = [{
             'containerPort': 8080,
         }]
     elif name == 'worker':
-        while True:
-            rs = get_by_owner('rs', 'scanner-master')
-            pod_name = get_by_owner('pod', rs)
-            if "\n" not in pod_name and pod_name != "":
-                break
-            time.sleep(1)
-
-        while True:
-            pod = get_object(get_kube_info('pod'), pod_name)
-            if pod is not None:
-                break
-            time.sleep(1)
+        pod = get_master_pod()
 
         template['env'] += [{
             'name': 'SCANNER_MASTER_SERVICE_HOST',
@@ -90,14 +88,16 @@ def make_container(name):
             'value': '8080'
         }]
 
-        template['resources'] = {
-            'limits': {
-                'nvidia.com/gpu': 1
-            }
-            # 'requests': {
-            #     'cpu': 0.7,
-            # }
+    if USE_GPU:
+        limits = {
+            'nvidia.com/gpu': 1
         }
+    else:
+        limits = {
+            'cpu': 3
+        }
+
+    template['resources']['limits'] = limits
 
     return template
 
@@ -187,8 +187,10 @@ def create(args):
             'cluster_id': CLUSTER_ID,
             'zone': ZONE,
             'cluster_version': KUBE_VERSION,
-            'machine_type': 'n1-standard-4',
+            'machine_type': machine_type(NUM_CPU, NUM_MEM),
             'scopes': ','.join(scopes),
+            'initial_size': 1,
+            'accelerator': '--accelerator type=nvidia-tesla-k80,count=1' if USE_GPU else ''
         }
 
         cluster_cmd = """
@@ -202,6 +204,7 @@ gcloud alpha -q container --project "{project}" clusters create "{cluster_id}" \
         --scopes {scopes} \
         --num-nodes "1" \
         --enable-cloud-logging \
+        {accelerator}
         """.format(**fmt_args)
 
         run(cluster_cmd)
@@ -214,12 +217,12 @@ gcloud alpha -q container node-pools create workers \
         --image-type "COS" \
         --disk-size "30" \
         --scopes {scopes} \
-        --num-nodes "1" \
+        --num-nodes "{initial_size}" \
         --enable-autoscaling \
         --min-nodes "0" \
         --max-nodes "1000" \
         --preemptible \
-        --accelerator type=nvidia-tesla-p100,count=1
+        {accelerator}
         """.format(**fmt_args)
 
         run(pool_cmd)
@@ -236,11 +239,12 @@ gcloud alpha -q container node-pools create workers \
                 'kubectl --username=admin --password={} create clusterrolebinding add-on-cluster-admin \
                 --clusterrole=cluster-admin --serviceaccount=kube-system:default'.format(password)))
 
-        # Install GPU drivers
-        sp.check_call(
-            shlex.split(
-                'kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/k8s-1.8/device-plugin-daemonset.yaml'
-            ))
+        if USE_GPU:
+            # Install GPU drivers
+            sp.check_call(
+                shlex.split(
+                    'kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/k8s-1.8/device-plugin-daemonset.yaml'
+                ))
 
     print 'Cluster created. Setting up kubernetes...'
     get_credentials(args)
@@ -263,8 +267,8 @@ gcloud alpha -q container node-pools create workers \
         create_object(make_deployment('master'))
         print 'Waiting for master to start...'
         while True:
-            deploy = get_object(get_kube_info('deployments'), 'scanner-master')
-            if 'unavailableReplicas' not in deploy['status']:
+            pod = get_master_pod()
+            if pod['status']['phase'] == 'Running':
                 break
         serve(args)
 
@@ -273,6 +277,20 @@ gcloud alpha -q container node-pools create workers \
 
     print 'Done!'
 
+
+def get_master_pod():
+    while True:
+        rs = get_by_owner('rs', 'scanner-master')
+        pod_name = get_by_owner('pod', rs)
+        if "\n" not in pod_name and pod_name != "":
+            break
+        time.sleep(1)
+
+    while True:
+        pod = get_object(get_kube_info('pod'), pod_name)
+        if pod is not None:
+            return pod
+        time.sleep(1)
 
 def get_by_owner(ty, owner):
     return sp.check_output(
