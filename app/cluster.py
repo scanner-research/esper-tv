@@ -16,13 +16,15 @@ import shlex
 import signal
 
 PROJECT_ID = os.environ['GOOGLE_PROJECT']
-ZONE = os.environ['GOOGLE_ZONE']
+#ZONE = os.environ['GOOGLE_ZONE']
+ZONE = 'us-east1-d'
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
-CLUSTER_ID = 'wc-test'
+CLUSTER_ID = 'wc-test-2'
 KUBE_VERSION = '1.8.4-gke.1'
 USE_GPU = False
-NUM_CPU = 2 if USE_GPU else 4
-NUM_MEM = 16
+USE_PREEMPTIBLE = False
+NUM_CPU = int(2 if USE_GPU else 64)
+NUM_MEM = int(16 if USE_GPU else NUM_CPU * 3.0)
 
 CLUSTER_CMD = 'gcloud container clusters --zone {}'.format(ZONE)
 
@@ -78,37 +80,32 @@ def make_container(name):
             'containerPort': 8080,
         }]
     elif name == 'worker':
-        pod = get_master_pod()
+        master_pod = get_pod('scanner-master')
 
         template['env'] += [{
             'name': 'SCANNER_MASTER_SERVICE_HOST',
-            'value': pod['status']['podIP']
+            'value': master_pod['status']['podIP']
         }, {
             'name': 'SCANNER_MASTER_SERVICE_PORT',
             'value': '8080'
         }]
 
     if USE_GPU:
-        limits = {
-            'nvidia.com/gpu': 1
-        }
+        template['resources']['limits'] = {'nvidia.com/gpu': 1}
     else:
-        limits = {
-            'cpu': 3
-        }
-
-    template['resources']['limits'] = limits
+        if name == 'worker':
+            template['resources']['requests'] = {'cpu': NUM_CPU / 2.0 + 0.1}
 
     return template
 
 
-def make_deployment(name):
+def make_deployment(name, replicas):
     template = {
         'apiVersion': 'apps/v1beta1',
         'kind': 'Deployment',
         'metadata': {'name': 'scanner-{}'.format(name)},
         'spec': {  # DeploymentSpec
-            'replicas': 1,
+            'replicas': replicas,
             'template': {
                 'metadata': {'labels': {'app': 'scanner-{}'.format(name)}},
                 'spec': {  # PodSpec
@@ -158,8 +155,9 @@ def delete(args):
     run('{cmd} delete {id}'.format(cmd=CLUSTER_CMD, id=CLUSTER_ID))
 
 
-def get_kube_info(kind):
-    return json.loads(sp.check_output(shlex.split('kubectl get {} -o json'.format(kind))))
+def get_kube_info(kind, namespace='default'):
+    return json.loads(
+        sp.check_output(shlex.split('kubectl get {} -o json -n {}'.format(kind, namespace))))
 
 
 def get_object(info, name):
@@ -189,7 +187,7 @@ def create(args):
             'cluster_version': KUBE_VERSION,
             'machine_type': machine_type(NUM_CPU, NUM_MEM),
             'scopes': ','.join(scopes),
-            'initial_size': 1,
+            'initial_size': args.num_workers,
             'accelerator': '--accelerator type=nvidia-tesla-k80,count=1' if USE_GPU else ''
         }
 
@@ -198,9 +196,9 @@ gcloud alpha -q container --project "{project}" clusters create "{cluster_id}" \
         --enable-kubernetes-alpha \
         --zone "{zone}" \
         --cluster-version "{cluster_version}" \
-        --machine-type "{machine_type}" \
+        --machine-type "n1-highmem-4" \
         --image-type "COS" \
-        --disk-size "30" \
+        --disk-size "100" \
         --scopes {scopes} \
         --num-nodes "1" \
         --enable-cloud-logging \
@@ -215,17 +213,46 @@ gcloud alpha -q container node-pools create workers \
         --zone "{zone}" \
         --machine-type "{machine_type}" \
         --image-type "COS" \
-        --disk-size "30" \
+        --disk-size "100" \
         --scopes {scopes} \
         --num-nodes "{initial_size}" \
         --enable-autoscaling \
         --min-nodes "0" \
         --max-nodes "1000" \
-        --preemptible \
+        {preemptible} \
         {accelerator}
-        """.format(**fmt_args)
+        """.format(
+            preemptible=('--preemptible' if USE_PREEMPTIBLE else ''), **fmt_args)
 
         run(pool_cmd)
+
+        # Wait for cluster to enter reconciliation if it's going to occur
+        time.sleep(10)
+
+        # If we requested workers up front, we have to wait for the cluster to reconcile while they are
+        # being allocated
+        while True:
+            cluster_status = sp.check_output(
+                'gcloud container clusters list --format=json | jq -r \'.[] | select(.name == "{}") | .status\''.
+                format(CLUSTER_ID),
+                shell=True).strip()
+
+            if cluster_status == 'RECONCILING':
+                time.sleep(5)
+            else:
+                if cluster_status != 'RUNNING':
+                    raise Exception(
+                        'Expected cluster status RUNNING, got: {}'.format(cluster_status))
+                break
+
+        # Install dashboard addons cpu/memory count
+        dashboard_pod = get_pod('kubernetes-dashboard', namespace='kube-system')
+        sp.check_call(
+            'kubectl create -f https://raw.githubusercontent.com/kubernetes/heapster/master/deploy/kube-config/influxdb/influxdb.yaml && \
+            kubectl create -f https://raw.githubusercontent.com/kubernetes/heapster/master/deploy/kube-config/influxdb/grafana.yaml && \
+            (kubectl get pod {} -n kube-system -o yaml | kubectl replace --force -f -)'
+            .format(dashboard_pod['metadata']['name']),
+            shell=True)
 
         # Authorize dashboard to access cluster info
         # https://github.com/kubernetes/helm/issues/2687
@@ -246,8 +273,16 @@ gcloud alpha -q container node-pools create workers \
                     'kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/k8s-1.8/device-plugin-daemonset.yaml'
                 ))
 
+        serve(args)
+
     print 'Cluster created. Setting up kubernetes...'
     get_credentials(args)
+
+    deploy = get_object(get_kube_info('deployments'), 'scanner-worker')
+    if deploy is not None:
+        num_workers = deploy['status']['replicas']
+    else:
+        num_workers = args.num_workers
 
     if args.reset:
         run('kubectl delete deploy --all')
@@ -264,38 +299,39 @@ gcloud alpha -q container node-pools create workers \
     deployments = get_kube_info('deployments')
     print 'Creating deployments...'
     if get_object(deployments, 'scanner-master') is None:
-        create_object(make_deployment('master'))
+        create_object(make_deployment('master', 1))
         print 'Waiting for master to start...'
         while True:
-            pod = get_master_pod()
+            pod = get_pod('scanner-master')
             if pod['status']['phase'] == 'Running':
                 break
         serve(args)
 
     if get_object(deployments, 'scanner-worker') is None:
-        create_object(make_deployment('worker'))
+        create_object(make_deployment('worker', num_workers))
 
     print 'Done!'
 
 
-def get_master_pod():
+def get_pod(deployment, namespace='default'):
     while True:
-        rs = get_by_owner('rs', 'scanner-master')
-        pod_name = get_by_owner('pod', rs)
+        rs = get_by_owner('rs', deployment, namespace)
+        pod_name = get_by_owner('pod', rs, namespace)
         if "\n" not in pod_name and pod_name != "":
             break
         time.sleep(1)
 
     while True:
-        pod = get_object(get_kube_info('pod'), pod_name)
+        pod = get_object(get_kube_info('pod', namespace), pod_name)
         if pod is not None:
             return pod
         time.sleep(1)
 
-def get_by_owner(ty, owner):
+
+def get_by_owner(ty, owner, namespace='default'):
     return sp.check_output(
-        'kubectl get {} -o json | jq \'.items[] | select(.metadata.ownerReferences[0].name == "{}") | .metadata.name\''.
-        format(ty, owner),
+        'kubectl get {} -o json -n {} | jq \'.items[] | select(.metadata.ownerReferences[0].name == "{}") | .metadata.name\''.
+        format(ty, namespace, owner),
         shell=True).strip()[1:-1]
 
 
@@ -355,6 +391,8 @@ def main():
     command = parser.add_subparsers(dest='command')
     create = command.add_parser('create')
     create.add_argument('--reset', '-r', action='store_true', help='Delete current deployments')
+    create.add_argument(
+        '--num-workers', '-n', type=int, default=1, help='Initial number of workers')
     command.add_parser('delete')
     command.add_parser('get-credentials')
     command.add_parser('serve')
