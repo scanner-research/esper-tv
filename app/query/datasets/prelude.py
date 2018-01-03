@@ -8,8 +8,8 @@ from django.db.models import Min, Max, Count, F, OuterRef, Subquery, Sum, Avg, F
 from django.db.models.functions import Cast, Extract
 from django.utils import timezone
 from django_bulk_update.manager import BulkUpdateManager
-import datetime
 from IPython.core.getipython import get_ipython
+import datetime
 import django.db.models as models
 import os
 import subprocess as sp
@@ -39,8 +39,8 @@ if not log.handlers:
             level = record.levelname[0]
             time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')[2:]
             if len(record.args) > 0:
-                record.msg = '({})'.format(
-                    ', '.join([str(x) for x in [record.msg] + list(record.args)]))
+                record.msg = '({})'.format(', '.join(
+                    [str(x) for x in [record.msg] + list(record.args)]))
                 record.args = ()
             return '{level} {time} {filename}:{lineno:03d}] {msg}'.format(
                 level=level, time=time, **record.__dict__)
@@ -166,11 +166,12 @@ def group_by_frame(objs, fn_key, fn_sort, output_dict=False, include_frame=True)
             l = [f for _, f in l]
         return l
 
+
 def ingest_if_missing(db, videos):
     needed = [video.path for video in videos if not db.has_table(video.path)]
     if len(needed) > 0:
         _, failed = db.ingest_videos([(p, p) for p in needed])
-        assert(len(failed) == 0)
+        assert (len(failed) == 0)
 
 
 PICKLE_CACHE_DIR = '/app/.cache'
@@ -220,11 +221,29 @@ class QuerySetMixin:
         except self.model.DoesNotExist:
             return False
 
+
 QuerySet.__bases__ += (QuerySetMixin, )
+
 
 class BulkUpdateManagerMixin:
     def batch_create(self, objs, batch_size=1000):
         for i in range(0, len(objs), batch_size):
-            self.bulk_create(objs[i:(i+batch_size)])
+            self.bulk_create(objs[i:(i + batch_size)])
+
 
 BulkUpdateManager.__bases__ += (BulkUpdateManagerMixin, )
+
+
+def model_repr(model):
+    def field_repr(field):
+        return '{}: {}'.format(field.name, getattr(model, field.name))
+
+    return '{}({})'.format(
+        model.__class__.__name__,
+        ', '.join([
+            field_repr(field) for field in model._meta.get_fields(include_hidden=False)
+            if not field.is_relation
+        ]))
+
+
+models.Model.__repr__ = model_repr

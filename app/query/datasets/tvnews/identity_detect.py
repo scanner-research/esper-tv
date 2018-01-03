@@ -25,7 +25,9 @@ def identity_detect(videos, exemplar, features, force=False):
     else:
         img = cv2.imread(exemplar)
         with Database() as db:
-            bboxes = [db.protobufs.BoundingBox(x1=0, y1=0, x2=img.shape[1] - 1, y2=img.shape[0] - 1)]
+            bboxes = [
+                db.protobufs.BoundingBox(x1=0, y1=0, x2=img.shape[1] - 1, y2=img.shape[0] - 1)
+            ]
             kernel = EmbedFaceKernel(None, db.protobufs)
             [emb] = kernel.execute(
                 [cv2.cvtColor(img, cv2.COLOR_RGB2BGR),
@@ -35,6 +37,14 @@ def identity_detect(videos, exemplar, features, force=False):
 
     log.debug('Doing lookup')
     dists, id_indices = feat_nn.kneighbors([exemplar_vector], min(10000, len(vectors)))
+
+    # to_update = []
+    # for (dist, id_idx) in zip(dists[0], id_indices[0]):
+    #     (i, j, k) = ids[id_idx]
+    #     f = features[i][j][k]
+    #     f.distto = dist
+    #     to_update.append(f)
+    # FaceFeatures.objects.bulk_update(to_update)
 
     face_map = defaultdict(list)
     for (dist, id_idx) in zip(dists[0], id_indices[0]):

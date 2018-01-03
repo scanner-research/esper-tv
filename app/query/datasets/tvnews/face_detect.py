@@ -30,12 +30,17 @@ def face_detect(videos, all_frames, force=False):
                 remove_already_labeled(video, vid_frames)
                 for video, vid_frames in zip(videos, all_frames)
             ]
+            to_compute = [(video, vid_frames) for video, vid_frames in zip(videos, filtered_frames)
+                          if not db.has_table(output_name(video, vid_frames))
+                          or not db.table(output_name(video, vid_frames)).committed()]
 
-            pipelines.detect_faces(db, [db.table(video.path).column('frame') for video in videos],
-                                   [db.sampler.gather(vid_frames) for vid_frames in all_frames], [
-                                       output_name(video, vid_frames)
-                                       for video, vid_frames in zip(videos, filtered_frames)
-                                   ])
+            if len(to_compute) > 0:
+                pipelines.detect_faces(
+                    db, [db.table(video.path).column('frame') for video, _ in to_compute],
+                    [db.sampler.gather(vid_frames) for _, vid_frames in to_compute],
+                    [output_name(video, vid_frames) for video, vid_frames in to_compute])
+
+            print(videos, filtered_frames)
 
             for video, video_frames in zip(videos, filtered_frames):
                 video_faces = list(
@@ -70,7 +75,6 @@ def face_detect(videos, all_frames, force=False):
                                 labeler=LABELER))
                         p_idx += 1
 
-                print(faces_to_save)
                 Face.objects.bulk_create(faces_to_save)
                 log.debug('Created {} faces'.format(len(faces_to_save)))
 

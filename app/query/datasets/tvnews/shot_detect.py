@@ -14,6 +14,8 @@ def compute_histograms(videos, force=False):
         return video.path + '_hist'
 
     with Database() as db:
+        ingest_if_missing(db, videos)
+        
         frame = db.ops.FrameInput()
         histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
         output = db.ops.Output(columns=[histogram])
@@ -170,17 +172,18 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
 
 
 STITCHED_LABELER, _ = Labeler.objects.get_or_create(name='shot-stitched')
+FEATURE_DISTANCE_THRESHOLD = 0.5
 
-
-def should_stitch(left_faces, right_faces):
+def should_stitch((left_faces, left_features), (right_faces, right_features)):
     if len(left_faces) == 0 or len(right_faces) == 0 or len(left_faces) != len(right_faces):
         return False
 
-    for f1 in left_faces:
+    for face1, feat1 in zip(left_faces, left_features):
         found = False
-        for i, f2 in enumerate(right_faces):
-            if bbox_iou(f1, f2) > 0.5:
+        for i, (face2, feat2) in enumerate(zip(right_faces, right_features)):
+            if bbox_iou(face1, face2) > 0.5 and distance.euclidean(feat1.load_features(), feat2.load_features()) < FEATURE_DISTANCE_THRESHOLD:
                 right_faces = right_faces[:i] + right_faces[(i + 1):]
+                right_features = right_features[:i] + right_features[(i + 1):]
                 found = True
                 break
         if not found:
@@ -189,25 +192,25 @@ def should_stitch(left_faces, right_faces):
     return len(right_faces) == 0
 
 
-def shot_stitch(videos, all_shots, all_shot_frames, all_faces, force=False):
+def shot_stitch(videos, all_shots, all_shot_frames, all_faces, all_features, force=False):
     if force or not Shot.objects.filter(video=videos[0], labeler=STITCHED_LABELER).exists():
-        for k, (vid_shots, vid_shot_frames, vid_faces) in \
-            enumerate(zip(all_shots, all_shot_frames, all_faces)):
+        for k, (vid_shots, vid_shot_frames, vid_faces, vid_features) in \
+            enumerate(zip(all_shots, all_shot_frames, all_faces, all_features)):
 
             log.debug('{}/{}'.format(k + 1, len(all_shots)))
 
-            frame_map = defaultdict(list, {
-                frame_faces[0].person.frame.number: frame_faces
-                for frame_faces in vid_faces
+            frame_map = defaultdict(lambda: ([], []), {
+                frame_faces[0].person.frame.number: (frame_faces, frame_features)
+                for (frame_faces, frame_features) in zip(vid_faces, vid_features)
             })
 
             u = unionfind(len(vid_shots))
 
             for i in range(len(vid_shots) - 1):
-                left_faces = frame_map[vid_shot_frames[i]]
-                right_faces = frame_map[vid_shot_frames[i + 1]]
+                left = frame_map[vid_shot_frames[i]]
+                right = frame_map[vid_shot_frames[i + 1]]
 
-                if should_stitch(left_faces, right_faces):
+                if should_stitch(left, right):
                     u.unite(i, i + 1)
 
             new_shots = []
@@ -228,26 +231,34 @@ def shot_stitch(videos, all_shots, all_shot_frames, all_faces, force=False):
 
     all_shots = []
     all_shot_faces = []
-    for (video, vid_faces) in zip(videos, all_faces):
-        frame_map = {l[0].person.frame.number: l for l in vid_faces}
+    all_shot_features = []
+    for (video, vid_faces, vid_features) in zip(videos, all_faces, all_features):
+        frame_map = defaultdict(list, {
+            frame_faces[0].person.frame.number: (frame_faces, frame_features)
+            for (frame_faces, frame_features) in zip(vid_faces, vid_features)
+        })
         frames = sorted(frame_map.keys())
         shots = list(
             Shot.objects.filter(video=video, labeler=STITCHED_LABELER).order_by('min_frame')
             .select_related('video'))
         shot_faces = []
+        shot_features = []
         for shot in shots:
             idx = bisect.bisect_right(frames, shot.min_frame)
             if idx == len(frames) or frames[idx] > shot.max_frame:
                 shot_faces.append([])
+                shot_features.append([])
             else:
-                shot_faces.append(frame_map[frames[idx]])
+                shot_faces.append(frame_map[frames[idx]][0])
+                shot_features.append(frame_map[frames[idx]][1])
 
-        assert(len(shots) == len(shot_faces))
+        assert(len(shots) == len(shot_faces) and len(shots) == len(shot_features))
 
         all_shots.append(shots)
         all_shot_faces.append(shot_faces)
+        all_shot_features.append(shot_features)
 
-    return all_shots, all_shot_faces
+    return all_shots, all_shot_faces, all_shot_features
 
 
 def main():

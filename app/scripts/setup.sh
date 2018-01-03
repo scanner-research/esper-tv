@@ -30,8 +30,9 @@ popd
 popd
 
 ## OpenPose
-cp -r /opt/openpose/models openpose-models
+mkdir openpose-models
 pushd openpose-models
+curl https://codeload.github.com/CMU-Perceptual-Computing-Lab/openpose/tar.gz/master | tar -xz --strip=2 openpose-master/models
 ./getModels.sh
 popd
 

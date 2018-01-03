@@ -23,8 +23,8 @@ def pose_detect(videos, all_frames, force=False):
             pose = db.ops.OpenPose(
                 frame=frame_sampled,
                 model_directory="/app/deps/openpose-models/",
-                hands=False,
-                face=False,
+                compute_hands=False,
+                compute_face=False,
                 pose_num_scales=2,
                 pose_scale_gap=0.5,
                 batch=50,
@@ -32,11 +32,14 @@ def pose_detect(videos, all_frames, force=False):
             output = db.ops.Output(columns=[pose])
 
             def remove_already_labeled(video, frames):
+                assert(len(set(frames)) == len(frames))
                 already_labeled = set([
                     f['number']
                     for f in Frame.objects.filter(video=video, tags=LABELED_TAG).values('number')
                 ])
-                return sorted(list(set(frames) - already_labeled))
+                l = sorted(list(set(frames) - already_labeled))
+                assert(len(l) > 0)
+                return l
 
             all_frames = [
                 remove_already_labeled(video, vid_frames)
