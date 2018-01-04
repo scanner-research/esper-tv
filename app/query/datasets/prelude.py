@@ -1,4 +1,4 @@
-from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType
+from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType, ColumnType
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
@@ -9,6 +9,7 @@ from django.db.models.functions import Cast, Extract
 from django.utils import timezone
 from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
+from timeit import default_timer as now
 import datetime
 import django.db.models as models
 import os
@@ -172,6 +173,25 @@ def ingest_if_missing(db, videos):
     if len(needed) > 0:
         _, failed = db.ingest_videos([(p, p) for p in needed])
         assert (len(failed) == 0)
+
+
+def shape(l):
+    if type(l) is list or type(l) is tuple:
+        return 'list({})'.format(shape(l[0]))
+    else:
+        return type(l).__name__
+
+
+class Timer:
+    def __init__(self, s):
+        self.s = s
+        log.debug('-- START: {}'.format(s))
+
+    def __enter__(self):
+        self.start = now()
+
+    def __exit__(self, a, b, c):
+        log.debug('-- END: {} -- {:.3f}s'.format(self.s, now() - self.start))
 
 
 PICKLE_CACHE_DIR = '/app/.cache'

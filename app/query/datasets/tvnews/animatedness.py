@@ -150,73 +150,70 @@ def animated_score(track):
     return max([np.mean(dists[i:i + w]) for i in range(0, len(dists) - w)])
 
 
-def shape(l):
-    if type(l) is list or type(l) is tuple:
-        return 'list({})'.format(shape(l[0]))
-    else:
-        return type(l).__name__
-
-
 def animatedness(videos, exemplar):
-    log.debug('Detecting shots')
-    all_shots = shot_detect(videos)
-    face_frame_per_shot = [[shot_frame_to_detect(shot) for shot in vid_shots]
-                           for vid_shots in all_shots]
+    with Timer('Detecting shots'):
+        all_shots = shot_detect(videos)
+        pose_frame_per_shot = [[shot_frame_to_detect(shot) for shot in vid_shots]
+                               for vid_shots in all_shots]
 
-    log.debug('Detecting faces')
-    all_faces = face_detect(videos, face_frame_per_shot)
+    with Timer('Detecting sparse poses'):
+        all_faces = face_detect(videos, pose_frame_per_shot, force=True)
+        # all_poses = pose_detect(videos, pose_frame_per_shot)
+    print([f.id for l in all_faces[0] for f in l])
+    exit()
 
-    log.debug('Filtering invalid faces')
-    filtered_faces = filter_invalid_faces(all_faces)
+    with Timer('Filtering invalid faces'):
+        filtered_faces = filter_invalid_faces(all_faces)
     log.debug('faces: {} --> {}'.format(
         sum(len(f) for f in all_faces[0]), sum(len(f) for f in filtered_faces[0])))
 
-    log.debug('Embedding faces')
-    all_features = face_embed(videos, filtered_faces)
+    with Timer('Embedding faces'):
+        all_features = face_embed(videos, filtered_faces)
 
-    log.debug('Stiching shots')
-    stitched_shots, shot_faces, shot_features = shot_stitch(videos, all_shots, face_frame_per_shot,
-                                                            filtered_faces, all_features)
+    with Timer('Stiching shots'):
+        stitched_shots, shot_faces, shot_features = shot_stitch(
+            videos, all_shots, face_frame_per_shot, filtered_faces, all_features)
 
-    log.debug('Detecting identities')
-    matching_features, indices = identity_detect(videos, exemplar, shot_features)
-    matching_shots, matching_faces = unzip([
-        unzip([(vid_shots[j], vid_faces[j][k]) for (j, k) in vid_indices])
-        for (vid_shots, vid_faces, vid_indices) in zip(stitched_shots, shot_faces, indices)
-    ])
-    log.debug('shots: {} --> {}'.format(len(stitched_shots[0]), len(matching_shots[0])))
+    with Timer('Detecting identities'):
+        matching_features, indices = identity_detect(videos, exemplar, shot_features)
+        matching_shots, matching_faces = unzip([
+            unzip([(vid_shots[j], vid_faces[j][k]) for (j, k) in vid_indices])
+            for (vid_shots, vid_faces, vid_indices) in zip(stitched_shots, shot_faces, indices)
+        ])
+        log.debug('shots: {} --> {}'.format(len(stitched_shots[0]), len(matching_shots[0])))
 
-    log.debug('Computing sparse poses to find shots with hands in view')
-    pose_frame_per_shot, matching_shots, matching_faces = unzip([
-        unzip(
-            sorted(
-                [(face.person.frame.number, shot, face)
-                 for (face, shot) in zip(vid_faces, vid_shots)],
-                key=itemgetter(0)))
-        for (vid_faces, vid_shots) in zip(matching_faces, matching_shots)
-    ])
+    with Timer('Computing sparse poses to find shots with hands in view'):
+        pose_frame_per_shot, matching_shots, matching_faces = unzip([
+            unzip(
+                sorted(
+                    [(face.person.frame.number, shot, face)
+                     for (face, shot) in zip(vid_faces, vid_shots)],
+                    key=itemgetter(0)))
+            for (vid_faces, vid_shots) in zip(matching_faces, matching_shots)
+        ])
 
-    log.debug('Computing sparse poses')
-    all_poses = pose_detect(videos, pose_frame_per_shot)
-    assert (len(all_poses[0]) == len(matching_faces[0]))
-    matching_poses = match_poses_to_faces(all_poses, matching_faces)
-    assert (len(matching_poses[0]) == len(matching_faces[0]))
+    with Timer('Computing sparse poses'):
+        all_poses = pose_detect(videos, pose_frame_per_shot)
+        assert (len(all_poses[0]) == len(matching_faces[0]))
+        matching_poses = match_poses_to_faces(all_poses, matching_faces)
+        assert (len(matching_poses[0]) == len(matching_faces[0]))
 
-    log.debug('Filtering invalid poses')
-    filtered_poses, indices = filter_invalid_poses(matching_poses)
-    filtered_shots = [[vid_shots[i] for i in vid_indices]
-                      for vid_shots, vid_indices in zip(matching_shots, indices)]
-    log.debug('shots: {} --> {}'.format(len(matching_poses[0]), len(filtered_poses[0])))
+    with Timer('Filtering invalid poses'):
+        filtered_poses, indices = filter_invalid_poses(matching_poses)
+        filtered_shots = [[vid_shots[i] for i in vid_indices]
+                          for vid_shots, vid_indices in zip(matching_shots, indices)]
+        log.debug('shots: {} --> {}'.format(len(matching_poses[0]), len(filtered_poses[0])))
 
-    log.debug('Computing dense poses for animatedness')
-    pose_frames_per_shot = [
-        sum([list(range(shot.min_frame, shot.max_frame + 1, POSE_STRIDE))
-             for shot in vid_shots], []) for vid_shots in filtered_shots
-    ]
-    all_dense_poses = pose_detect(videos, pose_frames_per_shot)
+    with Timer('Computing dense poses for animatedness'):
+        pose_frames_per_shot = [
+            sum([
+                list(range(shot.min_frame, shot.max_frame + 1, POSE_STRIDE)) for shot in vid_shots
+            ], []) for vid_shots in filtered_shots
+        ]
+        all_dense_poses = pose_detect(videos, pose_frames_per_shot)
 
-    log.debug('Tracking poses')
-    all_tracks = pose_track(videos, filtered_shots, filtered_poses, all_dense_poses)
+    with Timer('Tracking poses'):
+        all_tracks = pose_track(videos, filtered_shots, filtered_poses, all_dense_poses)
 
     for video, vid_tracks in zip(videos, all_tracks):
         scores = [(track.id, animated_score(track)) for track in vid_tracks]
@@ -227,17 +224,19 @@ def main():
     # video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
     # video = Video.objects.get(
     #     path='tvnews/videos/MSNBCW_20130404_060000_Hardball_With_Chris_Matthews.mp4')
+    # video = Video.objects.get(
+    #     path='tvnews/videos/MSNBCW_20150520_230000_Hardball_With_Chris_Matthews.mp4')
     video = Video.objects.get(
-        path='tvnews/videos/MSNBCW_20150520_230000_Hardball_With_Chris_Matthews.mp4')
+        path='tvnews/videos/MSNBCW_20160915_033000_Hardball_With_Chris_Matthews.mp4')
     if True:
-        log.debug('Deleting objects')
-        Shot.objects.filter(video=video).delete()
-        Person.objects.filter(frame__video=video).delete()
-        Face.objects.filter(person__frame__video=video).delete()
-        FaceFeatures.objects.filter(face__person__frame__video=video).delete()
-        Frame.tags.through.objects.filter(tvnews_frame__video=video).delete()
-        Pose.objects.filter(person__frame__video=video).delete()
-        PersonTrack.objects.filter(video=video).delete()
+        with Timer('Deleting objects'):
+            # Shot.objects.filter(video=video).delete()
+            Person.objects.filter(frame__video=video).delete()
+            Face.objects.filter(person__frame__video=video).delete()
+            FaceFeatures.objects.filter(face__person__frame__video=video).delete()
+            Frame.tags.through.objects.filter(tvnews_frame__video=video).delete()
+            # Pose.objects.filter(person__frame__video=video).delete()
+            # PersonTrack.objects.filter(video=video).delete()
     animatedness([video], "chris-matthews.jpg")
 
 

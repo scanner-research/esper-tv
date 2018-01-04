@@ -3,6 +3,9 @@ from scannerpy.stdlib import pipelines, parsers
 
 LABELER, _ = Labeler.objects.get_or_create(name='tinyfaces')
 LABELED_TAG, _ = Tag.objects.get_or_create(name='tinyfaces:labeled')
+cwd = os.path.dirname(os.path.abspath(__file__))
+
+METHOD = 'mtcnn'
 
 
 def face_detect(videos, all_frames, force=False):
@@ -27,20 +30,42 @@ def face_detect(videos, all_frames, force=False):
                 return sorted(list(set(frames) - already_labeled))
 
             filtered_frames = [
-                remove_already_labeled(video, vid_frames)
+                remove_already_labeled(video, vid_frames) if not force else vid_frames
                 for video, vid_frames in zip(videos, all_frames)
             ]
             to_compute = [(video, vid_frames) for video, vid_frames in zip(videos, filtered_frames)
-                          if not db.has_table(output_name(video, vid_frames))
+                          if force or not db.has_table(output_name(video, vid_frames))
                           or not db.table(output_name(video, vid_frames)).committed()]
 
             if len(to_compute) > 0:
-                pipelines.detect_faces(
-                    db, [db.table(video.path).column('frame') for video, _ in to_compute],
-                    [db.sampler.gather(vid_frames) for _, vid_frames in to_compute],
-                    [output_name(video, vid_frames) for video, vid_frames in to_compute])
+                if METHOD == 'mtcnn':
+                    db.register_op('MTCNN', [('frame', ColumnType.Video)], ['bboxes'])
+                    db.register_python_kernel(
+                        'MTCNN', DeviceType.GPU, cwd + '/mtcnn_kernel.py', batch=50)
 
-            print(videos, filtered_frames)
+                    frame = db.ops.FrameInput()
+                    frame_strided = frame.sample()
+                    bboxes = db.ops.MTCNN(frame=frame_strided, device=DeviceType.GPU)
+                    output = db.ops.Output(columns=[bboxes])
+
+                    jobs = [
+                        Job(
+                            op_args={
+                                frame: db.table(video.path).column('frame'),
+                                frame_strided: db.sampler.gather(vid_frames),
+                                output: output_name(video, vid_frames)
+                            }) for video, vid_frames in to_compute
+                    ]
+
+                    db.run(BulkJob(output=output, jobs=jobs), force=True)
+
+                elif METHOD == 'tinyfaces':
+                    pipelines.detect_faces(
+                        db, [db.table(video.path).column('frame') for video, _ in to_compute],
+                        [db.sampler.gather(vid_frames) for _, vid_frames in to_compute],
+                        [output_name(video, vid_frames) for video, vid_frames in to_compute])
+                else:
+                    raise Exception("Invalid face detect METHOD")
 
             for video, video_frames in zip(videos, filtered_frames):
                 video_faces = list(
