@@ -19,14 +19,17 @@ PROJECT_ID = os.environ['GOOGLE_PROJECT']
 #ZONE = os.environ['GOOGLE_ZONE']
 ZONE = 'us-east1-d'
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
-CLUSTER_ID = 'wc-test-2'
+CLUSTER_ID = 'wc-test'
 KUBE_VERSION = '1.8.4-gke.1'
 USE_GPU = False
-USE_PREEMPTIBLE = False
+USE_PREEMPTIBLE = True
+USE_AUTOSCALING = True
 NUM_CPU = int(2 if USE_GPU else 64)
 NUM_MEM = int(16 if USE_GPU else NUM_CPU * 3.0)
 
-CLUSTER_CMD = 'gcloud container clusters --zone {}'.format(ZONE)
+assert(not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
+
+CLUSTER_CMD = 'gcloud alpha container --project {} clusters --zone {}'.format(PROJECT_ID, ZONE)
 
 
 # docker sends a sigterm to kill a container, this ensures Python dies when the
@@ -72,8 +75,7 @@ def make_container(name):
             {'name': 'GLOG_v',
              'value': '1'}
         ],
-        'resources': {
-        }
+        'resources': {}
     }  # yapf: disable
     if name == 'master':
         template['ports'] = [{
@@ -181,9 +183,8 @@ def create(args):
         ]
 
         fmt_args = {
-            'project': PROJECT_ID,
+            'cmd': CLUSTER_CMD,
             'cluster_id': CLUSTER_ID,
-            'zone': ZONE,
             'cluster_version': KUBE_VERSION,
             'machine_type': machine_type(NUM_CPU, NUM_MEM),
             'scopes': ','.join(scopes),
@@ -192,13 +193,12 @@ def create(args):
         }
 
         cluster_cmd = """
-gcloud alpha -q container --project "{project}" clusters create "{cluster_id}" \
+{cmd} -q create "{cluster_id}" \
         --enable-kubernetes-alpha \
-        --zone "{zone}" \
         --cluster-version "{cluster_version}" \
-        --machine-type "n1-highmem-4" \
+        --machine-type "n1-highmem-8" \
         --image-type "COS" \
-        --disk-size "100" \
+        --disk-size "500" \
         --scopes {scopes} \
         --num-nodes "1" \
         --enable-cloud-logging \
@@ -207,34 +207,36 @@ gcloud alpha -q container --project "{project}" clusters create "{cluster_id}" \
 
         run(cluster_cmd)
 
+        fmt_args['cmd'] = fmt_args['cmd'].replace('clusters', 'node-pools')
         pool_cmd = """
-gcloud alpha -q container node-pools create workers \
+{cmd} -q create workers \
         --cluster "{cluster_id}" \
-        --zone "{zone}" \
         --machine-type "{machine_type}" \
         --image-type "COS" \
-        --disk-size "100" \
+        --disk-size "500" \
         --scopes {scopes} \
         --num-nodes "{initial_size}" \
-        --enable-autoscaling \
-        --min-nodes "0" \
-        --max-nodes "1000" \
+        {autoscaling} \
         {preemptible} \
         {accelerator}
         """.format(
-            preemptible=('--preemptible' if USE_PREEMPTIBLE else ''), **fmt_args)
+            preemptible=('--preemptible' if USE_PREEMPTIBLE else ''),
+            autoscaling=('--enable-autoscaling --min-nodes 0 --max-nodes 1000'
+                         if USE_AUTOSCALING else ''),
+            **fmt_args)
 
         run(pool_cmd)
 
         # Wait for cluster to enter reconciliation if it's going to occur
-        time.sleep(10)
+        if args.num_workers > 1:
+            time.sleep(60)
 
         # If we requested workers up front, we have to wait for the cluster to reconcile while they are
         # being allocated
         while True:
             cluster_status = sp.check_output(
-                'gcloud container clusters list --format=json | jq -r \'.[] | select(.name == "{}") | .status\''.
-                format(CLUSTER_ID),
+                '{cmd} list --format=json | jq -r \'.[] | select(.name == "{id}") | .status\''.
+                format(cmd=CLUSTER_CMD, id=CLUSTER_ID),
                 shell=True).strip()
 
             if cluster_status == 'RECONCILING':
@@ -381,6 +383,10 @@ def serve_process():
 
 
 def resize(args):
+    if not USE_AUTOSCALING:
+        run('{cmd} resize {id} --node-pool=workers --size={size}'.format(
+            cmd=CLUSTER_CMD, id=CLUSTER_ID, size=args.size))
+
     run('kubectl scale deploy/scanner-worker --replicas={}'.format(args.size))
 
 

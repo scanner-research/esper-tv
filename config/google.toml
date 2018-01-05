@@ -1,6 +1,6 @@
 [google]
 project = "visualdb-1046"
-zone = "us-west1-b"
+zone = "us-east1-d"
 
 [storage]
 type = "google"
@@ -9,7 +9,7 @@ path = "public"
 
 [database]
 type = "google"
-name = "esper-public-dev"
+name = "esper-public-dev-2"
 user = "will"
 password = "foobar"
 

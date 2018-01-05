@@ -21,6 +21,8 @@ import sqlparse
 import logging
 import dill
 import json
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -73,22 +75,6 @@ else:
     storage_config = StorageConfig.make_posix_config()
 storage = StorageBackend.make_from_config(storage_config)
 
-
-def progress_bar(n):
-    import progressbar
-    return progressbar.ProgressBar(
-        max_value=n,
-        widgets=[
-            progressxbar.Percentage(),
-            ' ',
-            '(',
-            progressbar.SimpleProgress(),
-            ')',
-            ' ',
-            progressbar.Bar(),
-            ' ',
-            progressbar.AdaptiveETA(),
-        ])
 
 
 # http://code.activestate.com/recipes/577058/
