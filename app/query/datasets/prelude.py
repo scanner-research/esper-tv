@@ -21,7 +21,7 @@ import sqlparse
 import logging
 import dill
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from tqdm import tqdm
 
 # Import all models for current dataset

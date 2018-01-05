@@ -2,38 +2,60 @@ from query.datasets.prelude import *
 from scannerpy.stdlib import parsers
 from scipy.spatial import distance
 from unionfind import unionfind
-from face_detect import LABELER as FACE_LABELER
 import bisect
 
 
 LABELER, _ = Labeler.objects.get_or_create(name='shot-histogram')
+cwd = os.path.dirname(os.path.abspath(__file__))
 
 
 def compute_histograms(videos, force=False):
-    def output_name(video):
+    def output_name_hist(video):
         return video.path + '_hist'
 
-    with Database() as db:
-        ingest_if_missing(db, videos)
+    def output_name_shots(video):
+        return video.path + '_shots'
+
+
+    with Database(prefetch_table_metadata=False) as db:
+        db.register_op('ShotDetection', ['histogram'], ['shots'], stencil=[0])
+        db.register_python_kernel('ShotDetection', DeviceType.CPU, cwd + '/shot_kernel.py')
+        # ingest_if_missing(db, videos)
         
         frame = db.ops.FrameInput()
         histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
         output = db.ops.Output(columns=[histogram])
         jobs = [
             Job(op_args={frame: db.table(video.path).column('frame'),
-                         output: output_name(video)}) for video in videos
-            if not db.has_table(output_name(video)) or force
+                         output: output_name_hist(video)}) for video in videos
+            if not db.has_table(output_name_hist(video)) or force
         ]
         if len(jobs) > 0:
+            raise Exception(video.path)
             bulk_job = BulkJob(output=output, jobs=jobs)
             logging.debug('Running Scanner histogram job on {} videos...'.format(len(jobs)))
             db.run(bulk_job, force=True, io_packet_size=10000)
 
         log.debug('Loading histograms...')
-        hists = [[
-            h for _, h in db.table(output_name(video)).load(['histogram'], parsers.histograms)
-        ] for video in videos]
-        log.debug('Loaded!')
+        for video in videos:
+            t = db.table(output_name_hist(video))
+            histogram = db.ops.Input()
+            shots = db.ops.ShotDetection(histogram=histogram, stencil=range(t.num_rows()))
+            output = db.ops.Output(columns=[shots])
+            jobs = [
+                Job(op_args={histogram: t.column('histogram'), 
+                             output: output_name_shots(video)})
+            ]
+            bulk_job = BulkJob(output=output, jobs=jobs)
+            logging.debug('Running Scanner shot detection job on {} videos'.format(len(jobs)))
+            db.run(bulk_job, force=True, io_packet_size=200000, work_packet_size=200000, pipeline_instances_per_node=1)
+
+        exit()
+
+        # hists = [[
+        #     h for _, h in db.table(output_name(video)).load(['histogram'], parsers.histograms)
+        # ] for video in videos]
+        # log.debug('Loaded!')
 
         return hists
 
@@ -164,6 +186,9 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
             log.debug('Evaluating shot results')
             evaluate_boundaries(all_boundaries[0])
 
+        if not save:
+            return all_shots
+
     return [
         list(
             Shot.objects.filter(video=video, labeler=LABELER).order_by('min_frame').select_related(
@@ -260,8 +285,23 @@ def shot_stitch(videos, all_shots, all_shot_frames, all_faces, all_features, for
 
     return all_shots, all_shot_faces, all_shot_features
 
+def foo(videos):
+    return shot_detect(videos, save=False)
 
 def main():
+    with open('all_videos_dl.txt') as f:
+        videos = ['tvnews/videos/{}.mp4'.format(s.strip()) for s in f.readlines()]
+    videos = [Video(path=path) for path in videos]
+
+    for i in range(740, len(videos), 1):
+        log.debug(i, videos[i])
+        shot_detect(videos[i:i+1], save=False)
+    exit()
+
+    with ProcessPoolExecutor(max_workers=8) as executor:
+        batch = 5
+        list(tqdm(executor.map(foo, [videos[i:i+batch] for i in range(0, len(videos), batch)])))
+
     video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
     shot_detect([video], save=False, evaluate=True)
 
