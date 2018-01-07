@@ -4,60 +4,31 @@ from scipy.spatial import distance
 from unionfind import unionfind
 import bisect
 
-
 LABELER, _ = Labeler.objects.get_or_create(name='shot-histogram')
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 
-def compute_histograms(videos, force=False):
-    def output_name_hist(video):
+def compute_histograms(db, videos, force=False):
+    def output_name(video):
         return video.path + '_hist'
 
-    def output_name_shots(video):
-        return video.path + '_shots'
+    # ingest_if_missing(db, videos)
 
+    frame = db.ops.FrameInput()
+    histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
+    output = db.ops.Output(columns=[histogram])
+    jobs = [
+        Job(op_args={frame: db.table(video.path).column('frame'),
+                     output: output_name(video)}) for video in videos
+        if not db.has_table(output_name(video)) or force
+    ]
+    if len(jobs) > 0:
+        raise Exception(video.path)
+        bulk_job = BulkJob(output=output, jobs=jobs)
+        logging.debug('Running Scanner histogram job on {} videos...'.format(len(jobs)))
+        db.run(bulk_job, force=True, io_packet_size=10000)
 
-    with Database(prefetch_table_metadata=False) as db:
-        db.register_op('ShotDetection', ['histogram'], ['shots'], stencil=[0])
-        db.register_python_kernel('ShotDetection', DeviceType.CPU, cwd + '/shot_kernel.py')
-        # ingest_if_missing(db, videos)
-        
-        frame = db.ops.FrameInput()
-        histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
-        output = db.ops.Output(columns=[histogram])
-        jobs = [
-            Job(op_args={frame: db.table(video.path).column('frame'),
-                         output: output_name_hist(video)}) for video in videos
-            if not db.has_table(output_name_hist(video)) or force
-        ]
-        if len(jobs) > 0:
-            raise Exception(video.path)
-            bulk_job = BulkJob(output=output, jobs=jobs)
-            logging.debug('Running Scanner histogram job on {} videos...'.format(len(jobs)))
-            db.run(bulk_job, force=True, io_packet_size=10000)
-
-        log.debug('Loading histograms...')
-        for video in videos:
-            t = db.table(output_name_hist(video))
-            histogram = db.ops.Input()
-            shots = db.ops.ShotDetection(histogram=histogram, stencil=range(t.num_rows()))
-            output = db.ops.Output(columns=[shots])
-            jobs = [
-                Job(op_args={histogram: t.column('histogram'), 
-                             output: output_name_shots(video)})
-            ]
-            bulk_job = BulkJob(output=output, jobs=jobs)
-            logging.debug('Running Scanner shot detection job on {} videos'.format(len(jobs)))
-            db.run(bulk_job, force=True, io_packet_size=200000, work_packet_size=200000, pipeline_instances_per_node=1)
-
-        exit()
-
-        # hists = [[
-        #     h for _, h in db.table(output_name(video)).load(['histogram'], parsers.histograms)
-        # ] for video in videos]
-        # log.debug('Loaded!')
-
-        return hists
+    return [db.table(output_name(video)) for video in videos]
 
 
 WINDOW_SIZE = 500
@@ -66,7 +37,63 @@ STD_DEV_FACTOR = 1
 MAGNITUDE_THRESHOLD = 5000
 
 
-def compute_shot_boundaries(hists):
+def compute_shot_boundaries_scanner(db, videos, tables):
+    def output_name(video):
+        return video.path + '_shots'
+
+    batch = 1000000
+
+    def load(t):
+        list(tables[0].column('histogram').load())
+
+    par_for(load, tables[:100])
+    # for t in tqdm(tables[:10]):
+    #     load(t)
+    exit()
+
+    log.debug('Registering ops')
+    try:
+        db.register_op('ShotDetection', ['histogram'], ['shots'], unbounded_state=True)
+        db.register_python_kernel('ShotDetection', DeviceType.CPU, cwd + '/shot_kernel.py', batch=batch)
+    except ScannerException:
+        pass
+
+    log.debug('Building jobs')
+    histogram = db.ops.Input()
+    shots = db.ops.ShotDetection(histogram=histogram)
+    output = db.ops.Output(columns=[shots])
+    jobs = [
+        Job(op_args={histogram: t.column('histogram'),
+                     output: output_name(video)}) for video, t in zip(videos, tables)
+        if not db.has_table(output_name(video)) or not db.table(output_name(video)).committed()
+    ]
+    bulk_job = BulkJob(output=output, jobs=jobs)
+
+    log.debug('Running Scanner shot detection job on {} videos'.format(len(jobs)))
+    db.run(
+        bulk_job,
+        force=True,
+        io_packet_size=batch,
+        work_packet_size=batch,
+        pipeline_instances_per_node=1,
+        task_timeout=600)
+    log.debug('Done')
+
+    # db.table(output_name(videos[0])).profiler().write_trace('shot.trace')
+    exit()
+
+    out_tables = [db.table(output_name(video)) for video in videos]
+    boundaries = [[dill.loads(b) for _, b in t.column('shots').load(rows=[t.num_rows() - 1])]
+                  for t in out_tables]
+
+    return boundaries
+
+
+def compute_shot_boundaries(table):
+    log.debug('Loading histograms')
+    hists = [h for _, h in table.load(['histogram'], parsers.histograms)]
+    log.debug('Loaded!')
+
     # Compute the mean difference between each pair of adjacent frames
     log.debug('Computing means')
     diffs = np.array([
@@ -161,12 +188,18 @@ def boundaries_to_shots(video, boundaries):
 
 def shot_detect(videos, save=True, evaluate=False, force=False):
     if evaluate or force or not Shot.objects.filter(video=videos[0], labeler=LABELER).exists():
+        log.debug('Connecting to database...')
+        # with Database(master=master_addr(), start_cluster=False, prefetch_table_metadata=False) as db:
+        with Database(prefetch_table_metadata=False) as db:
+            log.debug('Connected!')
+            videos = [v for v in videos if db.has_table(v.path + '_hist') and db.table(v.path + '_hist').committed()]
+            log.debug('{} videos w/ hist ready'.format(len(videos)))
+            log.debug('Computing histograms')
+            all_tables = compute_histograms(db, videos, force)
 
-        log.debug('Computing histograms')
-        all_hists = compute_histograms(videos, force)
-
-        log.debug('Computing shot boundaries')
-        all_boundaries = [compute_shot_boundaries(vid_hists) for vid_hists in all_hists]
+            log.debug('Computing shot boundaries')
+            all_boundaries = compute_shot_boundaries_scanner(db, videos, all_tables)
+            # all_boundaries = [compute_shot_boundaries(t) for t in all_tables]
 
         log.debug('Converting to shots')
         all_shots = [
@@ -199,6 +232,7 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
 STITCHED_LABELER, _ = Labeler.objects.get_or_create(name='shot-stitched')
 FEATURE_DISTANCE_THRESHOLD = 0.5
 
+
 def should_stitch((left_faces, left_features), (right_faces, right_features)):
     if len(left_faces) == 0 or len(right_faces) == 0 or len(left_faces) != len(right_faces):
         return False
@@ -206,7 +240,8 @@ def should_stitch((left_faces, left_features), (right_faces, right_features)):
     for face1, feat1 in zip(left_faces, left_features):
         found = False
         for i, (face2, feat2) in enumerate(zip(right_faces, right_features)):
-            if bbox_iou(face1, face2) > 0.5 and distance.euclidean(feat1.load_features(), feat2.load_features()) < FEATURE_DISTANCE_THRESHOLD:
+            if bbox_iou(face1, face2) > 0.5 and distance.euclidean(
+                    feat1.load_features(), feat2.load_features()) < FEATURE_DISTANCE_THRESHOLD:
                 right_faces = right_faces[:i] + right_faces[(i + 1):]
                 right_features = right_features[:i] + right_features[(i + 1):]
                 found = True
@@ -277,7 +312,7 @@ def shot_stitch(videos, all_shots, all_shot_frames, all_faces, all_features, for
                 shot_faces.append(frame_map[frames[idx]][0])
                 shot_features.append(frame_map[frames[idx]][1])
 
-        assert(len(shots) == len(shot_faces) and len(shots) == len(shot_features))
+        assert (len(shots) == len(shot_faces) and len(shots) == len(shot_features))
 
         all_shots.append(shots)
         all_shot_faces.append(shot_faces)
@@ -285,25 +320,21 @@ def shot_stitch(videos, all_shots, all_shot_frames, all_faces, all_features, for
 
     return all_shots, all_shot_faces, all_shot_features
 
+
 def foo(videos):
     return shot_detect(videos, save=False)
 
+
 def main():
+    video_map = {v.path: v for v in Video.objects.all()}
     with open('all_videos_dl.txt') as f:
-        videos = ['tvnews/videos/{}.mp4'.format(s.strip()) for s in f.readlines()]
-    videos = [Video(path=path) for path in videos]
+        paths = ['tvnews/videos/{}.mp4'.format(s.strip()) for s in f.readlines()]
+    videos = [video_map[path] for path in paths]
 
-    for i in range(740, len(videos), 1):
-        log.debug(i, videos[i])
-        shot_detect(videos[i:i+1], save=False)
-    exit()
+    shot_detect(videos[:30000])
 
-    with ProcessPoolExecutor(max_workers=8) as executor:
-        batch = 5
-        list(tqdm(executor.map(foo, [videos[i:i+batch] for i in range(0, len(videos), batch)])))
-
-    video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
-    shot_detect([video], save=False, evaluate=True)
+    # video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
+    # shot_detect([video], save=False, evaluate=True)
 
 
 if __name__ == '__main__':

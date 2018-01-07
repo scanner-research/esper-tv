@@ -1,4 +1,4 @@
-from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType, ColumnType
+from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType, ColumnType, ScannerException
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
@@ -11,6 +11,7 @@ from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
 import datetime
+import _strptime  # https://stackoverflow.com/a/46401422/356915
 import django.db.models as models
 import os
 import subprocess as sp
@@ -21,6 +22,7 @@ import sqlparse
 import logging
 import dill
 import json
+import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from tqdm import tqdm
 
@@ -42,8 +44,8 @@ if not log.handlers:
             level = record.levelname[0]
             time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')[2:]
             if len(record.args) > 0:
-                record.msg = '({})'.format(', '.join(
-                    [str(x) for x in [record.msg] + list(record.args)]))
+                record.msg = '({})'.format(
+                    ', '.join([str(x) for x in [record.msg] + list(record.args)]))
                 record.args = ()
             return '{level} {time} {filename}:{lineno:03d}] {msg}'.format(
                 level=level, time=time, **record.__dict__)
@@ -74,7 +76,6 @@ if ESPER_ENV == 'google':
 else:
     storage_config = StorageConfig.make_posix_config()
 storage = StorageBackend.make_from_config(storage_config)
-
 
 
 # http://code.activestate.com/recipes/577058/
@@ -166,6 +167,32 @@ def shape(l):
         return 'list({})'.format(shape(l[0]))
     else:
         return type(l).__name__
+
+
+def par_for(f, l, process=False, workers=None):
+    Pool = ProcessPoolExecutor if process else ThreadPoolExecutor
+    with Pool(max_workers=mp.cpu_count() if workers is None else workers) as executor:
+        return list(tqdm(executor.map(f, l), total=len(l)))
+
+
+def master_addr():
+    ip = sp.check_output(
+        '''
+    kubectl get pods -l 'app=scanner-master' -o json | \
+    jq '.items[0].spec.nodeName' -r | \
+    xargs -I {} kubectl get nodes/{} -o json | \
+    jq '.status.addresses[] | select(.type == "ExternalIP") | .address' -r
+    ''',
+        shell=True).strip()
+
+    port = sp.check_output(
+        '''
+    kubectl get svc/scanner-master -o json | \
+    jq '.spec.ports[0].nodePort' -r
+    ''',
+        shell=True).strip()
+
+    return '{}:{}'.format(ip, port)
 
 
 class Timer:

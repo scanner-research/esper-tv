@@ -11,7 +11,7 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip jq && \
+    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip jq gdb psmisc && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # Google Cloud SDK

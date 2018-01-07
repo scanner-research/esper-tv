@@ -19,15 +19,16 @@ PROJECT_ID = os.environ['GOOGLE_PROJECT']
 #ZONE = os.environ['GOOGLE_ZONE']
 ZONE = 'us-east1-d'
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
-CLUSTER_ID = 'wc-test'
+CLUSTER_ID = 'wc-test-2'
 KUBE_VERSION = '1.8.4-gke.1'
 USE_GPU = False
 USE_PREEMPTIBLE = True
 USE_AUTOSCALING = True
-NUM_CPU = int(2 if USE_GPU else 64)
+NUM_CPU = int(2 if USE_GPU else 4)
 NUM_MEM = int(16 if USE_GPU else NUM_CPU * 3.0)
+PROCESS_PER_CORE = True
 
-assert(not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
+assert (not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
 
 CLUSTER_CMD = 'gcloud alpha container --project {} clusters --zone {}'.format(PROJECT_ID, ZONE)
 
@@ -73,23 +74,15 @@ def make_container(name):
             {'name': 'GLOG_logtostderr',
              'value': '1'},
             {'name': 'GLOG_v',
-             'value': '1'}
+             'value': '1'},
+            {'name': 'PROCESS_PER_CORE',
+             'value': str(PROCESS_PER_CORE)}
         ],
         'resources': {}
     }  # yapf: disable
     if name == 'master':
         template['ports'] = [{
             'containerPort': 8080,
-        }]
-    elif name == 'worker':
-        master_pod = get_pod('scanner-master')
-
-        template['env'] += [{
-            'name': 'SCANNER_MASTER_SERVICE_HOST',
-            'value': master_pod['status']['podIP']
-        }, {
-            'name': 'SCANNER_MASTER_SERVICE_PORT',
-            'value': '8080'
         }]
 
     if USE_GPU:
@@ -198,7 +191,7 @@ def create(args):
         --cluster-version "{cluster_version}" \
         --machine-type "n1-highmem-8" \
         --image-type "COS" \
-        --disk-size "500" \
+        --disk-size "50" \
         --scopes {scopes} \
         --num-nodes "1" \
         --enable-cloud-logging \
@@ -287,6 +280,7 @@ def create(args):
         num_workers = args.num_workers
 
     if args.reset:
+        run('kubectl delete service --all')
         run('kubectl delete deploy --all')
 
     secrets = get_kube_info('secrets')
@@ -302,12 +296,10 @@ def create(args):
     print 'Creating deployments...'
     if get_object(deployments, 'scanner-master') is None:
         create_object(make_deployment('master', 1))
-        print 'Waiting for master to start...'
-        while True:
-            pod = get_pod('scanner-master')
-            if pod['status']['phase'] == 'Running':
-                break
-        serve(args)
+
+    services = get_kube_info('services')
+    if get_object(services, 'scanner-master') is None:
+        run('kubectl expose deploy/scanner-master --type=NodePort --port=8080')
 
     if get_object(deployments, 'scanner-worker') is None:
         create_object(make_deployment('worker', num_workers))
@@ -364,17 +356,13 @@ def serve_process():
         pod_name = get_by_owner('pod', rs)
         if "\n" not in pod_name and pod_name != '':
             print 'Forwarding ' + pod_name
-            forward_process = sp.Popen(
-                shlex.split('kubectl port-forward {} 8080:8080'.format(pod_name)))
             proxy_process = sp.Popen(
                 shlex.split('kubectl proxy --address=0.0.0.0 --disable-filter=true'))
             break
 
     def cleanup_processes(signum, frame):
         proxy_process.terminate()
-        forward_process.terminate()
         proxy_process.wait()
-        forward_process.wait()
         exit()
 
     signal.signal(signal.SIGINT, cleanup_processes)

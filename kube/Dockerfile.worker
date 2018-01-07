@@ -3,5 +3,6 @@ FROM scannerresearch/scanner:${tag}
 ADD .scanner.toml /root/.scanner.toml
 WORKDIR /app
 
+RUN pip install dill unionfind scipy numpy
 ADD worker.py .
 CMD ["python", "worker.py"]
