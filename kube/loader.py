@@ -11,7 +11,8 @@ print('Connecting to database')
 with Database() as db:
     print('Reading tables')
     with open('/app/tables') as f:
-        tables = [s.strip() + '_hist' for s in f.readlines()][(WORKER_ID * BATCH_SIZE) : ((WORKER_ID + 1) * BATCH_SIZE)]
+        tables = [s.strip()
+                  for s in f.readlines()][(WORKER_ID * BATCH_SIZE):((WORKER_ID + 1) * BATCH_SIZE)]
 
     db._load_db_metadata()
 
@@ -22,4 +23,6 @@ with Database() as db:
     with ThreadPoolExecutor(max_workers=8) as executor:
         loaded = list(tqdm(executor.map(load, tables), total=len(tables)))
 
-    db._storage.write('tmp/hist_{}.pkl'.format(WORKER_ID), pickle.dumps(loaded, pickle.HIGHEST_PROTOCOL))
+    print('Writing out megafile')
+    db._storage.write('tmp/hist_{}.pkl'.format(WORKER_ID),
+                      pickle.dumps(loaded, pickle.HIGHEST_PROTOCOL))

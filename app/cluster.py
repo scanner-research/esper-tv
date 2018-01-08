@@ -79,7 +79,10 @@ def make_container(name):
             {'name': 'PROCESS_PER_CORE',
              'value': str(PROCESS_PER_CORE)}
         ],
-        'resources': {}
+        'resources': {},
+        'securityContext': {'capabilities': {
+            'add': ['SYS_PTRACE']  # Allows gdb to work in container
+        }}
     }  # yapf: disable
     if name == 'master':
         template['ports'] = [{
@@ -394,6 +397,14 @@ def load(args):
         container['env'].extend([
             {'name': 'WORKER_ID', 'value': str(i)},
             {'name': 'BATCH_SIZE', 'value': LOAD_BATCH},
+            {
+                'name': 'WORKER_ID',
+                'value': str(i)
+            },
+            {
+                'name': 'BATCH_SIZE',
+                'value': str(LOAD_BATCH)
+            },
         ])
 
         job = {
