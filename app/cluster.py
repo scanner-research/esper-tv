@@ -14,6 +14,7 @@ import atexit
 import multiprocessing as mp
 import shlex
 import signal
+import math
 
 PROJECT_ID = os.environ['GOOGLE_PROJECT']
 #ZONE = os.environ['GOOGLE_ZONE']
@@ -85,11 +86,14 @@ def make_container(name):
             'containerPort': 8080,
         }]
 
-    if USE_GPU:
-        template['resources']['limits'] = {'nvidia.com/gpu': 1}
+    if name == 'loader':
+        template['resources']['requests'] = {'cpu': NUM_CPU / 2.0 + 0.1}
     else:
-        if name == 'worker':
-            template['resources']['requests'] = {'cpu': NUM_CPU / 2.0 + 0.1}
+        if USE_GPU:
+            template['resources']['limits'] = {'nvidia.com/gpu': 1}
+        else:
+            if name == 'worker':
+                template['resources']['requests'] = {'cpu': NUM_CPU / 2.0 + 0.1}
 
     return template
 
@@ -377,6 +381,49 @@ def resize(args):
 
     run('kubectl scale deploy/scanner-worker --replicas={}'.format(args.size))
 
+LOAD_BATCH = 1000
+
+def load(args):
+    with open('/app/tables') as f:
+        num_tables = len(f.readlines())
+
+    num_workers = int(math.ceil(num_tables / float(LOAD_BATCH)))
+
+    for i in range(num_workers):
+        container = make_container('loader')
+        container['env'].extend([
+            {'name': 'WORKER_ID', 'value': str(i)},
+            {'name': 'BATCH_SIZE', 'value': LOAD_BATCH},
+        ])
+
+        job = {
+            'apiVersion': 'batch/v1',
+            'kind': 'Job',
+            'metadata': {'name': 'load-{}'.format(i)},
+            'spec': {'template': {
+                'metadata': {'name': 'load-{}'.format(i)},
+                'spec': {
+                    'containers': [container],
+                    'restartPolicy': 'Never',
+                    'volumes': [{
+                        'name': 'service-key',
+                        'secret': {
+                            'secretName': 'service-key',
+                            'items': [{
+                                'key': 'service-key.json',
+                                'path': 'service-key.json'
+                            }]
+                        }
+                    }],
+                    'nodeSelector': {
+                        'cloud.google.com/gke-nodepool': 'workers'
+                    }
+                }
+            }}
+        }  # yapf: disable
+
+        create_object(job)
+
 
 def main():
     signal.signal(signal.SIGTERM, sigterm_handler)
@@ -392,6 +439,7 @@ def main():
     command.add_parser('serve')
     resize = command.add_parser('resize')
     resize.add_argument('size', type=int, help='Number of nodes')
+    command.add_parser('load')
 
     args = parser.parse_args()
     globals()[args.command.replace('-', '_')](args)

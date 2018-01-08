@@ -1,0 +1,7 @@
+FROM scannerresearch/scanner:cpu
+ADD .scanner.toml /root/.scanner.toml
+WORKDIR /app
+
+ADD loader.py .
+ADD tables .
+CMD ["python", "loader.py"]

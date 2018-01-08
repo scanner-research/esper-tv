@@ -160,6 +160,7 @@ def main():
 
         build('master')
         build('worker')
+        build('loader')
 
     print('Successfully configured Esper.')
 
