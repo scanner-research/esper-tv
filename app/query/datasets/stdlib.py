@@ -135,7 +135,7 @@ def qs_to_result(result,
         for frame in result[:LIMIT * stride:stride]:
             materialized_result.append({
                 'video': frame.video.id,
-                'start_frame': frame.id,
+                'start_frame': frame.number,
                 'objects': []
             })
 
@@ -151,8 +151,8 @@ def qs_to_result(result,
         if frame_major:
             frames = set()
             for inst in result.values('person__frame__video',
-                                      'person__frame')[:LIMIT * stride:stride]:
-                frames.add((inst['person__frame__video'], inst['person__frame']))
+                                      'person__frame__number')[:LIMIT * stride:stride]:
+                frames.add((inst['person__frame__video'], inst['person__frame__number']))
             frames = list(frames)
             frames.sort(key=itemgetter(0, 1))
             for (video, frame) in frames:
@@ -168,7 +168,7 @@ def qs_to_result(result,
             for inst in result.select_related('person__frame')[:LIMIT * stride:stride]:
                 r = {
                     'video': inst.person.frame.video.id,
-                    'start_frame': inst.person.frame.id,
+                    'start_frame': inst.person.frame.number,
                     'objects': [fn(inst)]
                 }
                 materialized_result.append(r)
@@ -186,8 +186,8 @@ def qs_to_result(result,
             result = {
                 'video': t.video.id,
                 'track': t.id,
-                'start_frame': Frame.objects.get(video=t.video, number=t.min_frame).id,
-                'end_frame': Frame.objects.get(video=t.video, number=t.max_frame).id,
+                'start_frame': t.min_frame,
+                'end_frame': t.max_frame,
             }
 
             if model is not None and False:
@@ -215,13 +215,13 @@ def qs_to_result(result,
         intervals = [(r['video'], r['start_frame'], r['end_frame']) for r in materialized_result]
         points = []
         for (video, start, end) in intervals:
-            start_num = Frame.objects.get(id=start).number
-            end_num = Frame.objects.get(id=end).number
-            points.extend([(video, start_num, start, False), (video, end_num, end, True)])
-        points.sort(key=itemgetter(0, 1, 3))
+            points.extend([(video, start, False), (video, end, True)])
+        points.sort(key=itemgetter(0, 1, 2))
 
         pprint(points)
         sys.stdout.flush()
+
+        # TODO(wcrichto): this is probably broken after change from frame id -> frame number
 
         intervals_active = 0
         boundaries = []
@@ -231,7 +231,7 @@ def qs_to_result(result,
             num_intervals = 1
             (_, _, frame, is_end) = points[i]
             while i < len(points) - 1:
-                if points[i + 1][2] == frame:
+                if points[i + 1][1] == frame:
                     num_intervals += 1
                     i += 1
                 else:
@@ -242,11 +242,11 @@ def qs_to_result(result,
 
             if not is_end:
                 intervals_active += num_intervals
-                boundaries.append((frame, points[i + 1][2], intvl_id))
+                boundaries.append((frame, points[i + 1][1], intvl_id))
             else:
                 intervals_active -= num_intervals
                 if intervals_active > 0:
-                    boundaries.append((frame, points[i + 1][2], intvl_id))
+                    boundaries.append((frame, points[i + 1][1], intvl_id))
                 else:
                     intvl_id += 1
 

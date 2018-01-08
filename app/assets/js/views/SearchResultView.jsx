@@ -168,7 +168,7 @@ class ClipView extends React.Component {
     this.fullScreen = !this.fullScreen;
 
     if (this.fullScreen && this.state.showVideo) {
-      this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
+      this._video.currentTime = this._toSeconds(this.props.clip.start_frame);
       this._video.pause();
       setTimeout(() => {
         if (this._video) {
@@ -241,7 +241,7 @@ class ClipView extends React.Component {
   }
 
   _onLoadedData = () => {
-    this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
+    this._video.currentTime = this._toSeconds(this.props.clip.start_frame);
     if (this._video.textTracks.length > 0) {
       this._video.textTracks[0].mode = 'showing';
     }
@@ -250,9 +250,9 @@ class ClipView extends React.Component {
 
   _onTimeUpdate = () => {
     if (this.state.loopVideo &&
-        this._frameMeta('end') !== undefined &&
-        this._video.currentTime >= this._toSeconds(this._frameMeta('end').number)) {
-      this._video.currentTime = this._toSeconds(this._frameMeta('start').number);
+        this.props.clip.end_frame !== undefined &&
+        this._video.currentTime >= this._toSeconds(this.props.clip.end_frame)) {
+      this._video.currentTime = this._toSeconds(this.props.clip.start_frame);
     }
   }
 
@@ -266,10 +266,6 @@ class ClipView extends React.Component {
 
   _videoMeta = () => {
     return window.search_result.videos[this.props.clip.video];
-  }
-
-  _frameMeta = (ty) => {
-    return window.search_result.frames[this.props.clip[ty + '_frame']]
   }
 
   componentWillReceiveProps(props) {
@@ -286,16 +282,14 @@ class ClipView extends React.Component {
     let clip = this.props.clip;
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let video = this._videoMeta();
-    let frame = this._frameMeta('start');
 
-    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${frame.number}`;
+    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${clip.start_frame}`;
 
     let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
     let meta = [];
 
     if (this.state.expand) {
       meta.push(['Video', `${video.path.split(/[\\/]/).pop()} (${video.id})`]);
-      meta.push(['Frame', `${frame.number} (${frame.id})`]);
     }
 
     if (clip.end_frame !== undefined) {
