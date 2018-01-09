@@ -72,7 +72,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
+    parser.add_argument('--no-build-base', action='store_true')
     parser.add_argument('--build-tf', action='store_true')
+    parser.add_argument('--build-gpu', action='store_true')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -147,21 +149,24 @@ def main():
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
+    if not args.no_build_base:
+        devices = ['cpu'] + (['gpu'] if device == 'gpu' or args.build_gpu else [])
+        for device in devices:
+            build_args = {
+                'cores': cores,
+                'device': device,
+                'device2': device,
+                'tf_version': '1.2.0' if device == 'gpu' else '1.4.1',
+                'build_tf': 'on' if args.build_tf else 'off'
+            }
 
-    for device in ['cpu']:
-        build_args = {
-            'cores': cores,
-            'device': device,
-            'device2': device,
-            'tf_version': '1.2.0' if device == 'gpu' else '1.4.1',
-            'build_tf': 'on' if args.build_tf else 'off'
-        }
-
-        sp.check_call(
-            'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.format(
-                device=device,
-                build_args=' '.join(['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
-            shell=True)
+            sp.check_call(
+                'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+                format(
+                    device=device,
+                    build_args=' '.join(
+                        ['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
+                shell=True)
 
     if 'google' in base_config:
         base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
