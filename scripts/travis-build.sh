@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+python configure.py -c config/local.toml
+
 build_docker() {
     docker build -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
 
