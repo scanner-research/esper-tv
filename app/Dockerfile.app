@@ -25,7 +25,7 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 # Python setup
 ADD .deps/nbconfig /root/.jupyter/nbconfig
 ADD requirements.app.txt ./
-ADD pip install -r requirements.app.txt && \
+RUN pip install -r requirements.app.txt && \
     jupyter nbextension enable qgrid --py --sys-prefix && \
     jupyter nbextension install --sys-prefix --py vega && \
     jupyter nbextension enable vega --py --sys-prefix && \
