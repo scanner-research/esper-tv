@@ -4,7 +4,7 @@ set -e
 python configure.py -c config/local.toml
 
 build_docker() {
-    docker build -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
+    docker build -f app/Dockerfile.app -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
 
     if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
         docker push $DOCKER_REPO:$1
