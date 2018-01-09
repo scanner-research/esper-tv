@@ -1,5 +1,5 @@
 ARG device
-FROM scannerresearch/esper-base:${device}
+FROM scannerresearch/scanner:${device}
 WORKDIR /app
 
 COPY kube/master.py .
