@@ -25,9 +25,9 @@ KUBE_VERSION = '1.8.4-gke.1'
 USE_GPU = False
 USE_PREEMPTIBLE = True
 USE_AUTOSCALING = True
-NUM_CPU = int(2 if USE_GPU else 4)
+NUM_CPU = int(2 if USE_GPU else 64)
 NUM_MEM = int(16 if USE_GPU else NUM_CPU * 3.0)
-PROCESS_PER_CORE = True
+PROCESS_PER_CORE = False
 
 assert (not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
 
@@ -384,7 +384,9 @@ def resize(args):
 
     run('kubectl scale deploy/scanner-worker --replicas={}'.format(args.size))
 
+
 LOAD_BATCH = 1000
+
 
 def load(args):
     with open('/app/tables') as f:
@@ -395,8 +397,6 @@ def load(args):
     for i in range(num_workers):
         container = make_container('loader')
         container['env'].extend([
-            {'name': 'WORKER_ID', 'value': str(i)},
-            {'name': 'BATCH_SIZE', 'value': LOAD_BATCH},
             {
                 'name': 'WORKER_ID',
                 'value': str(i)

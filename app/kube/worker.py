@@ -1,6 +1,5 @@
 from scannerpy import start_worker, ScannerException
 import os
-import time
 
 # TODO: vary num_workers w/ # of cores, don't fix 64
 
@@ -21,4 +20,4 @@ start_worker(
     prefetch_table_metadata=True,
     machine_params=machine_params.SerializeToString(),
     port=5002,
-    num_workers=4 if PROCESS_PER_CORE else None)
+    num_workers=2 if PROCESS_PER_CORE else None)

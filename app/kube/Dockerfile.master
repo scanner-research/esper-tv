@@ -1,0 +1,6 @@
+ARG device
+FROM scannerresearch/esper-base:${device}
+WORKDIR /app
+
+COPY kube/master.py .
+CMD ["python", "master.py"]

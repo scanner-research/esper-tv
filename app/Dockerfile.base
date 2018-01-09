@@ -1,0 +1,18 @@
+ARG device
+FROM scannerresearch/scanner:${device}
+# ARGS before FROM aren't accessible after the FROM, so we need to replicate the device arg.
+ARG build_tf=off
+ARG tf_version=1.2.0
+ARG device2=cpu
+ARG cores=1
+
+ENV APPDIR=/app
+WORKDIR ${APPDIR}
+
+COPY ./scripts ./scripts
+COPY ./requirements.base.txt .
+RUN ./scripts/build-tf.sh
+RUN pip install -r requirements.base.txt
+COPY ./.scanner.toml /root/.scanner.toml
+
+ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH

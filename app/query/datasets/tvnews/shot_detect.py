@@ -9,24 +9,33 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 
 
 def compute_histograms(db, videos, force=False):
+    log.debug('Computing histograms on {} videos'.format(len(videos)))
+
     def output_name(video):
         return video.path + '_hist'
 
     # ingest_if_missing(db, videos)
 
     frame = db.ops.FrameInput()
-    histogram = db.ops.Histogram(frame=frame, device=DeviceType.GPU)
+    histogram = db.ops.Histogram(frame=frame, device=DeviceType.CPU, batch=500)
     output = db.ops.Output(columns=[histogram])
     jobs = [
         Job(op_args={frame: db.table(video.path).column('frame'),
                      output: output_name(video)}) for video in videos
-        if not db.has_table(output_name(video)) or force
+        if force or not db.has_table(output_name(video))
+        or not db.table(output_name(video)).committed()
     ]
+
     if len(jobs) > 0:
-        raise Exception(video.path)
+        log.debug('Running Scanner histogram job on {} videos'.format(len(jobs)))
         bulk_job = BulkJob(output=output, jobs=jobs)
-        logging.debug('Running Scanner histogram job on {} videos...'.format(len(jobs)))
-        db.run(bulk_job, force=True, io_packet_size=10000)
+
+        db.run(
+            bulk_job,
+            force=True,
+            io_packet_size=100000,
+            work_packet_size=500,
+            pipeline_instances_per_node=24)
 
     return [db.table(output_name(video)) for video in videos]
 
@@ -38,23 +47,18 @@ MAGNITUDE_THRESHOLD = 5000
 
 
 def compute_shot_boundaries_scanner(db, videos, tables):
+    log.debug('Computing shot boundaries on {} videos'.format(len(videos)))
+
     def output_name(video):
         return video.path + '_shots'
 
     batch = 1000000
 
-    def load(t):
-        list(tables[0].column('histogram').load())
-
-    par_for(load, tables[:100])
-    # for t in tqdm(tables[:10]):
-    #     load(t)
-    exit()
-
     log.debug('Registering ops')
     try:
         db.register_op('ShotDetection', ['histogram'], ['shots'], unbounded_state=True)
-        db.register_python_kernel('ShotDetection', DeviceType.CPU, cwd + '/shot_kernel.py', batch=batch)
+        db.register_python_kernel(
+            'ShotDetection', DeviceType.CPU, cwd + '/shot_kernel.py', batch=batch)
     except ScannerException:
         pass
 
@@ -66,11 +70,11 @@ def compute_shot_boundaries_scanner(db, videos, tables):
         Job(op_args={histogram: t.column('histogram'),
                      output: output_name(video)}) for video, t in zip(videos, tables)
         if not db.has_table(output_name(video)) or not db.table(output_name(video)).committed()
-    ]
+    ][:25000]
     bulk_job = BulkJob(output=output, jobs=jobs)
 
     log.debug('Running Scanner shot detection job on {} videos'.format(len(jobs)))
-    db.run(
+    ts = db.run(
         bulk_job,
         force=True,
         io_packet_size=batch,
@@ -186,34 +190,85 @@ def boundaries_to_shots(video, boundaries):
 # Potentially exclude lower third and/or top of the frame
 
 
+def bulk_load(db, videos):
+    shots = [
+        db.table(v.path + '_shots') for v in videos
+        if db.has_table(v.path + '_shots') and db.table(v.path + '_shots').committed()
+    ]
+
+    def load(t):
+        try:
+            return pickle.loads(next(t.column('shots').load(rows=[t.num_rows() - 1]))[1])
+        except Exception:
+            traceback.print_exc()
+            print(t.name())
+            return None
+
+    return par_for(load, shots)
+
+
 def shot_detect(videos, save=True, evaluate=False, force=False):
     if evaluate or force or not Shot.objects.filter(video=videos[0], labeler=LABELER).exists():
         log.debug('Connecting to database...')
-        # with Database(master=master_addr(), start_cluster=False, prefetch_table_metadata=False) as db:
-        with Database(prefetch_table_metadata=False) as db:
+        with make_scanner_db() as db:
             log.debug('Connected!')
-            videos = [v for v in videos if db.has_table(v.path + '_hist') and db.table(v.path + '_hist').committed()]
-            log.debug('{} videos w/ hist ready'.format(len(videos)))
-            log.debug('Computing histograms')
-            all_tables = compute_histograms(db, videos, force)
+            db._load_db_metadata()
 
-            log.debug('Computing shot boundaries')
-            all_boundaries = compute_shot_boundaries_scanner(db, videos, all_tables)
+            # all_tables = compute_histograms(db, videos, force)
+
+            # videos, all_tables = unzip([
+            #     (v, db.table(v.path + '_hist'))
+            #     for v in videos
+            #     if db.has_table(v.path + '_hist') and db.table(v.path + '_hist').committed()
+            # ])
+
+            # all_boundaries = compute_shot_boundaries_scanner(db, videos, all_tables)
+            # exit()
+
             # all_boundaries = [compute_shot_boundaries(t) for t in all_tables]
+
+            videos_without_shots = set([v['path'] for v in Video.objects.annotate(
+                c=Subquery(
+                    Shot.objects.filter(video=OuterRef('pk')).values('video') \
+                    .annotate(c=Count('video')).values('c')
+                )).filter(c__isnull=True).values('path')])
+
+            log.debug('Bulk fetch videos')
+            to_load = [v for v in videos
+                       if db.has_table(v.path + '_shots') and db.table(v.path + '_shots').committed() and \
+                       v.path in videos_without_shots]
+
+            # log.debug('Bulk load shots')
+            # shots = bulk_load(db, to_load)
+            # pcache.set('all_shots_2', shots)
+            shots = zip([v.path for v in to_load], pcache.get('all_shots_2'))
+
+            log.debug('Depickling')
+            video_map = {v.path: v for v in videos}
+            # pickled_shots = pickle.load(open('/app/notebooks/all_shots.pkl', 'rb'))
+            pickled_shots = shots
+            videos, all_boundaries, all_black_frames = unzip(
+                [(video_map[path.replace('_shots', '')], t[0], t[1])
+                 for (path, t) in pickled_shots
+                 if t is not None])
+
 
         log.debug('Converting to shots')
         all_shots = [
             boundaries_to_shots(video, vid_boundaries)
-            for video, vid_boundaries in zip(videos, all_boundaries)
+            for video, vid_boundaries in tqdm(zip(videos, all_boundaries))
         ]
 
-        log.debug('Computed {} shots'.format(len(all_shots[0])))
+        log.debug('Computed {} shots'.format(sum([len(s) for s in all_shots])))
 
         if save:
             log.debug('Saving shots')
-            for (video, vid_shots) in zip(videos, all_shots):
+            for (video, vid_shots) in tqdm(zip(videos, all_shots)):
                 Shot.objects.filter(video=video, labeler=LABELER).delete()
                 Shot.objects.bulk_create(vid_shots)
+
+        log.debug('Done')
+        exit()
 
         if evaluate:
             log.debug('Evaluating shot results')
@@ -222,10 +277,11 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
         if not save:
             return all_shots
 
+    log.debug('Loading shots')
     return [
         list(
             Shot.objects.filter(video=video, labeler=LABELER).order_by('min_frame').select_related(
-                'video')) for video in videos
+                'video')) for video in tqdm(videos)
     ]
 
 
@@ -331,7 +387,7 @@ def main():
         paths = ['tvnews/videos/{}.mp4'.format(s.strip()) for s in f.readlines()]
     videos = [video_map[path] for path in paths]
 
-    shot_detect(videos[:30000])
+    shot_detect(videos, force=True)
 
     # video = Video.objects.get(path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4')
     # shot_detect([video], save=False, evaluate=True)

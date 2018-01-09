@@ -1,0 +1,6 @@
+ARG device
+FROM scannerresearch/esper-base:${device}
+WORKDIR /app
+
+COPY kube/worker.py kube/deps.py ./
+CMD python deps.py && python worker.py

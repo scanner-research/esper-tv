@@ -34,6 +34,7 @@ services:
   app:
     build:
       context: ./app
+      dockerfile: ./app/Dockerfile.app
       args:
         https_proxy: "${{https_proxy}}"
         cores: {cores}
@@ -71,6 +72,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
+    parser.add_argument('--build-tf', action='store_true')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -145,13 +147,28 @@ def main():
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
+
+    for device in ['cpu']:
+        build_args = {
+            'cores': cores,
+            'device': device,
+            'device2': device,
+            'tf_version': '1.2.0' if device == 'gpu' else '1.4.1',
+            'build_tf': 'on' if args.build_tf else 'off'
+        }
+
+        sp.check_call(
+            'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.format(
+                device=device,
+                build_args=' '.join(['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
+            shell=True)
+
     if 'google' in base_config:
-        shutil.copy('app/.scanner.toml', 'kube/.scanner.toml')
         base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
 
         def build(tag):
             sp.check_call(
-                'docker build -t {base_url}/scanner-{tag} --build-arg tag=cpu -f kube/Dockerfile.{tag} kube'.
+                'docker build -t {base_url}/scanner-{tag} --build-arg device=cpu -f app/kube/Dockerfile.{tag} app'.
                 format(base_url=base_url, tag=tag),
                 shell=True)
             sp.check_call(
@@ -160,7 +177,7 @@ def main():
 
         build('master')
         build('worker')
-        build('loader')
+        # build('loader')
 
     print('Successfully configured Esper.')
 

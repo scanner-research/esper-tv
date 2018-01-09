@@ -31,14 +31,17 @@ class ShotDetectionKernel(Kernel):
 
         try:
             print('Processing {} hists'.format(len(self.hists)))
+            start = now()
             diffs = np.array([
                 np.mean([distance.chebyshev(self.hists[i - 1][j], self.hists[i][j]) for j in range(3)])
                 for i in range(1, len(self.hists))
             ])
             diffs = np.insert(diffs, 0, 0)
             n = len(diffs)
+            print('Diffs: {:.3f}'.format(now() - start))
 
             # Do simple outlier detection to find boundaries between shots
+            start = now()
             boundaries = []
             for i in range(1, n):
                 window = diffs[max(i - WINDOW_SIZE / 2, 0):min(i + WINDOW_SIZE / 2, n)]
@@ -52,14 +55,17 @@ class ShotDetectionKernel(Kernel):
                     if abs(bi - bj) < GROUP_THRESHOLD:
                         u.unite(i, j)
                         break
+            print('Groups: {:.3f}'.format(now() - start))
 
             grouped_boundaries = [boundaries[g[len(g) / 2]] for g in u.groups()]
 
+            start = now()
             black_frames = []
             count = float(3 * sum(self.hists[0][0]))
             for i, h in enumerate(self.hists):
                 if (h[0][0] + h[1][0] + h[2][0]) / count > 0.9:
                     black_frames.append(i)
+            print('Black frames: {:.3f}'.format(now() - start))
 
             print('Done!')
             return [['_' for _ in range(len(input_columns[0]) - 1)] + \

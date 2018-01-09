@@ -1,6 +1,8 @@
 ARG device=cpu
-FROM scannerresearch/scanner:${device}
+FROM scannerresearch/esper-base:${device}
 # ARGS before FROM aren't accessible after the FROM, so we need to replicate the device arg.
+ARG tf_version=1.2.0
+ARG build_tf=off
 ARG device2=cpu
 ARG cores=1
 ARG https_proxy
@@ -20,12 +22,10 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
     apt-get update && apt-get install -y google-cloud-sdk kubectl
 
-# Python dependencies
-ADD requirements.txt .
-ENV TF_VERSION=1.2.0
+# Python setup
 ADD .deps/nbconfig /root/.jupyter/nbconfig
-RUN (if [ "$device2" = "cpu" ]; then pip install tensorflow==${TF_VERSION}; else pip install tensorflow-gpu==${TF_VERSION}; fi) && \
-    pip install -r requirements.txt && \
+ADD requirements.app.txt ./
+ADD pip install -r requirements.app.txt && \
     jupyter nbextension enable qgrid --py --sys-prefix && \
     jupyter nbextension install --sys-prefix --py vega && \
     jupyter nbextension enable vega --py --sys-prefix && \
@@ -44,10 +44,6 @@ RUN npm config set registry http://registry.npmjs.org && \
 
 ADD .deps/esper-run /usr/bin
 
-ENV APPDIR=/app
-WORKDIR ${APPDIR}
-
-ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH
 ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 

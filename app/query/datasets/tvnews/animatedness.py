@@ -149,16 +149,20 @@ def animated_score(track):
     w = min(POSE_STRIDE * 5, len(dists) - 1)
     return max([np.mean(dists[i:i + w]) for i in range(0, len(dists) - w)])
 
+# Do shot segmentation on a larger set of videos
+
+# Goal 1. Histogram of shot lengths
+#
 
 def animatedness(videos, exemplar):
+    videos = videos[:10]
     with Timer('Detecting shots'):
         all_shots = shot_detect(videos)
-        pose_frame_per_shot = [[shot_frame_to_detect(shot) for shot in vid_shots]
+        face_frame_per_shot = [[shot_frame_to_detect(shot) for shot in vid_shots]
                                for vid_shots in all_shots]
 
-    with Timer('Detecting sparse poses'):
-        all_faces = face_detect(videos, pose_frame_per_shot, force=True)
-        # all_poses = pose_detect(videos, pose_frame_per_shot)
+    with Timer('Detecting sparse face'):
+        all_faces = face_detect(videos, face_frame_per_shot)
     print([f.id for l in all_faces[0] for f in l])
     exit()
 
@@ -226,9 +230,10 @@ def main():
     #     path='tvnews/videos/MSNBCW_20130404_060000_Hardball_With_Chris_Matthews.mp4')
     # video = Video.objects.get(
     #     path='tvnews/videos/MSNBCW_20150520_230000_Hardball_With_Chris_Matthews.mp4')
-    video = Video.objects.get(
-        path='tvnews/videos/MSNBCW_20160915_033000_Hardball_With_Chris_Matthews.mp4')
-    if True:
+    # video = Video.objects.get(
+    #     path='tvnews/videos/MSNBCW_20160915_033000_Hardball_With_Chris_Matthews.mp4')
+    video = Video.objects.get(path='tvnews/videos/CNNW_20160727_000000_Anderson_Cooper_360.mp4')
+    if False:
         with Timer('Deleting objects'):
             # Shot.objects.filter(video=video).delete()
             Person.objects.filter(frame__video=video).delete()
@@ -237,7 +242,18 @@ def main():
             Frame.tags.through.objects.filter(tvnews_frame__video=video).delete()
             # Pose.objects.filter(person__frame__video=video).delete()
             # PersonTrack.objects.filter(video=video).delete()
-    animatedness([video], "chris-matthews.jpg")
+
+    # log.debug('Fetching videos')
+    # videos_with_shots = list(Video.objects.annotate(
+    #     c=Subquery(
+    #         Shot.objects.filter(video=OuterRef('pk')).values('video') \
+    #         .annotate(c=Count('video')).values('c')
+    #     )).filter(c__isnull=False))
+    # pcache.set('videos_with_shots', videos_with_shots)
+
+    videos_with_shots = pcache.get('videos_with_shots')
+
+    animatedness(videos_with_shots, "chris-matthews.jpg")
 
 
 if __name__ == '__main__':

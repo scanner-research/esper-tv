@@ -19,8 +19,8 @@ def face_detect(videos, all_frames, force=False):
         def output_name(video, frames):
             return video.path + '_faces_' + str(hash(tuple(frames)))
 
-        with Database() as db:
-            ingest_if_missing(db, videos)
+        with make_scanner_db(kube=True) as db:
+            # ingest_if_missing(db, videos)
 
             def remove_already_labeled(video, frames):
                 already_labeled = set([
@@ -39,45 +39,53 @@ def face_detect(videos, all_frames, force=False):
 
             if len(to_compute) > 0:
                 if METHOD == 'mtcnn':
+                    device = DeviceType.CPU
                     db.register_op('MTCNN', [('frame', ColumnType.Video)], ['bboxes'])
-                    db.register_python_kernel(
-                        'MTCNN', DeviceType.GPU, cwd + '/mtcnn_kernel.py', batch=50)
+                    db.register_python_kernel('MTCNN', device, cwd + '/mtcnn_kernel.py', batch=50)
 
                     frame = db.ops.FrameInput()
                     frame_strided = frame.sample()
-                    bboxes = db.ops.MTCNN(frame=frame_strided, device=DeviceType.GPU)
+                    bboxes = db.ops.MTCNN(frame=frame_strided, device=device)
                     output = db.ops.Output(columns=[bboxes])
 
                     jobs = [
-                        Job(
-                            op_args={
-                                frame: db.table(video.path).column('frame'),
-                                frame_strided: db.sampler.gather(vid_frames),
-                                output: output_name(video, vid_frames)
-                            }) for video, vid_frames in to_compute
+                        Job(op_args={
+                            frame: db.table(video.path).column('frame'),
+                            frame_strided: db.sampler.gather(vid_frames),
+                            output: output_name(video, vid_frames)
+                        }) for video, vid_frames in to_compute
                     ]
 
-                    db.run(BulkJob(output=output, jobs=jobs), force=True)
+                    log.debug('Running face detect on {} jobs'.format(len(jobs)))
+                    db.run(
+                        BulkJob(output=output, jobs=jobs),
+                        force=True,
+                        io_packet_size=50000,
+                        work_packet_size=500,
+                        pipeline_instances_per_node=1)
+                    log.debug('Done!')
+                    exit()
 
                 elif METHOD == 'tinyfaces':
                     pipelines.detect_faces(
-                        db, [db.table(video.path).column('frame') for video, _ in to_compute],
-                        [db.sampler.gather(vid_frames) for _, vid_frames in to_compute],
-                        [output_name(video, vid_frames) for video, vid_frames in to_compute])
+                        db, [db.table(video.path).column('frame') for video, _ in to_compute], [
+                            db.sampler.gather(vid_frames) for _, vid_frames in to_compute
+                        ], [output_name(video, vid_frames) for video, vid_frames in to_compute])
                 else:
-                    raise Exception("Invalid face detect METHOD")
+                    raise Exception("Invalid face detect method {}".format(METHOD))
 
-            for video, video_frames in zip(videos, filtered_frames):
+            log.debug('Saving metadata')
+            for video, video_frames in tqdm(zip(videos, filtered_frames)):
                 video_faces = list(
                     db.table(output_name(video, video_frames)).load(
                         ['bboxes'], lambda lst, db: parsers.bboxes(lst[0], db.protobufs)))
 
-                prefetched_frames = list(Frame.objects.filter(video=video).order_by('number'))
+                frames = [Frame(video=video, number=n) for n in video_frames]
+                Frame.objects.bulk_create(frames)
 
                 people = []
                 tags = []
-                for (_, frame_faces), frame_num in zip(video_faces, video_frames):
-                    frame = prefetched_frames[frame_num]
+                for (_, frame_faces), frame in zip(video_faces, frames):
                     tags.append(
                         Frame.tags.through(tvnews_frame_id=frame.pk, tvnews_tag_id=LABELED_TAG.pk))
                     for bbox in frame_faces:
@@ -87,7 +95,7 @@ def face_detect(videos, all_frames, force=False):
 
                 faces_to_save = []
                 p_idx = 0
-                for (_, frame_faces), frame_num in zip(video_faces, video_frames):
+                for (_, frame_faces) in video_faces:
                     for bbox in frame_faces:
                         faces_to_save.append(
                             Face(
@@ -101,7 +109,6 @@ def face_detect(videos, all_frames, force=False):
                         p_idx += 1
 
                 Face.objects.bulk_create(faces_to_save)
-                log.debug('Created {} faces'.format(len(faces_to_save)))
 
     return [
         group_by_frame(

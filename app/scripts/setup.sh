@@ -18,16 +18,7 @@ unzip 21936-20171110T010513Z-001.zip
 rm 21936-20171110T010513Z-001.zip
 popd
 
-## Facenet
-git clone https://github.com/davidsandberg/facenet.git
-pushd facenet
-mkdir models
-pushd models
-gsutil cp gs://esper/models/20170512-110547.zip .
-unzip 20170512-110547.zip
-rm 20170512-110547.zip
-popd
-popd
+./scripts/install-facenet.sh
 
 ## OpenPose
 mkdir openpose-models

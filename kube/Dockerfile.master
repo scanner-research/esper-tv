@@ -1,7 +1,0 @@
-ARG tag
-FROM scannerresearch/scanner:${tag}
-ADD .scanner.toml /root/.scanner.toml
-WORKDIR /app
-
-ADD master.py .
-CMD ["python", "master.py"]

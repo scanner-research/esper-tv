@@ -1,33 +1,15 @@
 import scannerpy
-from scannerpy.stdlib import pykernel, writers
+from scannerpy.stdlib import kernel, writers
 import tensorflow as tf
 import align.detect_face
 import cv2
 from timeit import default_timer as now
+import numpy as np
 
 MODEL_DIR = '/app/deps/facenet/src/align'
 
 
-class TensorFlowKernel:
-    def __init__(self, config, protobufs):
-        # TODO: wrap this in "with device"
-        config = tf.ConfigProto(allow_soft_placement=True)
-        self.sess = tf.Session(config=config)
-        self.sess.as_default()
-        self.graph = self.build_graph(self.sess)
-        self.protobufs = protobufs
-
-    def close(self):
-        self.sess.close()
-
-    def build_graph(self):
-        raise NotImplementedError
-
-    def execute(self):
-        raise NotImplementedError
-
-
-class MTCNNKernel(TensorFlowKernel):
+class MTCNNKernel(kernel.TensorFlowKernel):
     def build_graph(self, sess):
         g = tf.Graph()
         g.as_default()
@@ -43,7 +25,9 @@ class MTCNNKernel(TensorFlowKernel):
         out_size = 160
         detection_window_size_ratio = .2
 
+
         imgs = columns[0]
+        print('Face detect on {} frames'.format(len(imgs)))
         start = now()
         detections = align.detect_face.bulk_detect_face(
             imgs, detection_window_size_ratio, self.pnet, self.rnet, self.onet, threshold, factor)
@@ -66,7 +50,7 @@ class MTCNNKernel(TensorFlowKernel):
                 vmargin_pix = int((det[2] - det[0]) * vmargin)
                 hmargin_pix = int((det[3] - det[1]) * hmargin)
                 frame_faces.append(
-                    proto.BoundingBox(
+                    self.protobufs.BoundingBox(
                         x1=np.maximum(det[0] - hmargin_pix / 2, 0),
                         y1=np.maximum(det[1] - vmargin_pix / 2, 0),
                         x2=np.minimum(det[2] + hmargin_pix / 2, img_size[1]),

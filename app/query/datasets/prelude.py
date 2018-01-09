@@ -21,6 +21,7 @@ import sys
 import sqlparse
 import logging
 import dill
+import pickle
 import json
 import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -175,24 +176,34 @@ def par_for(f, l, process=False, workers=None):
         return list(tqdm(executor.map(f, l), total=len(l)))
 
 
-def master_addr():
-    ip = sp.check_output(
-        '''
+def par_filter(f, l, **kwargs):
+    return [x for x, b in zip(l, par_for(f, l, **kwargs)) if b]
+
+
+def make_scanner_db(kube=False):
+    if kube:
+        ip = sp.check_output(
+            '''
     kubectl get pods -l 'app=scanner-master' -o json | \
     jq '.items[0].spec.nodeName' -r | \
     xargs -I {} kubectl get nodes/{} -o json | \
     jq '.status.addresses[] | select(.type == "ExternalIP") | .address' -r
     ''',
-        shell=True).strip()
+            shell=True).strip()
 
-    port = sp.check_output(
-        '''
+        port = sp.check_output(
+            '''
     kubectl get svc/scanner-master -o json | \
     jq '.spec.ports[0].nodePort' -r
     ''',
-        shell=True).strip()
+            shell=True).strip()
 
-    return '{}:{}'.format(ip, port)
+        master = '{}:{}'.format(ip, port)
+
+        return Database(master=master, start_cluster=False)
+
+    else:
+        return Database()
 
 
 class Timer:
@@ -223,7 +234,7 @@ class PickleCache:
 
     def set(self, k, v):
         with open(self._fname(k), 'w') as f:
-            dill.dump(v, f)
+            dill.dump(v, f, dill.HIGHEST_PROTOCOL)
 
     def get(self, k):
         if not self.has(k):

@@ -1,0 +1,4 @@
+dill==0.2.7.1
+unionfind==0.0.9
+numpy==1.13.0
+pandas==0.20.3

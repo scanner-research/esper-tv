@@ -1,5 +1,5 @@
 import scannerpy
-from scannerpy.stdlib import pykernel, parsers
+from scannerpy.stdlib import kernel, parsers
 import tensorflow as tf
 import facenet
 import cv2
@@ -8,24 +8,7 @@ import os
 
 model_path = '/app/deps/facenet/models/20170512-110547/'
 
-class TensorFlowKernel:
-    def __init__(self, config, protobufs):
-        # TODO: wrap this in "with device"
-        config = tf.ConfigProto(allow_soft_placement = True)
-        self.sess = tf.Session(config=config)
-        self.graph = self.build_graph(self.sess)
-        self.protobufs = protobufs
-
-    def close(self):
-        self.sess.close()
-
-    def build_graph(self):
-        raise NotImplementedError
-
-    def execute(self):
-        raise NotImplementedError
-
-class EmbedFaceKernel(TensorFlowKernel):
+class EmbedFaceKernel(kernel.TensorFlowKernel):
 
     def build_graph(self, sess):
         meta_file, ckpt_file = facenet.get_model_filenames(model_path)
