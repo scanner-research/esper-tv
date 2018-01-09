@@ -15,4 +15,4 @@ env:
     - DOCKER_USER=wcrichto
     - secure: "mPNnsLLZfEHbgH/R77wCYY4793Khdhg9Q9xE10hmTumvCAeWyO7oIJUSkONAX9AXlkVNzVMkPVMj3Un9uf5hwmc/HTUgQ8+lCTR+HPnV/CMsRSWGTf2kLSsqxF+wRLM90Vr0PVMXui3YeyanxEh0qbu3HsBjLVIMBiqBrybZx53E1vnNF1/lwQgi7ljpgQHNkkVLBc2yVsQ4izvLq7NlpcmtumEFeeWIft2WN7t4r7W7Q2c+QAADXrTFzrKxJkw4oz8Psn9WQeQlQf2HFdeVKoJJzwtce2QDKUxMpcRpVNIQ3drxBv33u4JMV7zhf/frGycuaKitiL8dLv0aX6rlW72tYh6Cc0SFQo7ZxbbZw18i6wRVLHf2OpzvFACvtbIx+5DCcojga/dbJGjRzn5fOCtF1nXuHz3z/OwQKjzYR/tQGD7Fa2PINQQpD4k+sOOhK3N+cHvvv9tCASUvYV4IXneSrlzlm6k/sTthx0oAZmFTLhTPgCdL2rt9Y1R3e/2p9MUza4uZk3Vh4KKN9NgjCUby42JyXbM9T48+hkiaRzb/NLk0fvU1q5bYFVi5vnsKijHJL3fqEt6Qp2nP+HwK9iXoq2yfayOpw5YHV2T+opr7GC7qVa7bEUmQ1OwCZWbJ3h2Fyfpa3lhkC59xHmAWayRWN9DX0jXsNaMj9y+p1pY="
 
-script: pip install -r requirements.txt && ./scripts/travis-build.sh
+script: sudo pip install -r requirements.txt && ./scripts/travis-build.sh
