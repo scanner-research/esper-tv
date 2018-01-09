@@ -63,7 +63,7 @@ class ShotDetectionKernel(Kernel):
             black_frames = []
             count = float(3 * sum(self.hists[0][0]))
             for i, h in enumerate(self.hists):
-                if (h[0][0] + h[1][0] + h[2][0]) / count > 0.9:
+                if (h[0][0] + h[1][0] + h[2][0]) / count > 0.99:
                     black_frames.append(i)
             print('Black frames: {:.3f}'.format(now() - start))
 

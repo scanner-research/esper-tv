@@ -155,7 +155,7 @@ def animated_score(track):
 #
 
 def animatedness(videos, exemplar):
-    videos = videos[:10]
+    videos = videos
     with Timer('Detecting shots'):
         all_shots = shot_detect(videos)
         face_frame_per_shot = [[shot_frame_to_detect(shot) for shot in vid_shots]

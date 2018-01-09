@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-python configure.py -c config/local.toml
+python configure.py -c config/local.toml --build-gpu
 
 build_docker() {
     docker build -f app/Dockerfile.app -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app

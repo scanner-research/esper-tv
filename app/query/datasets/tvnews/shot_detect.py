@@ -278,11 +278,11 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
             return all_shots
 
     log.debug('Loading shots')
-    return [
-        list(
+    def load_shots(video):
+        return list(
             Shot.objects.filter(video=video, labeler=LABELER).order_by('min_frame').select_related(
-                'video')) for video in tqdm(videos)
-    ]
+            'video'))
+    return par_for(load_shots, videos)
 
 
 STITCHED_LABELER, _ = Labeler.objects.get_or_create(name='shot-stitched')
