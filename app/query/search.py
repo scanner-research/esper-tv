@@ -54,7 +54,7 @@ def search(params):
                     labeler_ids.add(bbox['labeler'])
 
         def to_dict(qs):
-            return {t.id: model_to_dict(t) for t in qs}
+            return {t['id']: t for t in qs.values()}
 
         videos = to_dict(Video.objects.filter(id__in=video_ids))
         frames = to_dict(Frame.objects.filter(id__in=frame_ids))
