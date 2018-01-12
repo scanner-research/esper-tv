@@ -17,31 +17,31 @@ if [ "$build_tf" = "on" ]; then
     updatedb
 
     if [ "$device2" = "cpu" ]; then
-       PYTHON_BIN_PATH=$(which python) \
-                      PYTHON_LIB_PATH=/usr/local/lib/python2.7/site-packages \
-                      TF_NEED_MKL=1 \
-                      TF_DOWNLOAD_MKL=1 \
-                      CC_OPT_FLAGS=-march=core-avx2 \
-                      TF_NEED_JEMALLOC=1 \
-                      TF_NEED_GCP=0 \
-                      TF_NEED_S3=0 \
-                      TF_NEED_GDR=0 \
-                      TF_NEED_MPI=0 \
-                      TF_NEED_HDFS=0 \
-                      TF_ENABLE_XLA=0 \
-                      TF_NEED_VERBS=0 \
-                      TF_NEED_OPENCL=0 \
-                      TF_NEED_CUDA=0 \
-                      ./configure
+        # TODO(wcrichto): getting internal errors w/ MKL on GCE
 
-       bazel build \
-             --config=opt \
-             --config=mkl \
-             --incompatible_load_argument_is_label=false \
-             //tensorflow/tools/pip_package:build_pip_package
+        PYTHON_BIN_PATH=$(which python) \
+                       PYTHON_LIB_PATH=/usr/local/lib/python2.7/site-packages \
+                       TF_NEED_MKL=0 \
+                       CC_OPT_FLAGS=-march=core-avx2 \
+                       TF_NEED_JEMALLOC=1 \
+                       TF_NEED_GCP=0 \
+                       TF_NEED_S3=0 \
+                       TF_NEED_GDR=0 \
+                       TF_NEED_MPI=0 \
+                       TF_NEED_HDFS=0 \
+                       TF_ENABLE_XLA=0 \
+                       TF_NEED_VERBS=0 \
+                       TF_NEED_OPENCL=0 \
+                       TF_NEED_CUDA=0 \
+                       ./configure
+
+        bazel build \
+              --config=opt \
+              --incompatible_load_argument_is_label=false \
+              //tensorflow/tools/pip_package:build_pip_package
     else
         echo "No GPU TF support yet"
-        exit
+        exit 1
     fi
 
     bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg

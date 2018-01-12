@@ -20,14 +20,20 @@ PROJECT_ID = os.environ['GOOGLE_PROJECT']
 #ZONE = os.environ['GOOGLE_ZONE']
 ZONE = 'us-east1-d'
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
-CLUSTER_ID = 'wc-test-2'
-KUBE_VERSION = '1.8.4-gke.1'
+CLUSTER_ID = 'wc-test'
+KUBE_VERSION = '1.8.5-gke.0'
 USE_GPU = False
 USE_PREEMPTIBLE = True
 USE_AUTOSCALING = True
-NUM_CPU = int(2 if USE_GPU else 64)
-NUM_MEM = int(16 if USE_GPU else NUM_CPU * 3.0)
-PROCESS_PER_CORE = False
+MASTER_CPU = 4  # Cores
+MASTER_MEM = 96  # GB
+MASTER_DISK = 50  # GB
+# WORKER_CPU = 4
+# WORKER_MEM = 26
+WORKER_DISK = 500
+WORKER_CPU = int(2 if USE_GPU else 64)
+WORKER_MEM = int(16 if USE_GPU else WORKER_CPU * 4.0)
+WORKERS_PER_NODE = 5
 
 assert (not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
 
@@ -45,7 +51,10 @@ def run(s):
 
 
 def machine_type(cpu, mem):
-    return 'custom-{}-{}'.format(cpu, mem * 1024)
+    name = 'custom-{}-{}'.format(cpu, mem * 1024)
+    if float(mem) / cpu >= 6.5:
+        name += '-ext'
+    return name
 
 
 def make_container(name):
@@ -76,8 +85,8 @@ def make_container(name):
              'value': '1'},
             {'name': 'GLOG_v',
              'value': '1'},
-            {'name': 'PROCESS_PER_CORE',
-             'value': str(PROCESS_PER_CORE)}
+            {'name': 'WORKERS_PER_NODE',
+             'value': str(WORKERS_PER_NODE)}
         ],
         'resources': {},
         'securityContext': {'capabilities': {
@@ -90,13 +99,13 @@ def make_container(name):
         }]
 
     if name == 'loader':
-        template['resources']['requests'] = {'cpu': NUM_CPU / 2.0 + 0.1}
+        template['resources']['requests'] = {'cpu': WORKER_CPU / 2.0 + 0.1}
     else:
         if USE_GPU:
             template['resources']['limits'] = {'nvidia.com/gpu': 1}
         else:
             if name == 'worker':
-                template['resources']['requests'] = {'cpu': NUM_CPU / 2.0 + 0.1}
+                template['resources']['requests'] = {'cpu': WORKER_CPU / 2.0 + 0.1}
 
     return template
 
@@ -186,19 +195,24 @@ def create(args):
             'cmd': CLUSTER_CMD,
             'cluster_id': CLUSTER_ID,
             'cluster_version': KUBE_VERSION,
-            'machine_type': machine_type(NUM_CPU, NUM_MEM),
+            'master_machine': machine_type(MASTER_CPU, MASTER_MEM),
+            'master_disk': MASTER_DISK,
+            'worker_machine': machine_type(WORKER_CPU, WORKER_MEM),
+            'worker_disk': WORKER_DISK,
             'scopes': ','.join(scopes),
             'initial_size': args.num_workers,
-            'accelerator': '--accelerator type=nvidia-tesla-k80,count=1' if USE_GPU else ''
-        }
+            'accelerator': '--accelerator type=nvidia-tesla-k80,count=1' if USE_GPU else '',
+            'preemptible': '--preemptible' if USE_PREEMPTIBLE else '',
+            'autoscaling': '--enable-autoscaling --min-nodes 0 --max-nodes 1000' if USE_AUTOSCALING else ''
+        }  # yapf: disable
 
         cluster_cmd = """
 {cmd} -q create "{cluster_id}" \
         --enable-kubernetes-alpha \
         --cluster-version "{cluster_version}" \
-        --machine-type "n1-highmem-8" \
+        --machine-type "{master_machine}" \
         --image-type "COS" \
-        --disk-size "50" \
+        --disk-size "{master_disk}" \
         --scopes {scopes} \
         --num-nodes "1" \
         --enable-cloud-logging \
@@ -211,19 +225,15 @@ def create(args):
         pool_cmd = """
 {cmd} -q create workers \
         --cluster "{cluster_id}" \
-        --machine-type "{machine_type}" \
+        --machine-type "{worker_machine}" \
         --image-type "COS" \
-        --disk-size "500" \
+        --disk-size "{worker_disk}" \
         --scopes {scopes} \
         --num-nodes "{initial_size}" \
         {autoscaling} \
         {preemptible} \
         {accelerator}
-        """.format(
-            preemptible=('--preemptible' if USE_PREEMPTIBLE else ''),
-            autoscaling=('--enable-autoscaling --min-nodes 0 --max-nodes 1000'
-                         if USE_AUTOSCALING else ''),
-            **fmt_args)
+        """.format(**fmt_args)
 
         run(pool_cmd)
 
@@ -252,8 +262,8 @@ def create(args):
         sp.check_call(
             'kubectl create -f https://raw.githubusercontent.com/kubernetes/heapster/master/deploy/kube-config/influxdb/influxdb.yaml && \
             kubectl create -f https://raw.githubusercontent.com/kubernetes/heapster/master/deploy/kube-config/influxdb/grafana.yaml && \
-            (kubectl get pod {} -n kube-system -o yaml | kubectl replace --force -f -)'
-            .format(dashboard_pod['metadata']['name']),
+            (kubectl get pod {} -n kube-system -o yaml | kubectl replace --force -f -)'.format(
+                dashboard_pod['metadata']['name']),
             shell=True)
 
         # Authorize dashboard to access cluster info
@@ -266,7 +276,8 @@ def create(args):
         sp.check_call(
             shlex.split(
                 'kubectl --username=admin --password={} create clusterrolebinding add-on-cluster-admin \
-                --clusterrole=cluster-admin --serviceaccount=kube-system:default'.format(password)))
+                --clusterrole=cluster-admin --serviceaccount=kube-system:kubernetes-dashboard'
+                .format(password)))
 
         if USE_GPU:
             # Install GPU drivers
@@ -281,7 +292,7 @@ def create(args):
     get_credentials(args)
 
     deploy = get_object(get_kube_info('deployments'), 'scanner-worker')
-    if deploy is not None:
+    if deploy is not None and args.num_workers == 1:
         num_workers = deploy['status']['replicas']
     else:
         num_workers = args.num_workers

@@ -1,10 +1,5 @@
 ARG device=cpu
 FROM scannerresearch/esper-base:${device}
-# ARGS before FROM aren't accessible after the FROM, so we need to replicate the device arg.
-ARG tf_version=1.2.0
-ARG build_tf=off
-ARG device2=cpu
-ARG cores=1
 ARG https_proxy
 ENV DJANGO_CONFIGURATION Docker
 ENV https_proxy=$https_proxy
@@ -13,7 +8,7 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip jq gdb psmisc && \
+    apt-get install -y postgresql-9.5 libpq-dev cron python-tk npm nodejs curl unzip jq gdb psmisc zsh && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # Google Cloud SDK
@@ -23,8 +18,8 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
     apt-get update && apt-get install -y google-cloud-sdk kubectl
 
 # Python setup
-ADD .deps/nbconfig /root/.jupyter/nbconfig
-ADD requirements.app.txt ./
+COPY .deps/nbconfig /root/.jupyter/nbconfig
+COPY requirements.app.txt ./
 RUN pip install -r requirements.app.txt && \
     jupyter nbextension enable qgrid --py --sys-prefix && \
     jupyter nbextension install --sys-prefix --py vega && \
@@ -42,7 +37,9 @@ RUN pip install -r requirements.app.txt && \
 RUN npm config set registry http://registry.npmjs.org && \
     npm config set strict-ssl false
 
-ADD .deps/esper-run /usr/bin
+COPY .deps/esper-run /usr/bin
+COPY .deps/common.sh /tmp
+RUN cat /tmp/common.sh >> /root/.bashrc
 
 ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
@@ -50,5 +47,4 @@ ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
     python scripts/set-jupyter-password.py && \
-    . ./scripts/clear-proxy.sh && \
     supervisord -c supervisord.conf

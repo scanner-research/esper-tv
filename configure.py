@@ -34,10 +34,9 @@ services:
   app:
     build:
       context: ./app
-      dockerfile: ./app/Dockerfile.app
+      dockerfile: Dockerfile.app
       args:
         https_proxy: "${{https_proxy}}"
-        cores: {cores}
     privileged: true
     depends_on: [db]
     volumes:
@@ -72,7 +71,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
+    parser.add_argument('--no-build', action='store_true')
     parser.add_argument('--no-build-base', action='store_true')
+    parser.add_argument('--no-build-kube', action='store_true')
     parser.add_argument('--build-tf', action='store_true')
     parser.add_argument('--build-gpu', action='store_true')
     args = parser.parse_args()
@@ -82,8 +83,8 @@ def main():
 
     if 'google' in base_config:
         config.services.app.environment.extend([
-            'GOOGLE_PROJECT={}'.format(base_config.google.project),
-            'GOOGLE_ZONE={}'.format(base_config.google.zone)
+            'GOOGLE_PROJECT={}'.format(base_config.google.project), 'GOOGLE_ZONE={}'.format(
+                base_config.google.zone)
         ])
         config.services.app.ports.append('8001:8001')  # for kubectl proxy
 
@@ -95,7 +96,6 @@ def main():
     else:
         device = 'cpu'
     config.services.app.build.args.device = device
-    config.services.app.build.args.device2 = device
     config.services.app.environment.append('DEVICE={}'.format(device))
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
@@ -112,8 +112,10 @@ def main():
         base_config.database.user if 'user' in base_config.database else 'root'))
 
     if 'password' in base_config.database:
-        config.services.app.environment.append(
-            "DJANGO_DB_PASSWORD={}".format(base_config.database.password))
+        config.services.app.environment.extend([
+            'DJANGO_DB_PASSWORD={}'.format(base_config.database.password), 'PGPASSWORD={}'.format(
+                base_config.database.password)
+        ])
 
     scanner_config = {'scanner_path': '/opt/scanner'}
     if base_config.storage.type == 'google':
@@ -149,40 +151,43 @@ def main():
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
-    if not args.no_build_base:
-        devices = ['cpu'] + (['gpu'] if device == 'gpu' or args.build_gpu else [])
-        for device in devices:
-            build_args = {
-                'cores': cores,
-                'device': device,
-                'device2': device,
-                'tf_version': '1.2.0' if device == 'gpu' else '1.4.1',
-                'build_tf': 'on' if args.build_tf else 'off'
-            }
+    if not args.no_build:
+        if not args.no_build_base:
+            devices = ['cpu'] + (['gpu'] if device == 'gpu' or args.build_gpu else [])
+            for device in devices:
+                build_args = {
+                    'cores': cores,
+                    'device': device,
+                    'device2': device,
+                    'tf_version': '1.2.0' if device == 'gpu' else '1.4.1',
+                    'build_tf': 'on' if args.build_tf else 'off'
+                }
 
-            sp.check_call(
-                'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
-                format(
-                    device=device,
-                    build_args=' '.join(
-                        ['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
-                shell=True)
+                sp.check_call(
+                    'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+                    format(
+                        device=device,
+                        build_args=' '.join(
+                            ['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
+                    shell=True)
 
-    if 'google' in base_config:
-        base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
+        if not args.no_build_kube:
+            if 'google' in base_config:
+                base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
 
-        def build(tag):
-            sp.check_call(
-                'docker build -t {base_url}/scanner-{tag} --build-arg device=cpu -f app/kube/Dockerfile.{tag} app'.
-                format(base_url=base_url, tag=tag),
-                shell=True)
-            sp.check_call(
-                'gcloud docker -- push {base_url}/scanner-{tag}'.format(base_url=base_url, tag=tag),
-                shell=True)
+                def build(tag):
+                    sp.check_call(
+                        'docker build -t {base_url}/scanner-{tag} --build-arg device=cpu -f app/kube/Dockerfile.{tag} app'.
+                        format(base_url=base_url, tag=tag),
+                        shell=True)
+                    sp.check_call(
+                        'gcloud docker -- push {base_url}/scanner-{tag}'.format(
+                            base_url=base_url, tag=tag),
+                        shell=True)
 
-        build('master')
-        build('worker')
-        # build('loader')
+                build('master')
+                build('worker')
+                # build('loader')
 
     print('Successfully configured Esper.')
 

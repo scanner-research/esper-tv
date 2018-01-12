@@ -20,12 +20,13 @@ import pandas as pd
 import sys
 import sqlparse
 import logging
-import dill
-import pickle
+import cPickle as pickle
+import marshal
 import json
 import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from tqdm import tqdm
+import gc
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -45,8 +46,8 @@ if not log.handlers:
             level = record.levelname[0]
             time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')[2:]
             if len(record.args) > 0:
-                record.msg = '({})'.format(
-                    ', '.join([str(x) for x in [record.msg] + list(record.args)]))
+                record.msg = '({})'.format(', '.join(
+                    [str(x) for x in [record.msg] + list(record.args)]))
                 record.args = ()
             return '{level} {time} {filename}:{lineno:03d}] {msg}'.format(
                 level=level, time=time, **record.__dict__)
@@ -63,8 +64,10 @@ if get_ipython() is not None:
     qgrid.enable()
 
     # Matplotlib/seaborn config
+    import matplotlib
     import matplotlib.pyplot as plt
     import seaborn as sns
+    matplotlib.rcParams['figure.figsize'] = (18, 8)
     plt.rc("axes.spines", top=False, right=False)
     sns.set_style('white')
 
@@ -170,10 +173,13 @@ def shape(l):
         return type(l).__name__
 
 
-def par_for(f, l, process=False, workers=None):
+def par_for(f, l, process=False, workers=None, progress=True):
     Pool = ProcessPoolExecutor if process else ThreadPoolExecutor
     with Pool(max_workers=mp.cpu_count() if workers is None else workers) as executor:
-        return list(tqdm(executor.map(f, l), total=len(l)))
+        if progress:
+            return list(tqdm(executor.map(f, l), total=len(l)))
+        else:
+            return list(executor.map(f, l))
 
 
 def par_filter(f, l, **kwargs):
@@ -215,10 +221,13 @@ class Timer:
         self.start = now()
 
     def __exit__(self, a, b, c):
-        log.debug('-- END: {} -- {:.3f}s'.format(self.s, now() - self.start))
+        t = int(now() - self.start)
+        log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self.s, t / 3600, t / 60, t % 60))
 
 
 PICKLE_CACHE_DIR = '/app/.cache'
+PICKLE_METHOD = 'marshal'
+NUM_CHUNKS = 8
 
 
 class PickleCache:
@@ -226,22 +235,60 @@ class PickleCache:
         if not os.path.isdir(PICKLE_CACHE_DIR):
             os.mkdir(PICKLE_CACHE_DIR)
 
-    def _fname(self, k):
-        return '{}/{}.pkl'.format(PICKLE_CACHE_DIR, k)
+    def _fname(self, k, i, method):
+        ext = 'msl' if method == 'marshal' else 'pkl'
+        return '{}/{}_{}.{}'.format(PICKLE_CACHE_DIR, k, i, ext)
 
-    def has(self, k):
-        return os.path.isfile(self._fname(k))
+    def has(self, k, i=0, method=PICKLE_METHOD):
+        return os.path.isfile(self._fname(k, i, method))
 
-    def set(self, k, v):
-        with open(self._fname(k), 'w') as f:
-            dill.dump(v, f, dill.HIGHEST_PROTOCOL)
+    def set(self, k, v, method=PICKLE_METHOD):
+        def save_chunk((i, v)):
+            with open(self._fname(k, i, method), 'wb') as f:
+                if method == 'marshal':
+                    marshal.dump(v, f)
+                else:
+                    pickler = pickle.Pickler(f, pickle.HIGHEST_PROTOCOL)
+                    pickler.fast = 1  # https://stackoverflow.com/a/15108940/356915
+                    pickler.dump(v)
 
-    def get(self, k):
-        if not self.has(k):
-            raise Exception('Missing cache key {}'.format(k))
+        gc.disable()  # https://stackoverflow.com/a/36699998/356915
+        if isinstance(v, list) and len(v) >= NUM_CHUNKS:
+            n = len(v)
+            chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
+            par_for(
+                save_chunk,
+                [(i, v[(i * chunk_size):((i + 1) * chunk_size)]) for i in range(NUM_CHUNKS)],
+                progress=False,
+                workers=1)
+        else:
+            save_chunk((0, v))
+        gc.enable()
 
-        with open(self._fname(k), 'r') as f:
-            return dill.load(f)
+    def get(self, k, fn=None, force=False, method=PICKLE_METHOD):
+        if not self.has(k, 0, method) or force:
+            if fn is not None:
+                v = fn()
+                self.set(k, v, method)
+                return v
+            else:
+                raise Exception('Missing cache key {}'.format(k))
+
+        def load_chunk(i):
+            with open(self._fname(k, i, method), 'rb') as f:
+                if method == 'marshal':
+                    return marshal.load(f)
+                else:
+                    return pickle.load(f)
+
+        gc.disable()
+        if self.has(k, 1, method):
+            loaded = par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False)
+        else:
+            loaded = load_chunk(0)
+        gc.enable()
+
+        return sum(loaded, [])
 
 
 pcache = PickleCache()
@@ -271,7 +318,7 @@ QuerySet.__bases__ += (QuerySetMixin, )
 
 class BulkUpdateManagerMixin:
     def batch_create(self, objs, batch_size=1000):
-        for i in range(0, len(objs), batch_size):
+        for i in tqdm(range(0, len(objs), batch_size)):
             self.bulk_create(objs[i:(i + batch_size)])
 
 

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+mkdir -p /app/deps
 pushd /app/deps
 git clone https://github.com/davidsandberg/facenet.git
 pushd facenet

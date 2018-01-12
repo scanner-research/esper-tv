@@ -1,4 +1,4 @@
-from scannerpy import Database, DeviceType, BulkJob, Job
+from query.datasets.prelude import *
 
-with Database(master='localhost:8080', start_cluster=False, prefetch_table_metadata=False) as db:
+with make_scanner_db(kube=True) as db:
     db.wait_on_current_job()
