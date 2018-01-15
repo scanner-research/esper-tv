@@ -2,4 +2,6 @@
 # even if it should already be on the PYTHONPATH. Maybe Python interpreter does some pre-eval checking of files on
 # the path to optimize module lookups?
 import subprocess as sp
-sp.check_call('./scripts/install-facenet.sh && ./scripts/install-rudecarnie.sh', shell=True)
+import os
+deps = os.environ['DEPS'].split(',')
+sp.check_call(' && '.join(['./scripts/install-{}.sh'.format(dep) for dep in deps]), shell=True)

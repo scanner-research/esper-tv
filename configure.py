@@ -27,7 +27,7 @@ services:
 
   frameserver:
     image: scannerresearch/frameserver
-    ports: ['7500']
+    ports: ['7500:7500']
     environment:
       - 'WORKERS={workers}'
 
@@ -38,23 +38,24 @@ services:
       args:
         https_proxy: "${{https_proxy}}"
     privileged: true
-    depends_on: [db]
+    depends_on: [db, frameserver]
     volumes:
       - ./app:/app
       - ${{HOME}}/.bash_history:/root/.bash_history
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter"]
-""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=cores, workers=cores * 2)))
+""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=cores, workers=cores)))
 
 db_local = DotMap(
     yaml.load("""
-image: postgres:9.5
+build:
+    context: ./db
 environment:
   - POSTGRES_USER=will
   - POSTGRES_PASSWORD=foobar
   - POSTGRES_DB=esper
-volumes: ["./postgres:/var/lib/postgresql/data"]
+volumes: ["./db/data:/var/lib/postgresql/data", "./app:/app"]
 ports: ["5432"]
 """))
 
@@ -74,8 +75,8 @@ def main():
     parser.add_argument('--no-build', action='store_true')
     parser.add_argument('--no-build-base', action='store_true')
     parser.add_argument('--no-build-kube', action='store_true')
+    parser.add_argument('--kube-device', default='cpu')
     parser.add_argument('--build-tf', action='store_true')
-    parser.add_argument('--build-gpu', action='store_true')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -153,7 +154,7 @@ def main():
 
     if not args.no_build:
         if not args.no_build_base:
-            devices = ['cpu'] + (['gpu'] if device == 'gpu' or args.build_gpu else [])
+            devices = ['cpu'] + (['gpu'] if device == 'gpu' or args.kube_device == 'gpu' else [])
             for device in devices:
                 build_args = {
                     'cores': cores,
@@ -176,13 +177,14 @@ def main():
                 base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
 
                 def build(tag):
+                    fmt_args = {'base_url': base_url, 'tag': tag, 'device': args.kube_device}
                     sp.check_call(
-                        'docker build -t {base_url}/scanner-{tag} --build-arg device=cpu -f app/kube/Dockerfile.{tag} app'.
-                        format(base_url=base_url, tag=tag),
+                        'docker build -t {base_url}/scanner-{tag}:{device} --build-arg device={device} -f app/kube/Dockerfile.{tag} app'.
+                        format(**fmt_args),
                         shell=True)
                     sp.check_call(
-                        'gcloud docker -- push {base_url}/scanner-{tag}'.format(
-                            base_url=base_url, tag=tag),
+                        'gcloud docker -- push {base_url}/scanner-{tag}:{device}'.format(
+                            **fmt_args),
                         shell=True)
 
                 build('master')

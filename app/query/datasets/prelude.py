@@ -2,7 +2,7 @@ from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceT
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
-from django.db import connections
+from django.db import connections, connection
 from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, OuterRef, Subquery, Sum, Avg, Func
 from django.db.models.functions import Cast, Extract
@@ -27,6 +27,9 @@ import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from tqdm import tqdm
 import gc
+import csv
+import requests
+import cv2
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -138,8 +141,12 @@ def bbox_iou(f1, f2):
     return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
 
 
-def unzip(l):
-    return tuple(zip(*l))
+def unzip(l, default=([], [])):
+    x = tuple(zip(*l))
+    if x == ():
+        return default
+    else:
+        return x
 
 
 def group_by_frame(objs, fn_key, fn_sort, output_dict=False, include_frame=True):
@@ -252,18 +259,19 @@ class PickleCache:
                     pickler.fast = 1  # https://stackoverflow.com/a/15108940/356915
                     pickler.dump(v)
 
-        gc.disable()  # https://stackoverflow.com/a/36699998/356915
-        if isinstance(v, list) and len(v) >= NUM_CHUNKS:
-            n = len(v)
-            chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
-            par_for(
-                save_chunk,
-                [(i, v[(i * chunk_size):((i + 1) * chunk_size)]) for i in range(NUM_CHUNKS)],
-                progress=False,
-                workers=1)
-        else:
-            save_chunk((0, v))
-        gc.enable()
+        with Timer('Saving to cache: {}'.format(k))
+            gc.disable()  # https://stackoverflow.com/a/36699998/356915
+            if isinstance(v, list) and len(v) >= NUM_CHUNKS:
+                n = len(v)
+                chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
+                par_for(
+                    save_chunk,
+                    [(i, v[(i * chunk_size):((i + 1) * chunk_size)]) for i in range(NUM_CHUNKS)],
+                    progress=False,
+                    workers=1)
+            else:
+                save_chunk((0, v))
+            gc.enable()
 
     def get(self, k, fn=None, force=False, method=PICKLE_METHOD):
         if not self.has(k, 0, method) or force:
@@ -281,14 +289,16 @@ class PickleCache:
                 else:
                     return pickle.load(f)
 
-        gc.disable()
-        if self.has(k, 1, method):
-            loaded = par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False)
-        else:
-            loaded = load_chunk(0)
-        gc.enable()
+        with Timer('Loading from cache: {}'.format(k))
+            gc.disable()
+            if self.has(k, 1, method):
+                loaded = sum(
+                    par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False), [])
+            else:
+                loaded = load_chunk(0)
+            gc.enable()
 
-        return sum(loaded, [])
+        return loaded
 
 
 pcache = PickleCache()
@@ -321,6 +331,29 @@ class BulkUpdateManagerMixin:
         for i in tqdm(range(0, len(objs), batch_size)):
             self.bulk_create(objs[i:(i + batch_size)])
 
+    def bulk_create_copy(self, objects):
+        meta = self.model._meta
+        keys = [f.attname for f in meta.get_fields()][1:]
+        fname = '/app/rows.csv'
+        log.debug('Creating CSV')
+        with open(fname, 'wb') as f:
+            writer = csv.writer(f, delimiter=',')
+            writer.writerow(['id'] + keys)
+            max_id = self.all().aggregate(Max('id'))['id__max']
+            id = max_id + 1 if max_id is not None else 0
+            for obj in tqdm(objects):
+                writer.writerow([id] + [obj[k] for k in keys])
+                id += 1
+
+        table = meta.db_table
+        log.debug('Writing to database')
+        with connection.cursor() as cursor:
+            cursor.execute("COPY {} FROM '{}' DELIMITER ',' CSV HEADER".format(table, fname))
+            cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
+
+        os.remove(fname)
+        log.debug('Done!')
+
 
 BulkUpdateManager.__bases__ += (BulkUpdateManagerMixin, )
 
@@ -338,3 +371,56 @@ def model_repr(model):
 
 
 models.Model.__repr__ = model_repr
+
+
+def make_montage(video,
+                 frames,
+                 output_path,
+                 bboxes=None,
+                 width=1600,
+                 num_cols=8,
+                 workers=16,
+                 progress=False):
+    target_width = width / num_cols
+
+    def load_frame((n, bboxes)):
+        while True:
+            try:
+                r = requests.get(
+                    'http://frameserver:7500/fetch', params={
+                        'path': video.path,
+                        'frame': n,
+                    })
+                break
+            except requests.ConnectionError:
+                pass
+        img = cv2.imdecode(np.fromstring(r.content, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise Exception("Bad frame {} for {}".format(n, video.path))
+        for bbox in bboxes:
+            img = cv2.rectangle(
+                img, (int(bbox['bbox_x1'] * img.shape[1]), int(bbox['bbox_y1'] * img.shape[0])),
+                (int(bbox['bbox_x2'] * img.shape[1]), int(bbox['bbox_y2'] * img.shape[0])),
+                (0, 0, 255), 8)
+        return cv2.resize(img,
+                          (target_width, int(img.shape[0] * (target_width / float(img.shape[1])))))
+
+    bboxes = bboxes or [[] for _ in range(len(frames))]
+    imgs = par_for(load_frame, zip(frames, bboxes), progress=progress, workers=workers)
+    target_height = imgs[0].shape[0]
+    num_rows = int(math.ceil(float(len(imgs)) / num_cols))
+
+    montage = np.zeros((num_rows * target_height, width, 3))
+    for row in range(num_rows):
+        for col in range(num_cols):
+            i = row * num_cols + col
+            if i >= len(imgs):
+                break
+            img = imgs[i]
+            montage[row * target_height:(row + 1) * target_height, col * target_width:(
+                col + 1) * target_width, :] = img
+        else:
+            continue
+        break
+
+    cv2.imwrite(output_path, montage)

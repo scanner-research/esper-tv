@@ -4,39 +4,34 @@ from query.datasets.tvnews.face_detect import face_detect
 from query.datasets.tvnews.face_embed import face_embed
 from query.datasets.tvnews.pose_detect import pose_detect
 from query.datasets.tvnews.identity_detect import identity_detect
+from query.datasets.tvnews.gender_detect import gender_detect
 
 POSE_STRIDE = 3
 
 
 def shot_frame_to_detect(shot):
-    return (shot.min_frame + shot.max_frame) / 2
+    return (shot['min_frame'] + shot['max_frame']) / 2
 
 
 # Remove faces with negative coords and small height
-def filter_invalid_faces(all_faces):
+def filter_invalid_faces(all_frames, all_faces):
     def inrange(v):
         return 0 <= v and v <= 1
 
     def valid_bbox(f):
-        return f.bbox_y2 - f.bbox_y1 >= .1 and inrange(f.bbox_x1) and inrange(f.bbox_x2) \
-            and inrange(f.bbox_y1) and inrange(f.bbox_y2)
+        return f['bbox_y2'] - f['bbox_y1'] >= .1 and inrange(f['bbox_x1']) and inrange(f['bbox_x2']) \
+            and inrange(f['bbox_y1']) and inrange(f['bbox_y2'])
 
     filtered_faces = [[[f for f in frame if valid_bbox(f)] for frame in vid_faces]
                       for vid_faces in all_faces]
 
-    return [[f for f in vid_faces if len(f) > 0] for vid_faces in filtered_faces]
+    assert (len(all_frames[0]) == len(filtered_faces[0]))
 
-
-def closest_pose(candidates, target):
-    if len(candidates) == 0: return None
-    noses = [pose.pose_keypoints()[Pose.Nose] for pose in candidates]
-    filtered_noses = [(nose[:2], i) for i, nose in enumerate(noses) if nose[2] > 0]
-    if len(filtered_noses) == 0: return None
-    noses, indices = unzip(filtered_noses)
-    target = target.pose_keypoints()[Pose.Nose][:2] if type(target) is not np.ndarray else target
-    dists = np.linalg.norm(np.array(noses) - target, axis=1)
-    closest = candidates[indices[np.argmin(dists)]]
-    return closest
+    return unzip([
+        unzip([(frame, f) for frame, f in zip(vid_frames, vid_faces) if len(f) > 0])
+        for vid_frames, vid_faces in zip(all_frames, filtered_faces)
+        if sum([len(f) for f in vid_faces]) > 0
+    ])
 
 
 def match_poses_to_faces(all_poses, all_faces):
@@ -68,59 +63,6 @@ def features_to_shots(matching_features, all_shots, frame_per_shot):
             for vid_features, shot_map in zip(matching_features, all_shot_maps)]
 
 
-def pose_track(videos, all_shots, all_shot_poses, all_dense_poses, force=False):
-    labeler, _ = Labeler.objects.get_or_create(name='posetrack')
-    if force or not PersonTrack.objects.filter(video=videos[0], labeler=labeler).exists():
-        for (video, vid_shots, vid_shot_poses, vid_dense_poses) in zip(
-                videos, all_shots, all_shot_poses, all_dense_poses):
-            pose_map = defaultdict(list, {l[0].person.frame.number: l for l in vid_dense_poses})
-
-            log.debug('Finding tracks')
-            vid_tracks = []
-            for shot, known_pose in zip(vid_shots, vid_shot_poses):
-                initial_frame = known_pose.person.frame.number
-                track = [known_pose]
-
-                shot_frames = range(shot.min_frame, shot.max_frame, POSE_STRIDE)
-                lower = [n for n in shot_frames if n < initial_frame]
-                upper = [n for n in shot_frames if n > initial_frame]
-
-                for frame in reversed(lower):
-                    closest = closest_pose(pose_map[frame], track[0])
-                    if closest is None:
-                        break
-                    track.insert(0, closest)
-
-                for frame in upper:
-                    closest = closest_pose(pose_map[frame], track[-1])
-                    if closest is None:
-                        break
-                    track.append(closest)
-
-                person_track = PersonTrack(
-                    video=video,
-                    labeler=labeler,
-                    min_frame=track[0].person.frame.number,
-                    max_frame=track[-1].person.frame.number)
-
-                vid_tracks.append([track, person_track])
-
-            log.debug('Creating persontracks')
-            PersonTrack.objects.bulk_create([p for _, p in vid_tracks])
-
-            log.debug('Adding links to persontracks')
-            ThroughModel = Person.tracks.through
-            links = []
-            for track, person_track in vid_tracks:
-                for pose in track:
-                    links.append(
-                        ThroughModel(
-                            tvnews_person_id=pose.person.pk, tvnews_persontrack_id=person_track.pk))
-            ThroughModel.objects.bulk_create(links)
-
-    return [list(PersonTrack.objects.filter(video=video, labeler=labeler)) for video in videos]
-
-
 def pose_dist(p1, p2):
     kp1 = p1.pose_keypoints()
     kp2 = p2.pose_keypoints()
@@ -149,13 +91,14 @@ def animated_score(track):
     w = min(POSE_STRIDE * 5, len(dists) - 1)
     return max([np.mean(dists[i:i + w]) for i in range(0, len(dists) - w)])
 
+
 # Do shot segmentation on a larger set of videos
 
 # Goal 1. Histogram of shot lengths
 #
 
+
 def animatedness(videos, exemplar):
-    videos = videos
     with Timer('Detecting shots'):
         all_shots = shot_detect(videos)
         face_frame_per_shot = [[shot_frame_to_detect(shot) for shot in vid_shots]
@@ -163,16 +106,23 @@ def animatedness(videos, exemplar):
 
     with Timer('Detecting sparse face'):
         all_faces = face_detect(videos, face_frame_per_shot)
-    print([f.id for l in all_faces[0] for f in l])
-    exit()
+        videos, all_frames, all_faces = unzip(
+            [(video, vid_frames, vid_faces)
+             for video, vid_frames, vid_faces in zip(videos, face_frame_per_shot, all_faces)
+             if vid_faces is not None])
+        paths = [v.path for v in videos]
+        assert (len(paths) == len(set(paths)))
 
-    with Timer('Filtering invalid faces'):
-        filtered_faces = filter_invalid_faces(all_faces)
-    log.debug('faces: {} --> {}'.format(
-        sum(len(f) for f in all_faces[0]), sum(len(f) for f in filtered_faces[0])))
+    # with Timer('Filtering invalid faces'):
+    #     filtered_frames, filtered_faces = filter_invalid_faces(all_frames, all_faces)
+    # log.debug('faces: {} --> {}'.format(
+    #     sum(len(f) for f in all_faces[0]), sum(len(f) for f in filtered_faces[0])))
 
     with Timer('Embedding faces'):
-        all_features = face_embed(videos, filtered_faces)
+        all_features = gender_detect(videos, all_frames, [
+            video.path + '_faces_' + str(hash(tuple(frames)))
+            for video, frames in zip(videos, all_frames)
+        ])
 
     with Timer('Stiching shots'):
         stitched_shots, shot_faces, shot_features = shot_stitch(
@@ -243,15 +193,15 @@ def main():
             # Pose.objects.filter(person__frame__video=video).delete()
             # PersonTrack.objects.filter(video=video).delete()
 
-    # log.debug('Fetching videos')
-    # videos_with_shots = list(Video.objects.annotate(
-    #     c=Subquery(
-    #         Shot.objects.filter(video=OuterRef('pk')).values('video') \
-    #         .annotate(c=Count('video')).values('c')
-    #     )).filter(c__isnull=False))
-    # pcache.set('videos_with_shots', videos_with_shots)
+    def get_videos():
+        log.debug('Fetching videos')
+        return list(Video.objects.annotate(
+            c=Subquery(
+                Shot.objects.filter(video=OuterRef('pk')).values('video') \
+                .annotate(c=Count('video')).values('c')
+            )).filter(c__isnull=False).order_by('id'))
 
-    videos_with_shots = pcache.get('videos_with_shots')
+    videos_with_shots = pcache.get('videos_with_shots', fn=get_videos, method='pickle')
 
     animatedness(videos_with_shots, "chris-matthews.jpg")
 

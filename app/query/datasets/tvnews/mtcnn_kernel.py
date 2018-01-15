@@ -25,7 +25,6 @@ class MTCNNKernel(kernel.TensorFlowKernel):
         out_size = 160
         detection_window_size_ratio = .2
 
-
         imgs = columns[0]
         print('Face detect on {} frames'.format(len(imgs)))
         start = now()

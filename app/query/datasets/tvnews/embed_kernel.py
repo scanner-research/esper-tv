@@ -5,11 +5,12 @@ import facenet
 import cv2
 import json
 import os
+import numpy as np
 
 model_path = '/app/deps/facenet/models/20170512-110547/'
 
-class EmbedFaceKernel(kernel.TensorFlowKernel):
 
+class EmbedFaceKernel(kernel.TensorFlowKernel):
     def build_graph(self, sess):
         meta_file, ckpt_file = facenet.get_model_filenames(model_path)
         g = tf.Graph()
@@ -27,17 +28,29 @@ class EmbedFaceKernel(kernel.TensorFlowKernel):
 
         out_size = 160
         bboxes = parsers.bboxes(bboxes, self.protobufs)
+        # print(len(bboxes))
         outputs = ''
         for bbox in bboxes:
-            face_img = img[int(h*bbox.y1):int(h*bbox.y2), int(w*bbox.x1):int(w*bbox.x2)]
-            face_img = cv2.resize(face_img, (out_size, out_size))
-            face_img = facenet.prewhiten(face_img)
-            embs = self.sess.run(self.embeddings, feed_dict={
-                self.images_placeholder: [face_img],
-                self.phase_train_placeholder: False})
+            # NOTE: if using output of mtcnn, not-normalized, so removing de-normalization factors here
+            face_img = img[int(bbox.y1):int(bbox.y2), int(bbox.x1):int(bbox.x2)]
+            #print(bbox, img.shape, face_img.shape)
+            [fh, fw] = face_img.shape[:2]
+            if fh == 0 or fw == 0:
+                outputs += np.zeros(128, dtype=np.float32).tobytes()
+            else:
+                face_img = cv2.resize(face_img, (out_size, out_size))
+                face_img = facenet.prewhiten(face_img)
+                embs = self.sess.run(
+                    self.embeddings,
+                    feed_dict={
+                        self.images_placeholder: [face_img],
+                        self.phase_train_placeholder: False
+                    })
 
-            outputs += embs[0].tobytes()
+                # print(embs[0].shape, embs[0].dtype, len(embs[0].tobytes()))
+                outputs += embs[0].tobytes()
 
         return [outputs]
+
 
 KERNEL = EmbedFaceKernel

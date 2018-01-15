@@ -18,11 +18,11 @@ import math
 
 PROJECT_ID = os.environ['GOOGLE_PROJECT']
 #ZONE = os.environ['GOOGLE_ZONE']
-ZONE = 'us-east1-d'
+ZONE = 'us-central1-c'
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
-CLUSTER_ID = 'wc-test'
+CLUSTER_ID = 'wc-test-2'
 KUBE_VERSION = '1.8.5-gke.0'
-USE_GPU = False
+USE_GPU = True
 USE_PREEMPTIBLE = True
 USE_AUTOSCALING = True
 MASTER_CPU = 4  # Cores
@@ -30,11 +30,13 @@ MASTER_MEM = 96  # GB
 MASTER_DISK = 50  # GB
 # WORKER_CPU = 4
 # WORKER_MEM = 26
-WORKER_DISK = 500
 WORKER_CPU = int(2 if USE_GPU else 64)
 WORKER_MEM = int(16 if USE_GPU else WORKER_CPU * 4.0)
-WORKERS_PER_NODE = 5
+WORKER_DISK = 500
+WORKERS_PER_NODE = 1
+DEPS = ['openpose']
 
+assert (not USE_GPU or WORKERS_PER_NODE == 1)
 assert (not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
 
 CLUSTER_CMD = 'gcloud alpha container --project {} clusters --zone {}'.format(PROJECT_ID, ZONE)
@@ -52,7 +54,7 @@ def run(s):
 
 def machine_type(cpu, mem):
     name = 'custom-{}-{}'.format(cpu, mem * 1024)
-    if float(mem) / cpu >= 6.5:
+    if float(mem) / cpu > 6.5:
         name += '-ext'
     return name
 
@@ -60,7 +62,7 @@ def machine_type(cpu, mem):
 def make_container(name):
     template = {
         'name': name,
-        'image': 'gcr.io/{project}/scanner-{name}'.format(project=PROJECT_ID, name=name),
+        'image': 'gcr.io/{project}/scanner-{name}:{device}'.format(project=PROJECT_ID, name=name, device='gpu' if USE_GPU else 'cpu'),
         'imagePullPolicy': 'Always',
         'volumeMounts': [{
             'name': 'service-key',
@@ -86,7 +88,9 @@ def make_container(name):
             {'name': 'GLOG_v',
              'value': '1'},
             {'name': 'WORKERS_PER_NODE',
-             'value': str(WORKERS_PER_NODE)}
+             'value': str(WORKERS_PER_NODE)},
+            {'name': 'DEPS',
+             'value': ','.join(DEPS)}
         ],
         'resources': {},
         'securityContext': {'capabilities': {
@@ -201,9 +205,9 @@ def create(args):
             'worker_disk': WORKER_DISK,
             'scopes': ','.join(scopes),
             'initial_size': args.num_workers,
-            'accelerator': '--accelerator type=nvidia-tesla-k80,count=1' if USE_GPU else '',
+            'accelerator': '--accelerator type=nvidia-tesla-p100,count=1' if USE_GPU else '',
             'preemptible': '--preemptible' if USE_PREEMPTIBLE else '',
-            'autoscaling': '--enable-autoscaling --min-nodes 0 --max-nodes 1000' if USE_AUTOSCALING else ''
+            'autoscaling': '--enable-autoscaling --min-nodes 0 --max-nodes {}'.format(args.num_workers) if USE_AUTOSCALING else ''
         }  # yapf: disable
 
         cluster_cmd = """
@@ -391,6 +395,9 @@ def serve_process():
 def resize(args):
     if not USE_AUTOSCALING:
         run('{cmd} resize {id} --node-pool=workers --size={size}'.format(
+            cmd=CLUSTER_CMD, id=CLUSTER_ID, size=args.size))
+    else:
+        run('{cmd} update {id} --node-pool=workers --enable-autoscaling --max-nodes={size}'.format(
             cmd=CLUSTER_CMD, id=CLUSTER_ID, size=args.size))
 
     run('kubectl scale deploy/scanner-worker --replicas={}'.format(args.size))
