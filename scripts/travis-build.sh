@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-python configure.py -c config/local.toml --build-gpu
 
 build_docker() {
+    python configure.py -c config/local.toml --no-build-kube
     docker build -f app/Dockerfile.app -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
 
     if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
