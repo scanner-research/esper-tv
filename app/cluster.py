@@ -18,11 +18,11 @@ import math
 
 PROJECT_ID = os.environ['GOOGLE_PROJECT']
 #ZONE = os.environ['GOOGLE_ZONE']
-ZONE = 'us-central1-c'
+ZONE = 'us-east1-d'
 SERVICE_KEY = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
 CLUSTER_ID = 'wc-test-2'
 KUBE_VERSION = '1.8.5-gke.0'
-USE_GPU = True
+USE_GPU = False
 USE_PREEMPTIBLE = True
 USE_AUTOSCALING = True
 MASTER_CPU = 4  # Cores
@@ -30,11 +30,12 @@ MASTER_MEM = 96  # GB
 MASTER_DISK = 50  # GB
 # WORKER_CPU = 4
 # WORKER_MEM = 26
-WORKER_CPU = int(2 if USE_GPU else 64)
-WORKER_MEM = int(16 if USE_GPU else WORKER_CPU * 4.0)
+WORKER_GPU = 4
+WORKER_CPU = int(4 * WORKER_GPU if USE_GPU else 64)
+WORKER_MEM = int(WORKER_CPU * 4.0)
 WORKER_DISK = 500
-WORKERS_PER_NODE = 1
-DEPS = ['openpose']
+WORKERS_PER_NODE = 6
+DEPS = []  #['openpose']
 
 assert (not USE_GPU or WORKERS_PER_NODE == 1)
 assert (not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
@@ -90,7 +91,11 @@ def make_container(name):
             {'name': 'WORKERS_PER_NODE',
              'value': str(WORKERS_PER_NODE)},
             {'name': 'DEPS',
-             'value': ','.join(DEPS)}
+             'value': ','.join(DEPS)},
+            # HACK(wcrichto): GPU decode for interlaced videos is broken, so forcing CPU
+            # decode instead for now.
+            {'name': 'FORCE_CPU_DECODE',
+             'value': '1'}
         ],
         'resources': {},
         'securityContext': {'capabilities': {
@@ -106,7 +111,7 @@ def make_container(name):
         template['resources']['requests'] = {'cpu': WORKER_CPU / 2.0 + 0.1}
     else:
         if USE_GPU:
-            template['resources']['limits'] = {'nvidia.com/gpu': 1}
+            template['resources']['limits'] = {'nvidia.com/gpu': WORKER_GPU}
         else:
             if name == 'worker':
                 template['resources']['requests'] = {'cpu': WORKER_CPU / 2.0 + 0.1}
@@ -183,7 +188,7 @@ def get_object(info, name):
 
 
 def create(args):
-    if not cluster_running():
+    if not cluster_running() or args.force:
         print 'Creating cluster...'
         scopes = [
             "https://www.googleapis.com/auth/compute",
@@ -205,7 +210,7 @@ def create(args):
             'worker_disk': WORKER_DISK,
             'scopes': ','.join(scopes),
             'initial_size': args.num_workers,
-            'accelerator': '--accelerator type=nvidia-tesla-p100,count=1' if USE_GPU else '',
+            'accelerator': '--accelerator type=nvidia-tesla-p100,count={}'.format(WORKER_GPU) if USE_GPU else '',
             'preemptible': '--preemptible' if USE_PREEMPTIBLE else '',
             'autoscaling': '--enable-autoscaling --min-nodes 0 --max-nodes {}'.format(args.num_workers) if USE_AUTOSCALING else ''
         }  # yapf: disable
@@ -463,6 +468,7 @@ def main():
     create.add_argument('--reset', '-r', action='store_true', help='Delete current deployments')
     create.add_argument(
         '--num-workers', '-n', type=int, default=1, help='Initial number of workers')
+    create.add_argument('--force', '-f', action='store_true', help='Force re-creation of cluster')
     command.add_parser('delete')
     command.add_parser('get-credentials')
     command.add_parser('serve')

@@ -74,6 +74,7 @@ def main():
     parser.add_argument('--dataset', default='default')
     parser.add_argument('--no-build', action='store_true')
     parser.add_argument('--no-build-base', action='store_true')
+    parser.add_argument('--no-build-local', action='store_true')
     parser.add_argument('--no-build-kube', action='store_true')
     parser.add_argument('--kube-device', default='cpu')
     parser.add_argument('--build-tf', action='store_true')
@@ -154,7 +155,9 @@ def main():
 
     if not args.no_build:
         if not args.no_build_base:
-            devices = ['cpu'] + (['gpu'] if device == 'gpu' or args.kube_device == 'gpu' else [])
+            devices = list(
+                set(([device] if not args.no_build_local else []) +
+                    ([args.kube_device] if not args.no_build_kube else [])))
             for device in devices:
                 build_args = {
                     'cores': cores,

@@ -4,4 +4,5 @@
 import subprocess as sp
 import os
 deps = os.environ['DEPS'].split(',')
-sp.check_call(' && '.join(['./scripts/install-{}.sh'.format(dep) for dep in deps]), shell=True)
+if deps != ['']:
+    sp.check_call(' && '.join(['./scripts/install-{}.sh'.format(dep) for dep in deps]), shell=True)

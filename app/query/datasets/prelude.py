@@ -25,7 +25,6 @@ import marshal
 import json
 import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from tqdm import tqdm
 import gc
 import csv
 import requests
@@ -73,6 +72,10 @@ if get_ipython() is not None:
     matplotlib.rcParams['figure.figsize'] = (18, 8)
     plt.rc("axes.spines", top=False, right=False)
     sns.set_style('white')
+
+    from tqdm import tqdm_notebook as tqdm
+else:
+    from tqdm import tqdm
 
 # Setup Storehouse
 ESPER_ENV = os.environ.get('ESPER_ENV')
@@ -259,7 +262,7 @@ class PickleCache:
                     pickler.fast = 1  # https://stackoverflow.com/a/15108940/356915
                     pickler.dump(v)
 
-        with Timer('Saving to cache: {}'.format(k))
+        with Timer('Saving to cache: {}'.format(k)):
             gc.disable()  # https://stackoverflow.com/a/36699998/356915
             if isinstance(v, list) and len(v) >= NUM_CHUNKS:
                 n = len(v)
@@ -289,7 +292,7 @@ class PickleCache:
                 else:
                     return pickle.load(f)
 
-        with Timer('Loading from cache: {}'.format(k))
+        with Timer('Loading from cache: {}'.format(k)):
             gc.disable()
             if self.has(k, 1, method):
                 loaded = sum(
