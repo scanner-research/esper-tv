@@ -29,6 +29,7 @@ import gc
 import csv
 import requests
 import cv2
+import itertools
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -295,8 +296,8 @@ class PickleCache:
         with Timer('Loading from cache: {}'.format(k)):
             gc.disable()
             if self.has(k, 1, method):
-                loaded = sum(
-                    par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False), [])
+                loaded = flatten(
+                    par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False))
             else:
                 loaded = load_chunk(0)
             gc.enable()
@@ -325,6 +326,12 @@ class QuerySetMixin:
         except self.model.DoesNotExist:
             return False
 
+    def save_to_csv(self, name):
+        meta = self.model._meta
+        with connection.cursor() as cursor:
+            cursor.execute("COPY ({}) TO '{}' CSV DELIMITER ',' HEADER".format(
+                str(self.query), '/app/pg/{}.csv'.format(name)))
+
 
 QuerySet.__bases__ += (QuerySetMixin, )
 
@@ -336,22 +343,27 @@ class BulkUpdateManagerMixin:
 
     def bulk_create_copy(self, objects):
         meta = self.model._meta
-        keys = [f.attname for f in meta.get_fields()][1:]
+        keys = [
+            f.attname for f in meta._get_fields(reverse=False)
+            if not isinstance(f, models.ManyToManyField)
+        ]
         fname = '/app/rows.csv'
         log.debug('Creating CSV')
         with open(fname, 'wb') as f:
             writer = csv.writer(f, delimiter=',')
-            writer.writerow(['id'] + keys)
+            writer.writerow(keys)
             max_id = self.all().aggregate(Max('id'))['id__max']
             id = max_id + 1 if max_id is not None else 0
             for obj in tqdm(objects):
-                writer.writerow([id] + [obj[k] for k in keys])
+                obj['id'] = id
+                writer.writerow([obj[k] for k in keys])
                 id += 1
 
         table = meta.db_table
         log.debug('Writing to database')
         with connection.cursor() as cursor:
-            cursor.execute("COPY {} FROM '{}' DELIMITER ',' CSV HEADER".format(table, fname))
+            cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
+                table, ', '.join(keys), fname))
             cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
 
         os.remove(fname)
@@ -383,10 +395,11 @@ def make_montage(video,
                  width=1600,
                  num_cols=8,
                  workers=16,
+                 target_height=None,
                  progress=False):
     target_width = width / num_cols
 
-    def load_frame((n, bboxes)):
+    def load_frame((video, n, bboxes)):
         while True:
             try:
                 r = requests.get(
@@ -405,11 +418,13 @@ def make_montage(video,
                 img, (int(bbox['bbox_x1'] * img.shape[1]), int(bbox['bbox_y1'] * img.shape[0])),
                 (int(bbox['bbox_x2'] * img.shape[1]), int(bbox['bbox_y2'] * img.shape[0])),
                 (0, 0, 255), 8)
-        return cv2.resize(img,
-                          (target_width, int(img.shape[0] * (target_width / float(img.shape[1])))))
+        th = int(img.shape[0] *
+                 (target_width / float(img.shape[1]))) if target_height is None else target_height
+        return cv2.resize(img, (target_width, th))
 
     bboxes = bboxes or [[] for _ in range(len(frames))]
-    imgs = par_for(load_frame, zip(frames, bboxes), progress=progress, workers=workers)
+    videos = video if isinstance(video, list) else [video for _ in range(len(frames))]
+    imgs = par_for(load_frame, zip(videos, frames, bboxes), progress=progress, workers=workers)
     target_height = imgs[0].shape[0]
     num_rows = int(math.ceil(float(len(imgs)) / num_cols))
 
@@ -427,3 +442,23 @@ def make_montage(video,
         break
 
     cv2.imwrite(output_path, montage)
+
+
+def gather(l, idx):
+    return [l[i] for i in idx]
+
+
+def gather2(l, idx):
+    return [l[i][j] for i, j in idx]
+
+
+# https://mathieularose.com/how-not-to-flatten-a-list-of-lists-in-python/
+def flatten(l):
+    return list(itertools.chain.from_iterable(l))
+
+
+def collect(l, kfn):
+    d = defaultdict(list)
+    for x in l:
+        d[kfn(x)].append(x)
+    return dict(d)

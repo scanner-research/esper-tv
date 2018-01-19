@@ -31,6 +31,15 @@ services:
     environment:
       - 'WORKERS={workers}'
 
+  spark:
+    build:
+      context: ./app
+      dockerfile: spark/Dockerfile
+    ports: ['8080:8080', '7077']
+    environment: []
+    volumes:
+      - ./app:/app
+
   app:
     build:
       context: ./app
@@ -38,7 +47,7 @@ services:
       args:
         https_proxy: "${{https_proxy}}"
     privileged: true
-    depends_on: [db, frameserver]
+    depends_on: [db, frameserver, spark]
     volumes:
       - ./app:/app
       - ${{HOME}}/.bash_history:/root/.bash_history

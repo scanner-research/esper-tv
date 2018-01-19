@@ -9,6 +9,7 @@ ARG cores=1
 ENV APPDIR=/app
 WORKDIR ${APPDIR}
 
+RUN apt update && apt install -y default-jre
 COPY ./scripts ./scripts
 COPY ./requirements.base.txt .
 RUN ./scripts/build-tf.sh
