@@ -336,38 +336,42 @@ class QuerySetMixin:
 QuerySet.__bases__ += (QuerySetMixin, )
 
 
+def bulk_create_copy(self, objects):
+    meta = self.model._meta
+    keys = [
+        f.attname for f in meta._get_fields(reverse=False)
+        if not isinstance(f, models.ManyToManyField)
+    ]
+    fname = '/app/rows.csv'
+    log.debug('Creating CSV')
+    with open(fname, 'wb') as f:
+        writer = csv.writer(f, delimiter=',')
+        writer.writerow(keys)
+        max_id = self.all().aggregate(Max('id'))['id__max']
+        id = max_id + 1 if max_id is not None else 0
+        for obj in tqdm(objects):
+            obj['id'] = id
+            writer.writerow([obj[k] for k in keys])
+            id += 1
+
+    table = meta.db_table
+    log.debug('Writing to database')
+    with connection.cursor() as cursor:
+        cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
+            table, ', '.join(keys), fname))
+        cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
+
+    os.remove(fname)
+    log.debug('Done!')
+
+
 class BulkUpdateManagerMixin:
     def batch_create(self, objs, batch_size=1000):
         for i in tqdm(range(0, len(objs), batch_size)):
             self.bulk_create(objs[i:(i + batch_size)])
 
     def bulk_create_copy(self, objects):
-        meta = self.model._meta
-        keys = [
-            f.attname for f in meta._get_fields(reverse=False)
-            if not isinstance(f, models.ManyToManyField)
-        ]
-        fname = '/app/rows.csv'
-        log.debug('Creating CSV')
-        with open(fname, 'wb') as f:
-            writer = csv.writer(f, delimiter=',')
-            writer.writerow(keys)
-            max_id = self.all().aggregate(Max('id'))['id__max']
-            id = max_id + 1 if max_id is not None else 0
-            for obj in tqdm(objects):
-                obj['id'] = id
-                writer.writerow([obj[k] for k in keys])
-                id += 1
-
-        table = meta.db_table
-        log.debug('Writing to database')
-        with connection.cursor() as cursor:
-            cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
-                table, ', '.join(keys), fname))
-            cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
-
-        os.remove(fname)
-        log.debug('Done!')
+        return bulk_create_copy(self, objects)
 
 
 BulkUpdateManager.__bases__ += (BulkUpdateManagerMixin, )

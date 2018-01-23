@@ -2,6 +2,47 @@ from query.datasets.prelude import *
 from query.datasets.queries import *
 
 
+@query("Commercials")
+def commercials():
+    return qs_to_result(Commercial.objects.filter(labeler__name='haotian-commercials'))
+
+
+@query("Positive segments")
+def positive_segments():
+    return qs_to_result(
+        Segment.objects.filter(labeler__name='haotian-segments',
+                               polarity__isnull=False).order_by('-polarity'),
+        custom_order=True)
+
+
+@query("Negative segments")
+def negative_segments():
+    return qs_to_result(
+        Segment.objects.filter(labeler__name='haotian-segments',
+                               polarity__isnull=False).order_by('polarity'),
+        custom_order=True)
+
+
+@query("Segments about Donald Trump")
+def segments_about_donald_trump():
+    from query.datasets.tvnews.models import ThingType
+    return qs_to_result(
+        Segment.objects.filter(
+            labeler__name='haotian-segments',
+            things__type=ThingType.PERSON,
+            things__name='donald trump'))
+
+
+@query("Segments about immigration")
+def segments_about_immigration():
+    from query.datasets.tvnews.models import ThingType
+    return qs_to_result(
+        Segment.objects.filter(
+            labeler__name='haotian-segments',
+            things__type=ThingType.TOPIC,
+            things__name='immigration'))
+
+
 @query("Fox News videos")
 def fox_news_videos():
     return qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))

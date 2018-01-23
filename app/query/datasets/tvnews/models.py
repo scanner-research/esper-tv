@@ -58,6 +58,28 @@ class Commercial(base.Track):
     pass
 
 
+class ThingType():
+    TOPIC = 1
+    PHRASE = 2
+    PERSON = 3
+    LOCATION = 4
+    ORGANIZATION = 5
+
+
+class Thing(base.Model):
+    name = base.CharField()
+    type = models.IntegerField()
+
+    class Meta:
+        unique_together = ('name', 'type')
+
+
+class Segment(base.Track):
+    things = base.ManyToManyField(Thing)
+    polarity = models.FloatField(null=True)
+    subjectivity = models.FloatField(null=True)
+
+
 class Shot(base.Track):
     pass
 
