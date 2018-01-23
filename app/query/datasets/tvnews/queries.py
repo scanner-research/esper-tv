@@ -58,21 +58,25 @@ def talking_heads_on_poppy_harlow():
 @query("Two female faces on Poppy Harlow")
 def two_female_faces_on_poppy_harlow():
     r = []
-    for video in Video.objects.filter(show='CNN Newsroom With Poppy Harlow'):
-        for frame in Frame.objects.filter(video=video).annotate(
-                n=F('number') % math.ceil(video.fps)).filter(n=0)[:10000:20]:
-            faces = list(
-                Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
-                    labeler__name='mtcnn',
-                    person__frame=frame,
-                    facegender__gender__name='female',
-                    height__gte=0.2))
-            if len(faces) == 2:
-                r.append({
-                    'video': frame.video.id,
-                    'start_frame': frame.id,
-                    'objects': [bbox_to_dict(f) for f in faces]
-                })
+    try:
+        for video in Video.objects.filter(show__name='CNN Newsroom With Poppy Harlow'):
+            for frame in Frame.objects.filter(video=video):
+                faces = list(
+                    Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
+                        labeler__name='mtcnn',
+                        person__frame=frame,
+                        facegender__gender__name='F',
+                        height__gte=0.2))
+                if len(faces) == 2:
+                    r.append({
+                        'video': frame.video.id,
+                        'start_frame': frame.number,
+                        'objects': [bbox_to_dict(f) for f in faces]
+                    })
+                if len(r) > 100:
+                    raise Break()
+    except Break:
+        pass
     return simple_result(r, 'Frame')
 
 
@@ -247,7 +251,7 @@ def people_sitting():
 
     return simple_result([{
         'video': frame.video.id,
-        'start_frame': frame.id,
+        'start_frame': frame.number,
         'objects': [pose_to_dict(p) for p in poses]
     } for (frame, poses) in frames], 'Frame')
 
@@ -320,7 +324,7 @@ def panels():
         .values('person__frame') \
         .annotate(c=Count('*')) \
         .values('c'), models.IntegerField())) \
-        .filter(c__gte=3, c__lte=4)
+        .filter(c__gte=3, c__lte=3).order_by('id')
 
     output_frames = []
     for frame in frames[:10000:10]:
@@ -342,7 +346,7 @@ def panels_():
     from query.datasets.tvnews.queries import panels
     return simple_result([{
         'video': frame.video.id,
-        'start_frame': frame.id,
+        'start_frame': frame.number,
         'objects': [bbox_to_dict(f) for f in faces]
     } for (frame, faces) in panels()], 'Frame')
 

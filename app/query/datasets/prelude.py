@@ -390,7 +390,7 @@ models.Model.__repr__ = model_repr
 
 def make_montage(video,
                  frames,
-                 output_path,
+                 output_path=None,
                  bboxes=None,
                  width=1600,
                  num_cols=8,
@@ -428,7 +428,7 @@ def make_montage(video,
     target_height = imgs[0].shape[0]
     num_rows = int(math.ceil(float(len(imgs)) / num_cols))
 
-    montage = np.zeros((num_rows * target_height, width, 3))
+    montage = np.zeros((num_rows * target_height, width, 3), dtype=np.uint8)
     for row in range(num_rows):
         for col in range(num_cols):
             i = row * num_cols + col
@@ -441,7 +441,34 @@ def make_montage(video,
             continue
         break
 
-    cv2.imwrite(output_path, montage)
+    if output_path is not None:
+        cv2.imwrite(output_path, montage)
+    else:
+        return montage
+
+
+def _get_frame((videos, fps, start, i, kwargs)):
+    return make_montage(videos, [int(math.ceil(v.fps)) / fps * i + start for v in videos], **kwargs)
+
+
+def make_montage_video(videos, start, end, output_path, **kwargs):
+    def gcd(a, b):
+        return gcd(b, a % b) if b else a
+
+    fps = reduce(gcd, [int(math.ceil(v.fps)) for v in videos])
+
+    first = _get_frame((videos, fps, start, 0, kwargs))
+    vid = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'XVID'), fps,
+                          (first.shape[1], first.shape[0]))
+
+    frames = par_for(
+        _get_frame, [(videos, fps, start, i, kwargs) for i in range(end - start)],
+        workers=8,
+        process=True)
+    for frame in tqdm(frames):
+        vid.write(frame)
+
+    vid.release()
 
 
 def gather(l, idx):
@@ -462,3 +489,7 @@ def collect(l, kfn):
     for x in l:
         d[kfn(x)].append(x)
     return dict(d)
+
+
+class Break(Exception):
+    pass

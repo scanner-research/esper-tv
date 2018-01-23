@@ -18,17 +18,17 @@ def gender_detect(videos, all_frames, all_faces):
                         if buf is not None else [] for _, buf in t.column('genders').load()]
 
             log.debug('Fetching tables')
-            tables = [
-                db.table(output_name(video, frames))
-                for video, frames in tqdm(zip(videos, all_frames))
-                if db.has_table(output_name(video, frames))
-                and db.table(output_name(video, frames)).committed()
-            ]
-            return par_for(load, tables)
+            indices, tables = unzip([(i, db.table(output_name(video, frames)))
+                                     for i, (video,
+                                             frames) in tqdm(enumerate(zip(videos, all_frames)))
+                                     if db.has_table(output_name(video, frames))
+                                     and db.table(output_name(video, frames)).committed()])
+            return par_for(load, tables, workers=16), indices
 
-    return pcache.get('all_genders', loader, method='marshal')
+    return pcache.get('all_genders', loader)
 
     log.debug('Connecting to scanner db')
+    # with Database(master='localhost:5006', workers=['localhost:5007']) as db:
     with make_scanner_db(kube=True) as db:
         log.debug('Connected!')
 
@@ -46,6 +46,7 @@ def gender_detect(videos, all_frames, all_faces):
         genders = db.ops.Gender(frame=frame_sampled, bboxes=bboxes)
         output = db.ops.Output(columns=[genders])
 
+        log.debug('Building jobs')
         jobs = [
             Job(
                 op_args={
@@ -55,9 +56,7 @@ def gender_detect(videos, all_frames, all_faces):
                     output: output_name(video, vid_frames)
                 }) for video, vid_frames, vid_faces in tqdm(zip(videos, all_frames, all_faces))
         ]
-        assert (len(jobs) > 0)
 
-        log.debug('Running gender on {} jobs'.format(len(jobs)))
         db.run(
             BulkJob(output=output, jobs=jobs),
             force=True,

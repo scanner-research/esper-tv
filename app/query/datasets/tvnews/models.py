@@ -54,12 +54,8 @@ class TopicTrack(base.Track):
     topic = base.ForeignKey(Topic)
 
 
-class CommercialTrack(base.Track):
+class Commercial(base.Track):
     pass
-
-
-class Commercial(base.Noun):
-    tracks = base.ManyToManyField(CommercialTrack)
 
 
 class Shot(base.Track):

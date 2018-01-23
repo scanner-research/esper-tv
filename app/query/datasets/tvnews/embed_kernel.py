@@ -26,14 +26,14 @@ class EmbedFaceKernel(kernel.TensorFlowKernel):
         [img, bboxes] = columns
         [h, w] = img.shape[:2]
 
+        # TODO(wcrichto): make this batched
+
         out_size = 160
         bboxes = parsers.bboxes(bboxes, self.protobufs)
-        # print(len(bboxes))
         outputs = ''
         for bbox in bboxes:
             # NOTE: if using output of mtcnn, not-normalized, so removing de-normalization factors here
             face_img = img[int(bbox.y1):int(bbox.y2), int(bbox.x1):int(bbox.x2)]
-            #print(bbox, img.shape, face_img.shape)
             [fh, fw] = face_img.shape[:2]
             if fh == 0 or fw == 0:
                 outputs += np.zeros(128, dtype=np.float32).tobytes()
@@ -47,7 +47,6 @@ class EmbedFaceKernel(kernel.TensorFlowKernel):
                         self.phase_train_placeholder: False
                     })
 
-                # print(embs[0].shape, embs[0].dtype, len(embs[0].tobytes()))
                 outputs += embs[0].tobytes()
 
         return [outputs]

@@ -2,25 +2,10 @@ from query.datasets.prelude import *
 
 LABELER, _ = Labeler.objects.get_or_create(name='openpose')
 LABELED_TAG, _ = Tag.objects.get_or_create(name='openpose:labeled')
+KP_SIZE = (Pose.POSE_KEYPOINTS + Pose.FACE_KEYPOINTS + 2 * Pose.HAND_KEYPOINTS) * 3
 
 
 def pose_detect(videos, all_frames, force=False):
-    def load_poses():
-        log.debug('Loading poses')
-
-        def loader(t):
-            return [
-                np.frombuffer(buf, dtype=np.float32) if len(buf) > 1 else []
-                for i, buf in t.column('pose').load()
-            ]
-
-        return par_for(loader, outputs, workers=96)
-
-    all_pose_bufs = pcache.get('pose_bufs', load_poses, method='pickle')
-
-    return [{frame: bufs
-             for (frame, bufs) in zip(sorted(set(vid_frames)), pose_bufs)}
-            for (video, vid_frames, pose_bufs) in tqdm(zip(videos, all_frames, all_pose_bufs))]
 
     existing_frames = Frame.objects.filter(
         video=videos[0], number__in=all_frames[0], tags=LABELED_TAG).count()
@@ -33,7 +18,7 @@ def pose_detect(videos, all_frames, force=False):
             return video.path + '_poses_' + str(hash(tuple(frames)))
 
         log.debug('Connecting to scanner db')
-        with make_scanner_db(kube=False) as db:
+        with make_scanner_db(kube=True) as db:
             log.debug('Connected!')
 
             # ingest_if_missing(db, videos)
@@ -52,6 +37,7 @@ def pose_detect(videos, all_frames, force=False):
                     device=DeviceType.GPU)
                 output = db.ops.Output(columns=[pose])
             except ScannerException:
+                log.warning('No openpose op')
                 output = db.ops.Output(columns=[frame])
 
             def remove_already_labeled(video, frames):
@@ -65,7 +51,7 @@ def pose_detect(videos, all_frames, force=False):
                 assert (len(l) > 0)
                 return l
 
-            all_frames = [
+            all_filtered_frames = [
                 remove_already_labeled(video, vid_frames)
                 for video, vid_frames in zip(videos, all_frames)
             ]
@@ -76,29 +62,48 @@ def pose_detect(videos, all_frames, force=False):
                         frame: db.table(video.path).column('frame'),
                         frame_sampled: db.sampler.gather(vid_frames),
                         output: output_name(video, vid_frames)
-                    }) for video, vid_frames in zip(videos, all_frames)
+                    }) for video, vid_frames in zip(videos, all_filtered_frames)
                 if not db.has_table(output_name(video, vid_frames))
                 or not db.table(output_name(video, vid_frames)).committed() or force
             ]
 
             if len(jobs) > 0:
                 log.debug('Running {} Scanner pose jobs'.format(len(jobs)))
-                exit()
                 bulk_job = BulkJob(output=output, jobs=jobs)
-                outputs = db.run(bulk_job, force=True)
+                outputs = db.run(bulk_job, force=True, io_packet_size=500, work_packet_size=100)
                 log.debug('Done!')
-                exit()
             else:
                 log.debug('No Scanner jobs to run')
 
             outputs = [
                 db.table(output_name(video, vid_frames))
-                for video, vid_frames in zip(videos, all_frames)
+                for video, vid_frames in zip(videos, all_filtered_frames)
             ]
 
+            def load_poses():
+                log.debug('Loading poses')
+
+                def loader(t):
+                    return [[
+                        Pose(keypoints=kp.tobytes(), labeler=LABELER)
+                        for kp in np.split(
+                            np.frombuffer(buf, dtype=np.float32),
+                            len(buf) / (KP_SIZE * 4))
+                    ] if len(buf) > 1 else [] for i, buf in t.column('pose').load()]
+
+                return par_for(loader, outputs)
+
+            all_pose_bufs = pcache.get('pose_bufs', load_poses, method='pickle', force=True)
+
+            return [{
+                frame: bufs
+                for (frame, bufs) in zip(sorted(list(set(vid_frames))), pose_bufs)
+            }
+                    for (video, vid_frames,
+                         pose_bufs) in tqdm(zip(videos, all_filtered_frames, all_pose_bufs))]
+
             log.debug('Saving poses')
-            kp_size = (Pose.POSE_KEYPOINTS + Pose.FACE_KEYPOINTS + 2 * Pose.HAND_KEYPOINTS) * 3
-            for (video, vid_frames, output) in zip(videos, all_frames, outputs):
+            for (video, vid_frames, output) in zip(videos, all_filtered_frames, outputs):
                 log.debug(video.path)
                 poses = []
                 unsorted_indices = np.argsort(vid_frames)
@@ -112,7 +117,7 @@ def pose_detect(videos, all_frames, force=False):
                         Frame.tags.through(tvnews_frame_id=frame.pk, tvnews_tag_id=LABELED_TAG.pk))
                     if len(buf) == 1: continue
                     all_kp = np.frombuffer(buf, dtype=np.float32)
-                    for j in range(0, len(all_kp), kp_size):
+                    for j in range(0, len(all_kp), KP_SIZE):
                         people.append(Person(frame=frame))
                 Frame.tags.through.objects.bulk_create(tags)
                 Person.objects.bulk_create(people)
@@ -121,9 +126,9 @@ def pose_detect(videos, all_frames, force=False):
                 for i, buf in output.column('pose').load():
                     if len(buf) == 1: continue
                     all_kp = np.frombuffer(buf, dtype=np.float32)
-                    for j in range(0, len(all_kp), kp_size):
+                    for j in range(0, len(all_kp), KP_SIZE):
                         pose = Pose(
-                            keypoints=all_kp[j:(j + kp_size)].tobytes(),
+                            keypoints=all_kp[j:(j + KP_SIZE)].tobytes(),
                             labeler=LABELER,
                             person=people[k])
                         k += 1
@@ -174,55 +179,80 @@ def closest_pose(candidates, target):
     return closest
 
 
+TARGET_FPS = 10
+
+
+def bbox_midpoint2(f):
+    return np.array([(f['bbox_x1'] + f['bbox_x2']) / 2, (f['bbox_y1'] + f['bbox_y2']) / 2])
+
+
 def pose_track(videos, all_shots, all_shot_frames, all_shot_faces, all_dense_poses, force=False):
     labeler, _ = Labeler.objects.get_or_create(name='posetrack')
     if force or not PersonTrack.objects.filter(video=videos[0], labeler=labeler).exists():
+        all_tracks = []
         for (video, vid_shots, vid_frames, vid_shot_faces, vid_dense_poses) in zip(
                 videos, all_shots, all_shot_frames, all_shot_faces, all_dense_poses):
 
             # pose_map = defaultdict(list, {l[0].person.frame.number: l for l in vid_dense_poses})
 
-            log.debug('Finding tracks')
             vid_tracks = []
             for shot, frame, known_face in zip(vid_shots, vid_frames, vid_shot_faces):
-                initial_frame = frame
+                shot_frames = list(
+                    range(shot['min_frame'], shot['max_frame'], int(round(video.fps / TARGET_FPS))))
+                closest_frame = shot_frames[np.argmin([abs(n - frame) for n in shot_frames])]
+                known_pose = closest_pose(vid_dense_poses[closest_frame],
+                                          bbox_midpoint2(known_face))
+
+                initial_frame = closest_frame
                 track = [known_pose]
 
-                shot_frames = range(shot.min_frame, shot.max_frame, POSE_STRIDE)
                 lower = [n for n in shot_frames if n < initial_frame]
                 upper = [n for n in shot_frames if n > initial_frame]
 
+                min_frame = None
+                max_frame = None
                 for frame in reversed(lower):
-                    closest = closest_pose(pose_map[frame], track[0])
+                    closest = closest_pose(vid_dense_poses[frame], track[0])
                     if closest is None:
                         break
+                    min_frame = frame
                     track.insert(0, closest)
 
                 for frame in upper:
-                    closest = closest_pose(pose_map[frame], track[-1])
+                    closest = closest_pose(vid_dense_poses[frame], track[-1])
                     if closest is None:
                         break
+                    max_frame = frame
                     track.append(closest)
 
-                person_track = PersonTrack(
-                    video=video,
-                    labeler=labeler,
-                    min_frame=track[0].person.frame.number,
-                    max_frame=track[-1].person.frame.number)
+                # person_track = PersonTrack(
+                #     video=video,
+                #     labeler=labeler,
+                #     min_frame=track[0].person.frame.number,
+                #     max_frame=track[-1].person.frame.number)
+                person_track = {
+                    'min_frame': min_frame,
+                    'max_frame': max_frame,
+                    'video_id': video.id,
+                    'labeler_id': labeler.id
+                }
 
                 vid_tracks.append([track, person_track])
 
-            log.debug('Creating persontracks')
-            PersonTrack.objects.bulk_create([p for _, p in vid_tracks])
+            all_tracks.append(track)
 
-            log.debug('Adding links to persontracks')
-            ThroughModel = Person.tracks.through
-            links = []
-            for track, person_track in vid_tracks:
-                for pose in track:
-                    links.append(
-                        ThroughModel(
-                            tvnews_person_id=pose.person.pk, tvnews_persontrack_id=person_track.pk))
-            ThroughModel.objects.bulk_create(links)
+            # log.debug('Creating persontracks')
+            # PersonTrack.objects.bulk_create([p for _, p in vid_tracks])
+
+            # log.debug('Adding links to persontracks')
+            # ThroughModel = Person.tracks.through
+            # links = []
+            # for track, person_track in vid_tracks:
+            #     for pose in track:
+            #         links.append(
+            #             ThroughModel(
+            #                 tvnews_person_id=pose.person.pk, tvnews_persontrack_id=person_track.pk))
+            # ThroughModel.objects.bulk_create(links)
+        return all_tracks
 
     return [list(PersonTrack.objects.filter(video=video, labeler=labeler)) for video in videos]

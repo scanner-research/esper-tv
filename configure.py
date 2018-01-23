@@ -33,8 +33,7 @@ services:
 
   spark:
     build:
-      context: ./app
-      dockerfile: spark/Dockerfile
+      context: ./spark
     ports: ['8080:8080', '7077']
     environment: []
     volumes:

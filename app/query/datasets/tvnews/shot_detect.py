@@ -52,7 +52,7 @@ def compute_shot_boundaries_scanner(db, videos, tables):
     log.debug('Computing shot boundaries on {} videos'.format(len(videos)))
 
     def output_name(video):
-        return video.path + '_blackframes'
+        return video.path + '_shots'
 
     batch = 1000000
 
@@ -74,7 +74,7 @@ def compute_shot_boundaries_scanner(db, videos, tables):
             output: output_name(video)
         }) for video, t in zip(videos, tables)
         if not db.has_table(output_name(video)) or not db.table(output_name(video)).committed()
-    ][25000:]
+    ]
     bulk_job = BulkJob(output=output, jobs=jobs)
 
     log.debug('Running Scanner shot detection job on {} videos'.format(len(jobs)))
@@ -87,11 +87,8 @@ def compute_shot_boundaries_scanner(db, videos, tables):
         task_timeout=600)
     log.debug('Done')
 
-    # db.table(output_name(videos[0])).profiler().write_trace('shot.trace')
-    exit()
-
     out_tables = [db.table(output_name(video)) for video in videos]
-    boundaries = [[dill.loads(b) for _, b in t.column('shots').load(rows=[t.num_rows() - 1])]
+    boundaries = [[pickle.loads(b) for _, b in t.column('shots').load(rows=[t.num_rows() - 1])]
                   for t in out_tables]
 
     return boundaries
@@ -181,7 +178,12 @@ def boundaries_to_shots(video, boundaries):
     for i in range(len(boundaries) - 1):
         start = 0 if i == 0 else boundaries[i]
         end = boundaries[i + 1] - 1
-        shots.append(Shot(video=video, labeler=LABELER, min_frame=start, max_frame=end))
+        shots.append({
+            'video_id': video.id,
+            'labeler_id': LABELER.id,
+            'min_frame': start,
+            'max_frame': end
+        })
     return shots
 
 
@@ -195,87 +197,103 @@ def boundaries_to_shots(video, boundaries):
 # Potentially exclude lower third and/or top of the frame
 
 
-def bulk_load(db, videos):
-    shots = [
-        db.table(v.path + '_shots') for v in videos
-        if db.has_table(v.path + '_shots') and db.table(v.path + '_shots').committed()
-    ]
-
-    def load(t):
-        try:
-            return pickle.loads(next(t.column('shots').load(rows=[t.num_rows() - 1]))[1])
-        except Exception:
-            traceback.print_exc()
-            print(t.name())
-            return None
-
-    return par_for(load, shots)
-
-
 def shot_detect(videos, save=True, evaluate=False, force=False):
-    if evaluate or force or not Shot.objects.filter(video=videos[0], labeler=LABELER).exists():
-        log.debug('Connecting to database...')
-        with make_scanner_db(kube=False) as db:
-            log.debug('Connected!')
-            db._load_db_metadata()
+    def load_combined():
+        def load_shots():
+            log.debug('Loading shots')
 
-            # all_tables = compute_histograms(db, videos, force)
+            log.debug('Connecting to database...')
+            with make_scanner_db(kube=False) as db:
+                log.debug('Connected!')
+                db._load_db_metadata()
 
-            videos, all_tables = unzip(
-                [(v, db.table(v.path + '_hist')) for v in videos
-                 if db.has_table(v.path + '_hist') and db.table(v.path + '_hist').committed()])
+                def loader(t):
+                    try:
+                        return pickle.loads(
+                            next(t.column('shots').load(rows=[t.num_rows() - 1]))[1])
+                    except Exception:
+                        traceback.print_exc()
+                        print(t.name())
+                        return None
 
-            all_boundaries = compute_shot_boundaries_scanner(db, videos, all_tables)
-            exit()
+                log.debug('Getting tables')
+                shots, indices = unzip([
+                    (db.table(v.path + '_shots'), i) for i, v in tqdm(list(enumerate(videos)))
+                    if db.has_table(v.path + '_shots') and db.table(v.path + '_shots').committed()
+                ])
+                log.debug('Loading tables')
 
-            # all_boundaries = [compute_shot_boundaries(t) for t in all_tables]
+                return par_for(loader, shots, workers=64), indices
 
-            videos_without_shots = set([v['path'] for v in Video.objects.annotate(
-                c=Subquery(
-                    Shot.objects.filter(video=OuterRef('pk')).values('video') \
-                    .annotate(c=Count('video')).values('c')
-                )).filter(c__isnull=True).values('path')])
+        all_boundaries, indices = pcache.get('all_boundaries', load_shots)
 
-            log.debug('Bulk fetch videos')
-            to_load = [v for v in videos
-                       if db.has_table(v.path + '_shots') and db.table(v.path + '_shots').committed() and \
-                       v.path in videos_without_shots]
-
-            # log.debug('Bulk load shots')
-            # shots = bulk_load(db, to_load)
-            # pcache.set('all_shots_2', shots)
-            shots = zip([v.path for v in to_load], pcache.get('all_shots_2'))
-
-            log.debug('Depickling')
-            video_map = {v.path: v for v in videos}
-            # pickled_shots = pickle.load(open('/app/notebooks/all_shots.pkl', 'rb'))
-            pickled_shots = shots
-            videos, all_boundaries, all_black_frames = unzip([(video_map[path.replace(
-                '_shots', '')], t[0], t[1]) for (path, t) in pickled_shots if t is not None])
+        log.debug('Filtering bad results')
+        indices2, filtered_boundaries = unzip(
+            [(idx, combined) for idx, combined in tqdm(zip(indices, all_boundaries))
+             if combined is not None])
 
         log.debug('Converting to shots')
-        all_shots = [
-            boundaries_to_shots(video, vid_boundaries)
-            for video, vid_boundaries in tqdm(zip(videos, all_boundaries))
-        ]
+        all_shots, all_blackframes = unzip(
+            [(boundaries_to_shots(video, vid_boundaries), vid_blackframes)
+             for video, (
+                 vid_boundaries,
+                 vid_blackframes) in tqdm(zip(gather(videos, indices2), filtered_boundaries))])
 
-        log.debug('Computed {} shots'.format(sum([len(s) for s in all_shots])))
+        log.debug('Done!')
+        return indices2, all_shots, all_blackframes
 
-        if save:
-            log.debug('Saving shots')
-            for (video, vid_shots) in tqdm(zip(videos, all_shots)):
-                Shot.objects.filter(video=video, labeler=LABELER).delete()
-                Shot.objects.bulk_create(vid_shots)
+    return pcache.get('all_shots_blackframes', load_combined, method='pickle')
 
-        log.debug('Done')
-        exit()
+    # all_tables = compute_histograms(db, videos, force)
 
-        if evaluate:
-            log.debug('Evaluating shot results')
-            evaluate_boundaries(all_boundaries[0])
+    # videos, all_tables = unzip(
+    #     [(v, db.table(v.path + '_hist')) for v in videos
+    #      if db.has_table(v.path + '_hist') and db.table(v.path + '_hist').committed()])
 
-        if not save:
-            return all_shots
+    # all_boundaries = compute_shot_boundaries_scanner(db, videos, all_tables)
+    # exit()
+
+    # all_boundaries = [compute_shot_boundaries(t) for t in all_tables]
+
+    # videos_without_shots = set([v['path'] for v in Video.objects.annotate(
+    #     c=Subquery(
+    #         Shot.objects.filter(video=OuterRef('pk')).values('video') \
+    #         .annotate(c=Count('video')).values('c')
+    #     )).filter(c__isnull=True).values('path')])
+
+    # log.debug('Bulk fetch videos')
+    # to_load = [
+    #     v for v in videos
+    #     if db.has_table(v.path + '_shots') and db.table(v.path + '_shots').committed()
+    # ]
+
+    # # log.debug('Bulk load shots')
+    # # shots = bulk_load(db, to_load)
+    # # pcache.set('all_shots_2', shots)
+    # shots = zip([v.path for v in to_load], pcache.get('all_shots_2'))
+
+    # log.debug('Depickling')
+    # video_map = {v.path: v for v in videos}
+    # # pickled_shots = pickle.load(open('/app/notebooks/all_shots.pkl', 'rb'))
+    # pickled_shots = shots
+    # videos, all_boundaries, all_black_frames = unzip([(video_map[path.replace(
+    #     '_shots', '')], t[0], t[1]) for (path, t) in pickled_shots if t is not None])
+
+    if save:
+        log.debug('Saving shots')
+        for (video, vid_shots) in tqdm(zip(videos, all_shots)):
+            Shot.objects.filter(video=video, labeler=LABELER).delete()
+            Shot.objects.bulk_create(vid_shots)
+
+    log.debug('Done')
+    exit()
+
+    if evaluate:
+        log.debug('Evaluating shot results')
+        evaluate_boundaries(all_boundaries[0])
+
+    if not save:
+        return all_shots
 
     def load_shots():
         log.debug('Loading shots')
@@ -290,14 +308,14 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
         return [[(t['id'], t['min_frame'], t['max_frame'], t['video__id']) for t in l]
                 for l in shots]
 
-    shots = pcache.get('shots', load_shots)
-    shots = [[{
-        'id': t[0],
-        'min_frame': t[1],
-        'max_frame': t[2],
-        'video__id': t[3]
-    } for t in l] for l in shots]
-    return shots
+        shots = pcache.get('shots', load_shots)
+        shots = [[{
+            'id': t[0],
+            'min_frame': t[1],
+            'max_frame': t[2],
+            'video__id': t[3]
+        } for t in l] for l in shots]
+        return shots
 
     # def load_shots(video):
     #     return list(
@@ -370,10 +388,10 @@ def do_stitch((vid_shots, vid_shot_frames, vid_faces, vid_features)):
         shot0['max_frame'] = vid_shots[group[-1]]['max_frame']
         indices.append(group[0])
         new_shots.append({
-            'video__id': shot0['video__id'],
+            'video_id': shot0['video_id'],
             'min_frame': shot0['min_frame'],
             'max_frame': vid_shots[group[-1]]['max_frame'],
-            'labeler': STITCHED_LABELER.id
+            'labeler_id': STITCHED_LABELER.id
         })
 
     return new_shots, indices
