@@ -10,6 +10,7 @@ from django.utils import timezone
 from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
+from pyspark.sql import SparkSession, Row
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
 import django.db.models as models
@@ -495,5 +496,44 @@ def collect(l, kfn):
     return dict(d)
 
 
+# For breaking out of nested loops
 class Break(Exception):
     pass
+
+
+SPARK_DATA_PREFIX = '/app/spark-data'
+
+
+class SparkWrapper:
+    def __init__(self):
+        self.spark = SparkSession.builder \
+            .master("spark://spark:7077") \
+            .config("spark.driver.memory", "128g") \
+            .config("spark.worker.memory", "128g") \
+            .config("spark.executor.memory", "128g") \
+            .getOrCreate()
+        self.sc = self.spark.sparkContext
+
+    # queryset to dataframe
+    def qs_to_df(self, qs):
+        qs.save_to_csv('tmp')
+        return self.spark.read.format("csv").option("header", "true").option(
+            "inferSchema", "true").load("/app/pg/tmp.csv")
+
+    # dictionaries to dataframe
+    def dicts_to_df(self, ds):
+        return self.spark.createDataFrame(self.sc.parallelize(data).map(lambda d: Row(**d)))
+
+    def load(self, key, fn, force=False):
+        key = '{}/{}'.format(SPARK_DATA_PREFIX, key)
+        has_dir = os.path.isdir(key)
+        if not has_dir or force:
+            log.debug('Not cached, loading spark key {}'.format(key))
+            if force and has_dir:
+                shutil.rmtree(key)
+            df = fn()
+            df.write.save(key)
+            return df
+        else:
+            with Timer('Reading data'):
+                return self.spark.read.load(key)

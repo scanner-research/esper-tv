@@ -10,5 +10,5 @@ service-key.json
 **/yapf*.py
 npm-debug.log
 .cache
-notebooks/data
+spark-data
 pg

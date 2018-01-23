@@ -14,4 +14,4 @@ build_docker() {
 
 docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
 build_docker cpu
-build_docker gpu
+# build_docker gpu
