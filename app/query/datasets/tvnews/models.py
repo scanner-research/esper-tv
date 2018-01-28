@@ -81,7 +81,7 @@ class Segment(base.Track):
 
 
 class Shot(base.Track):
-    pass
+    in_commercial = models.BooleanField(default=False)
 
 
 class PersonTrack(base.Track):

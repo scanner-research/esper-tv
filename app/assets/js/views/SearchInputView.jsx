@@ -9,6 +9,19 @@ import {observer} from 'mobx-react';
 import 'brace/mode/python'
 import 'brace/theme/github'
 
+// https://stackoverflow.com/questions/260857/changing-website-favicon-dynamically
+function changeFavicon(src) {
+  var link = document.createElement('link'),
+      oldLink = document.getElementById('dynamic-favicon');
+  link.id = 'dynamic-favicon';
+  link.rel = 'shortcut icon';
+  link.href = src;
+  if (oldLink) {
+    document.head.removeChild(oldLink);
+  }
+  document.head.appendChild(link);
+}
+
 @observer
 class SchemaView extends React.Component {
   state = {
@@ -131,6 +144,12 @@ export default class SearchInputView extends React.Component {
     let exampleQueries = GLOBALS.queries[DATASET];
     if (this.query === null) {
       this.query = exampleQueries[0][1];
+    }
+
+    if (this.state.searching) {
+      changeFavicon('/static/favicon-loading.ico');
+    } else {
+      changeFavicon('/static/favicon.ico');
     }
 
     return (

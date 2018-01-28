@@ -16,7 +16,8 @@ config = DotMap(
 version: '2'
 services:
   nginx:
-    image: nginx
+    build:
+      context: ./nginx
     command: ["bash", "/tmp/subst.sh"]
     volumes:
       - ./app:/app
@@ -34,8 +35,9 @@ services:
   spark:
     build:
       context: ./spark
-    ports: ['8080:8080', '7077']
+    ports: ['8080:8080', '8081:8081', '7077']
     environment: []
+    depends_on: [db]
     volumes:
       - ./app:/app
 

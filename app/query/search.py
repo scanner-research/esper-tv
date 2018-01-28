@@ -43,6 +43,7 @@ def search(params):
         video_ids = set()
         frame_ids = set()
         labeler_ids = set()
+        gender_ids = set()
         for group in result['result']:
             for obj in group['elements']:
                 video_ids.add(obj['video'])
@@ -51,14 +52,17 @@ def search(params):
                     frame_ids.add(obj['end_frame'])
 
                 for bbox in obj['objects']:
-                    labeler_ids.add(bbox['labeler'])
+                    labeler_ids.add(bbox['labeler_id'])
+                    if 'gender_id' in bbox:
+                        gender_ids.add(bbox['gender_id'])
 
         def to_dict(qs):
             return {t['id']: t for t in qs.values()}
 
         videos = to_dict(Video.objects.filter(id__in=video_ids))
         frames = to_dict(Frame.objects.filter(id__in=frame_ids))
-        labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
+        labelers = to_dict(Labeler.objects.all())
+        genders = to_dict(Gender.objects.all())
 
         return JsonResponse({
             'success': {
@@ -69,6 +73,7 @@ def search(params):
                 'videos': videos,
                 'frames': frames,
                 'labelers': labelers,
+                'genders': genders
             }
         })
     except Exception as e:

@@ -337,6 +337,10 @@ class ClipView extends React.Component {
             height={video.height}
             onClick={this.props.onBoxClick}
             expand={this.state.expand}
+            onChange={() => {}}
+            onTrack={() => {}}
+            onSetTrack={() => {}}
+            onDeleteTrack={() => {}}
             path={path} />
         </div>
         <table className='search-result-meta' style={{width: img_width}}>
@@ -456,10 +460,17 @@ class OptionsView extends React.Component {
 class MetadataView extends React.Component {
   render() {
     (window.search_result.result); // ensure that we re-render when search result changes
-    let keys = [
+    let view_keys = [
       ['f', 'expand thumbnail'],
       ['p', 'play clip'],
       ['l', 'play clip in loop']
+    ];
+    let label_keys = [
+      ['d', 'delete bounding box'],
+      ['g', 'cycle gender'],
+      ['t', 'start track'],
+      ['q', 'add to track'],
+      ['u', 'delete track']
     ];
     return <div className='metadata'>
       <h2>Metadata</h2>
@@ -467,19 +478,19 @@ class MetadataView extends React.Component {
         <div className='meta-key'>Type</div>
         <div className='meta-val'>{window.search_result.type}</div>
       </div>
-      <div className='meta-block colors'>
-        <div className='meta-key'>Labelers</div>
-        <div className='meta-val'>
+      {/* <div className='meta-block colors'>
+          <div className='meta-key'>Labelers</div>
+          <div className='meta-val'>
           {_.values(window.search_result.labelers).map((labeler, i) =>
-            <div key={i}>
-              {labeler.name}: &nbsp;
-              <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
-                           width: '10px', height: '10px', display: 'inline-box'}} />
-            </div>
+          <div key={i}>
+          {labeler.name}: &nbsp;
+          <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
+          width: '10px', height: '10px', display: 'inline-box'}} />
+          </div>
           )}
           <div className='clearfix' />
-        </div>
-      </div>
+          </div>
+          </div> */}
       <div className='meta-block'>
         <div className='meta-key'>Count</div>
         <div className='meta-val'>{window.search_result.count}</div>
@@ -487,8 +498,16 @@ class MetadataView extends React.Component {
       <h3>Help</h3>
       <div className='help'>
         On hover over a clip:
-        {keys.map((entry) =>
-          <div><code>{entry[0]}</code> - {entry[1]}</div>)}
+        <div>
+          <strong>Viewing</strong>
+          {view_keys.map((entry, i) =>
+            <div key={i}><code>{entry[0]}</code> - {entry[1]}</div>)}
+        </div>
+        <div>
+          <strong>Labeling</strong>
+          {label_keys.map((entry, i) =>
+            <div key={i}><code>{entry[0]}</code> - {entry[1]}</div>)}
+        </div>
       </div>
     </div>;
   }

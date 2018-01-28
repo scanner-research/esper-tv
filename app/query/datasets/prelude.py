@@ -31,6 +31,7 @@ import csv
 import requests
 import cv2
 import itertools
+import shutil
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -237,32 +238,37 @@ class Timer:
         log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self.s, t / 3600, t / 60, t % 60))
 
 
-PICKLE_CACHE_DIR = '/app/.cache'
-PICKLE_METHOD = 'marshal'
+CACHE_DIR = '/app/.cache'
+DEFAULT_CACHE_METHOD = 'marshal'
 NUM_CHUNKS = 8
 
 
-class PickleCache:
+class PyCache:
     def __init__(self):
-        if not os.path.isdir(PICKLE_CACHE_DIR):
-            os.mkdir(PICKLE_CACHE_DIR)
+        if not os.path.isdir(CACHE_DIR):
+            os.mkdir(CACHE_DIR)
 
     def _fname(self, k, i, method):
-        ext = 'msl' if method == 'marshal' else 'pkl'
-        return '{}/{}_{}.{}'.format(PICKLE_CACHE_DIR, k, i, ext)
+        exts = {'pickle': 'pkl', 'marshal': 'msl', 'numpy': 'bin'}
+        return '{}/{}_{}.{}'.format(CACHE_DIR, k, i, exts[method])
 
-    def has(self, k, i=0, method=PICKLE_METHOD):
+    def has(self, k, i=0, method=DEFAULT_CACHE_METHOD):
         return os.path.isfile(self._fname(k, i, method))
 
-    def set(self, k, v, method=PICKLE_METHOD):
+    def set(self, k, v, method=DEFAULT_CACHE_METHOD):
         def save_chunk((i, v)):
             with open(self._fname(k, i, method), 'wb') as f:
                 if method == 'marshal':
                     marshal.dump(v, f)
-                else:
+                elif method == 'numpy':
+                    for arr in v:
+                        f.write(arr.tobytes())
+                elif method == 'pickle':
                     pickler = pickle.Pickler(f, pickle.HIGHEST_PROTOCOL)
                     pickler.fast = 1  # https://stackoverflow.com/a/15108940/356915
                     pickler.dump(v)
+                else:
+                    raise Exception("Invalid cache method {}".format(method))
 
         with Timer('Saving to cache: {}'.format(k)):
             gc.disable()  # https://stackoverflow.com/a/36699998/356915
@@ -278,35 +284,56 @@ class PickleCache:
                 save_chunk((0, v))
             gc.enable()
 
-    def get(self, k, fn=None, force=False, method=PICKLE_METHOD):
-        if not self.has(k, 0, method) or force:
+    def get(self, k, fn=None, force=False, method=DEFAULT_CACHE_METHOD, **kwargs):
+        if not (all([self.has(k2, 0, m2) for k2, m2 in zip(k, method)])
+                if isinstance(k, tuple) else self.has(k, 0, method)) or force:
             if fn is not None:
                 v = fn()
-                self.set(k, v, method)
+                if isinstance(k, tuple):
+                    for (k2, v2, m2) in zip(k, v, method):
+                        self.set(k2, v2, m2)
+                else:
+                    self.set(k, v, method)
                 return v
             else:
                 raise Exception('Missing cache key {}'.format(k))
 
-        def load_chunk(i):
-            with open(self._fname(k, i, method), 'rb') as f:
-                if method == 'marshal':
-                    return marshal.load(f)
+        if isinstance(k, tuple):
+            return tuple([self.get(k2, method=m2, **kwargs) for k2, m2 in zip(k, method)])
+
+        else:
+
+            def load_chunk(i):
+                with open(self._fname(k, i, method), 'rb') as f:
+                    if method == 'marshal':
+                        return marshal.load(f)
+                    elif method == 'numpy':
+                        dtype = kwargs['dtype']
+                        size = np.dtype(dtype).itemsize * kwargs['length']
+                        byte_str = f.read()
+                        assert len(byte_str) % size == 0
+                        return [
+                            np.frombuffer(byte_str[i:i + size], dtype=dtype)
+                            for i in range(0, len(byte_str), size)
+                        ]
+                    elif method == 'pickle':
+                        return pickle.load(f)
+                    else:
+                        raise Exception("Invalid cache method {}".format(method))
+
+            with Timer('Loading from cache: {}'.format(k)):
+                gc.disable()
+                if self.has(k, 1, method):
+                    loaded = flatten(
+                        par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False))
                 else:
-                    return pickle.load(f)
+                    loaded = load_chunk(0)
+                gc.enable()
 
-        with Timer('Loading from cache: {}'.format(k)):
-            gc.disable()
-            if self.has(k, 1, method):
-                loaded = flatten(
-                    par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False))
-            else:
-                loaded = load_chunk(0)
-            gc.enable()
-
-        return loaded
+            return loaded
 
 
-pcache = PickleCache()
+pcache = PyCache()
 
 
 class QuerySetMixin:
@@ -337,7 +364,7 @@ class QuerySetMixin:
 QuerySet.__bases__ += (QuerySetMixin, )
 
 
-def bulk_create_copy(self, objects):
+def bulk_create_copy(self, objects, table=None):
     meta = self.model._meta
     keys = [
         f.attname for f in meta._get_fields(reverse=False)
@@ -351,16 +378,17 @@ def bulk_create_copy(self, objects):
         max_id = self.all().aggregate(Max('id'))['id__max']
         id = max_id + 1 if max_id is not None else 0
         for obj in tqdm(objects):
-            obj['id'] = id
+            if table is None:
+                obj['id'] = id
+                id += 1
             writer.writerow([obj[k] for k in keys])
-            id += 1
 
-    table = meta.db_table
     log.debug('Writing to database')
     with connection.cursor() as cursor:
         cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
-            table, ', '.join(keys), fname))
-        cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
+            table or meta.db_table, ', '.join(keys), fname))
+        if table is None:
+            cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
 
     os.remove(fname)
     log.debug('Done!')
@@ -508,9 +536,11 @@ class SparkWrapper:
     def __init__(self):
         self.spark = SparkSession.builder \
             .master("spark://spark:7077") \
-            .config("spark.driver.memory", "128g") \
-            .config("spark.worker.memory", "128g") \
-            .config("spark.executor.memory", "128g") \
+            .config("spark.driver.memory", "256g") \
+            .config("spark.worker.memory", "256g") \
+            .config("spark.executor.memory", "256g") \
+            .config("spark.rpc.message.maxSize", "2047") \
+            .config("spark.driver.maxResultSize", "256g") \
             .getOrCreate()
         self.sc = self.spark.sparkContext
 
@@ -522,7 +552,22 @@ class SparkWrapper:
 
     # dictionaries to dataframe
     def dicts_to_df(self, ds):
-        return self.spark.createDataFrame(self.sc.parallelize(data).map(lambda d: Row(**d)))
+        return self.spark.createDataFrame(self.sc.parallelize(ds, 96).map(lambda d: Row(**d)))
+
+    def append_column(self, df, name, col):
+        csv_path = '/app/tmp.csv'
+        with open(csv_path, 'wb') as f:
+            writer = csv.writer(f, delimiter=',')
+            writer.writerow(['id', name])
+            for id, x in col:
+                writer.writerow([id, str(x).lower()])
+        col_df = self.spark.read.format("csv").option("header", "true").option(
+            "inferSchema", "true").load(csv_path)
+        os.remove(csv_path)
+
+        # wcrichto 1-26-18: withColumn appears to fail in practice with inscrutable errors, so
+        # we have to use a join instead.
+        return df.join(col_df, df.id == col_df.id).drop(col_df.id)
 
     def load(self, key, fn, force=False):
         key = '{}/{}'.format(SPARK_DATA_PREFIX, key)
@@ -531,8 +576,10 @@ class SparkWrapper:
             log.debug('Not cached, loading spark key {}'.format(key))
             if force and has_dir:
                 shutil.rmtree(key)
-            df = fn()
-            df.write.save(key)
+            with Timer('Computing data'):
+                df = fn()
+            with Timer('Writing data'):
+                df.write.save(key)
             return df
         else:
             with Timer('Reading data'):

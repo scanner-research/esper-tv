@@ -14,7 +14,7 @@
   "homepage": "https://github.com/scanner-research/esper#readme",
   "scripts": {
     "build": "webpack -p",
-    "watch": "webpack -p -w"
+    "watch": "webpack -w"
   },
   "devDependencies": {
     "axios": "^0.16.1",

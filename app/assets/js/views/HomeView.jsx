@@ -39,6 +39,8 @@ export default class Home extends React.Component {
     window.search_result.dataset = results.dataset;
     window.search_result.count = results.count;
     window.search_result.type = results.type;
+    window.search_result.genders = results.genders;
+    console.log(results.genders);
 
     // We have to set clips last, because when we set it that triggers a re-render.
     // If we don't set it last, then the views will see inconsistent state in the search results.

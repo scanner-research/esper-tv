@@ -126,6 +126,18 @@
                 &:hover {
                     border-width: 3px;
                 }
+
+                &.gender-M {
+                    border-color: #50c9f8;
+                }
+
+                &.gender-F {
+                    border-color: #ff6d86;
+                }
+
+                &.gender-U {
+                    border-color: #c0ff00;
+                }
             }
         }
 

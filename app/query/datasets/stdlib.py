@@ -15,6 +15,13 @@ import query.base_models as base_models
 from query.datasets.prelude import *
 
 
+def access(obj, path):
+    fields = path.split('__')
+    for f in fields:
+        obj = getattr(obj, f)
+    return obj
+
+
 def fprint(*args):
     print(*args)
     sys.stdout.flush()
@@ -39,8 +46,14 @@ def bbox_to_dict(f):
         'bbox_y1': f.bbox_y1,
         'bbox_y2': f.bbox_y2,
         'bbox_score': f.bbox_score,
-        'labeler': f.labeler.id
+        'labeler_id': f.labeler.id,
     }
+
+
+def gender_to_dict(f):
+    d = bbox_to_dict(f.face)
+    d['gender_id'] = f.gender.id
+    return d
 
 
 def pose_to_dict(f):
@@ -102,7 +115,7 @@ def filter_poses(ty, fn, used_kps, poses=None):
 
 
 # TODO(wcrichto): allow pagination to make repeated requests to backend
-LIMIT = 500
+LIMIT = 10
 STRIDE = 1
 
 
@@ -140,32 +153,48 @@ def qs_to_result(result,
             })
 
     elif bases[0] is base_models.Attribute:
+
+        if cls is FaceGender:
+            frame_path = 'face__person__frame'
+            result = result.select_related('face', 'gender')
+        else:
+            frame_path = 'person__frame'
+        result = result.select_related(frame_path)
+
         if not shuffle and not custom_order:
-            result = result.order_by('person__frame__video', 'person__frame__number')
+            result = result.order_by(frame_path + '__video', frame_path + '__number')
 
         if cls is Face:
             fn = bbox_to_dict
+        elif cls is FaceGender:
+            fn = gender_to_dict
         elif cls is Pose:
             fn = pose_to_dict
 
         if frame_major:
             frames = set()
-            for inst in result.values('person__frame__video',
-                                      'person__frame__number')[:LIMIT * stride:stride]:
-                frames.add((inst['person__frame__video'], inst['person__frame__number']))
+            frame_ids = set()
+            for inst in result.values(frame_path + '__video', frame_path + '__number',
+                                      frame_path + '__id')[:LIMIT * stride:stride]:
+                frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
+                            inst[frame_path + '__id']))
+                frame_ids.add(inst[frame_path + '__id'])
+
+            all_results = collect(
+                result.filter(**{
+                    frame_path + '__in': list(frame_ids)
+                }), lambda t: access(t, frame_path + '__id'))
             frames = list(frames)
             frames.sort(key=itemgetter(0, 1))
-            for (video, frame) in frames:
+            for (video, frame_num, frame_id) in frames:
                 materialized_result.append({
-                    'video':
-                    video,
-                    'start_frame':
-                    frame,
-                    'objects': [fn(inst) for inst in result.filter(person__frame=frame)]
+                    'video': video,
+                    'start_frame': frame_num,
+                    'objects': [fn(inst) for inst in all_results[frame_id]]
                 })
 
         else:
-            for inst in result.select_related('person__frame')[:LIMIT * stride:stride]:
+            for inst in result[:LIMIT * stride:stride]:
                 r = {
                     'video': inst.person.frame.video.id,
                     'start_frame': inst.person.frame.number,

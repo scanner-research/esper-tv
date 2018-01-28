@@ -1,7 +1,6 @@
 import React from 'react';
 import {observer} from 'mobx-react';
 import {observable, autorun} from 'mobx';
-import {Face} from 'models/mod.jsx';
 
 export let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
@@ -58,10 +57,10 @@ class BoxView extends React.Component {
     let {width, height} = this.props;
     let offsetX = this.state.mouseX - this.state.clickX;
     let offsetY = this.state.mouseY - this.state.clickY;
-    box.x1 += offsetX / width;
-    box.x2 += offsetX / width;
-    box.y1 += offsetY / height;
-    box.y2 += offsetY / height;
+    box.bbox_x1 += offsetX / width;
+    box.bbox_x2 += offsetX / width;
+    box.bbox_y1 += offsetY / height;
+    box.bbox_y2 += offsetY / height;
     this.setState({clicked: false});
     e.stopPropagation();
   }
@@ -78,12 +77,12 @@ class BoxView extends React.Component {
     let chr = String.fromCharCode(e.which);
     let box = this.props.box;
     let {width, height} = this.props;
-    if (chr == ' ') {
-      let cls = 'F';
-      if (box.cls == 'F') {
-        cls = 'M';
-      }
-      box.cls = cls;
+    if (chr == 'g') {
+      let keys = _.sortBy(_.map(_.keys(window.search_result.genders), (x) => parseInt(x)));
+      console.log(box.gender_id, keys, _.indexOf(keys, box.gender_id));
+      box.gender_id = keys[(_.indexOf(keys, box.gender_id) + 1) % keys.length];
+      console.log(box.gender_id);
+
       this.props.onChange(this.props.i);
 
       e.preventDefault();
@@ -121,7 +120,7 @@ class BoxView extends React.Component {
       top: box.bbox_y1 * this.props.height + offsetY,
       width: (box.bbox_x2-box.bbox_x1) * this.props.width,
       height: (box.bbox_y2-box.bbox_y1) * this.props.height,
-      borderColor: window.search_result.labeler_colors[box.labeler],
+      borderColor: window.search_result.labeler_colors[box.labeler_id],
       opacity: DISPLAY_OPTIONS.annotation_opacity
     };
 
@@ -129,7 +128,7 @@ class BoxView extends React.Component {
                 onMouseOut={this._onMouseOut}
                 onMouseUp={this._onMouseUp}
                 onMouseDown={this._onMouseDown}
-                className={`bounding-box gender-${box.cls}`}
+                className={`bounding-box gender-${window.search_result.genders[box.gender_id].name}`}
                 style={style}
                 ref={(n) => {this._div = n}} />;
   }
@@ -377,17 +376,16 @@ export class FrameView extends React.Component {
 
   _makeBox() {
     let {width, height} = this._getDimensions();
-    return new Face({
-      bbox: {
-        x1: this.state.startX/width,
-        y1: this.state.startY/height,
-        x2: this.state.curX/width,
-        y2: this.state.curY/height,
-        labeler: 'handlabeled'
-      },
-      track: null,
-      gender: '0'
-    });
+    return {
+      bbox_x1: this.state.startX/width,
+      bbox_y1: this.state.startY/height,
+      bbox_x2: this.state.curX/width,
+      bbox_y2: this.state.curY/height,
+      labeler_id: _.find(window.search_result.labelers, (l) => l.name == 'handlabeled-face').id,
+      gender_id: _.find(window.search_result.genders, (l) => l.name == 'M').id,
+      type: 'bbox',
+      id: -1
+    }
   }
 
   componentWillReceiveProps(props) {
@@ -407,8 +405,8 @@ export class FrameView extends React.Component {
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'
-        /*onMouseDown={this._onMouseDown}
-           onMouseUp={this._onMouseUp}*/
+           onMouseDown={this._onMouseDown}
+           onMouseUp={this._onMouseUp}
            onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
