@@ -1,5 +1,7 @@
 # Esper [![Build Status](https://travis-ci.org/scanner-research/esper.svg?branch=master)](https://travis-ci.org/scanner-research/esper)
 
+**WARNING**: Esper is not in a working state right now for anyone but the maintainers of the repository. Do not attempt to use it until further notice.
+
 Esper is a framework for exploratory analysis of large video collections. Esper takes as input set of videos and a database of metadata about the videos (e.g. bounding boxes, poses, tracks). Esper provides a web UI (shown below) and a programmatic interface ([Jupyter](http://jupyter.org/) notebook) for visualizing and analyzing this metadata. Computer vision researchers may find Esper a useful tool for understanding and debugging the accuracy of their trained models.
 
 * [Setup](https://github.com/scanner-research/esper#setup)
@@ -12,7 +14,8 @@ Esper is a framework for exploratory analysis of large video collections. Esper 
 ## Setup
 First, install [Docker CE](https://docs.docker.com/engine/installation/#supported-platforms), [Python 2.7](https://www.python.org/downloads/), and [pip](https://pip.pypa.io/en/stable/installing/). Ensure that you have Docker version >= 17.12, which you can check by running:
 ```
-docker --version
+$ docker --version
+Docker version 17.12.0-ce, build c97c6d6
 ```
 
 ~~If you have a GPU and are running on Linux, then [install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start) For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.~~ Nvidia changed `nvidia-docker`, incoming fix is WIP.
@@ -20,14 +23,13 @@ docker --version
 Next, you will need to configure your Esper installation. If you are using Google Cloud, follow the instructions in [Getting started with Google Cloud](https://github.com/scanner-research/esper/blob/master/guides/google.md) and replace `local.toml` with `google.toml` below. Otherwise, edit any relevant configuration values in `config/local.toml`. Then run:
 
 ```
-git clone https://github.com/scanner-research/esper
-cd esper
-echo -e '\nalias dc=docker-compose' >> $HOME/.profile && source $HOME/.profile
-pip install -r requirements.txt
-python configure.py --config config/local.toml --dataset default
-dc pull
-dc up -d
-dc exec app ./scripts/setup.sh
+$ git clone https://github.com/scanner-research/esper
+$ cd esper
+$ pip install -r requirements.txt
+$ python configure.py --config config/local.toml --dataset default
+$ docker-compose pull
+$ docker-compose up -d
+$ docker-compose exec app ./scripts/setup.sh
 ```
 
 You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend. You will see a query interface, but we can't do anything with it until we get some data. Go through the [Demo](https://github.com/scanner-research/esper#demo) below to visualize some sample videos and metadata we have provided.
@@ -47,11 +49,11 @@ You have successfully setup Esper! Visit [http://localhost](http://localhost) (o
 
 We have premade a sample database of frames and annotations (faces and poses) for [this video](https://www.youtube.com/watch?v=dQw4w9WgXcQ). This demo will have you load this database into your local copy of Esper and run a few example queries against it.
 
-First, enter the Esper application container with `dc exec app bash`. Then run:
+First, enter the Esper application container with `docker-compose exec app bash`. Then run:
 ```
-wget https://storage.googleapis.com/esper/example-dataset.tar.gz
-tar -xf example-dataset.tar.gz
-esper-run query/datasets/default/import.py
+$ wget https://storage.googleapis.com/esper/example-dataset.tar.gz
+$ tar -xf example-dataset.tar.gz
+$ esper-run query/datasets/default/import.py
 ```
 
 Then visit [http://localhost](http://localhost) to see the web UI. A query has been pre-filled in the search box at the top--click "Search" to see the results, in this case to show all the detected faces in the video. Click "Show example queries" to see and run more examples.
