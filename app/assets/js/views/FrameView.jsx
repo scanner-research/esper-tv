@@ -33,10 +33,10 @@ class BoxView extends React.Component {
   _onMouseDown = (e) => {
     this.setState({
       clicked: true,
-      clickX: e.pageX,
-      clickY: e.pageY,
-      mouseX: e.pageX,
-      mouseY: e.pageY
+      clickX: e.clientX,
+      clickY: e.clientY,
+      mouseX: e.clientX,
+      mouseY: e.clientY
     });
     if (this.props.onClick) {
       this.props.onClick(this.props.box);
@@ -47,8 +47,8 @@ class BoxView extends React.Component {
   _onMouseMove = (e) => {
     if (!this.state.clicked) { return; }
     this.setState({
-      mouseX: e.pageX,
-      mouseY: e.pageY
+      mouseX: e.clientX,
+      mouseY: e.clientY
     });
   }
 
@@ -79,12 +79,8 @@ class BoxView extends React.Component {
     let {width, height} = this.props;
     if (chr == 'g') {
       let keys = _.sortBy(_.map(_.keys(window.search_result.genders), (x) => parseInt(x)));
-      console.log(box.gender_id, keys, _.indexOf(keys, box.gender_id));
       box.gender_id = keys[(_.indexOf(keys, box.gender_id) + 1) % keys.length];
-      console.log(box.gender_id);
-
       this.props.onChange(this.props.i);
-
       e.preventDefault();
     } else if (chr == 'd') {
       this.props.onDelete(this.props.i);
@@ -316,15 +312,15 @@ export class FrameView extends React.Component {
   _onMouseDown = (e) => {
     let rect = boundingRect(this._div);
     this.setState({
-      startX: e.pageX - rect.left,
-      startY: e.pageY - rect.top
+      startX: e.clientX - rect.left,
+      startY: e.clientY - rect.top
     });
   }
 
   _onMouseMove = (e) => {
     let rect = boundingRect(this._div);
-    let curX = e.pageX - rect.left;
-    let curY = e.pageY - rect.top;
+    let curX = e.clientX - rect.left;
+    let curY = e.clientY - rect.top;
     if (0 <= curX && curX <= rect.width &&
         0 <= curY && curY <= rect.height) {
       this.setState({curX: curX, curY: curY});

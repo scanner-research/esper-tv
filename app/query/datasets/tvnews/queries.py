@@ -2,6 +2,14 @@ from query.datasets.prelude import *
 from query.datasets.queries import *
 
 
+@query("Non-handlabeled random faces/genders")
+def not_handlabeled():
+    return qs_to_result(
+        FaceGender.objects.exclude(face__person__frame__tags__name='handlabeled-face:labeled'),
+        frame_major=True,
+        shuffle=True)
+
+
 @query("Commercials")
 def commercials():
     return qs_to_result(Commercial.objects.filter(labeler__name='haotian-commercials'))

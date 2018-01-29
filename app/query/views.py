@@ -193,3 +193,51 @@ def subtitles(request):
     vtt = srt_to_vtt(s)
 
     return HttpResponse(vtt, content_type="text/vtt")
+
+
+# Register frames as labeled
+def labeled(request):
+    params = json.loads(request.body)
+    m = ModelDelegator(params['dataset'])
+
+    face_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-face')
+    gender_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-gender')
+    labeled_tag, _ = m.Tag.objects.get_or_create(name='handlabeled-face:labeled')
+
+    all_tags = []
+    all_people = []
+    all_faces = []
+    all_genders = []
+    for (vid, frame_num, faces) in params['frames']:
+        frame = m.Frame.objects.get(video_id=vid, number=frame_num)
+        all_tags.append(
+            m.Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=labeled_tag.id))
+        for face in faces:
+            all_people.append(m.Person(frame=frame))
+
+            face_params = {
+                'bbox_score': 1.0,
+                'labeler': face_labeler,
+                'person_id': None,
+                'shot_id': None,
+            }
+            for k in ['bbox_x1', 'bbox_x2', 'bbox_y1', 'bbox_y2']:
+                face_params[k] = face[k]
+            all_faces.append(m.Face(**face_params))
+
+            all_genders.append(
+                m.FaceGender(face_id=None, gender_id=face['gender_id'], labeler=gender_labeler))
+
+    m.Frame.tags.through.objects.bulk_create(all_tags)
+
+    m.Person.objects.bulk_create(all_people)
+
+    for (p, f) in zip(all_people, all_faces):
+        f.person_id = p.id
+    m.Face.objects.bulk_create(all_faces)
+
+    for (f, g) in zip(all_faces, all_genders):
+        g.face_id = f.id
+    m.FaceGender.objects.bulk_create(all_genders)
+
+    return JsonResponse({'success': True})

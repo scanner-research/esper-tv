@@ -3,6 +3,7 @@ import * as Rb from 'react-bootstrap';
 import {observer} from 'mobx-react';
 import {observable} from 'mobx';
 import {Box, FrameView} from './FrameView.jsx';
+import axios from 'axios';
 
 class DisplayOptions {
   @observable results_per_page = 50;
@@ -45,36 +46,28 @@ class GroupsView extends React.Component {
 
   _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
-    let positive_ex = this.state.positive_ex;
-    let negative_ex = this.state.negative_ex;
-    if (chr == '1'){
-      for(let i = this.state.selected_start; i < this.state.selected_end; i++){
-        if (i < 0) continue;
-        if (negative_ex.has(i)){
-          negative_ex.delete(i);
-        }
-        positive_ex.add(i);
+    if (chr == 'a') {
+      if (this.state.selected_start == -1 || this.state.selected_end == -1) {
+        return;
       }
-      this.setState({positive_ex:positive_ex, negative_ex:negative_ex, selected_start:-1, selected_end:-1});
-    } else if (chr == '2'){
-      for (let i = this.state.selected_start; i <= this.state.selected_end; i++){
-        if (i < 0) continue;
-        if (positive_ex.has(i)){
-          positive_ex.delete(i);
+
+      let green = this.state.positive_ex;
+
+      let labeled = [];
+      for (let i = this.state.selected_start; i <= this.state.selected_end; i++) {
+        let frame = window.search_result.result[i].elements[0];
+        labeled.push([frame.video, frame.start_frame, frame.objects]);
+        if (!green.has(i)) {
+          green.add(i);
         }
-        negative_ex.add(i);
       }
-      this.setState({positive_ex:positive_ex, negative_ex:negative_ex, selected_start:-1, selected_end:-1});
-    } else if (chr == 'c') {
-      this.setState({
-        selected_start: -1,
-        selected_end: -1
-      });
-    }else if (chr == 'p'){
-      let pos = [];
-      let neg = [];
-      for (let x of positive_ex) pos.push(window.search_result.result[x].elements[0].objects[0].id);
-      for (let x of negative_ex) neg.push(window.search_result.result[x].elements[0].objects[0].id);
+
+      axios
+        .post('/api/labeled', {dataset: DATASET, frames: labeled})
+        .then(((response) => {
+          console.log('Done!');
+          this.setState({positive_ex: green});
+        }).bind(this));
     }
   }
 
@@ -341,6 +334,7 @@ class ClipView extends React.Component {
             onTrack={() => {}}
             onSetTrack={() => {}}
             onDeleteTrack={() => {}}
+            onSelect={() => {}}
             path={path} />
         </div>
         <table className='search-result-meta' style={{width: img_width}}>
@@ -468,9 +462,11 @@ class MetadataView extends React.Component {
     let label_keys = [
       ['d', 'delete bounding box'],
       ['g', 'cycle gender'],
-      ['t', 'start track'],
-      ['q', 'add to track'],
-      ['u', 'delete track']
+      ['s', 'select frames'],
+      ['a', 'mark as labeled']
+      /* ['t', 'start track'],
+       * ['q', 'add to track'],
+       * ['u', 'delete track']*/
     ];
     return <div className='metadata'>
       <h2>Metadata</h2>
