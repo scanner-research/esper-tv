@@ -115,7 +115,7 @@ def filter_poses(ty, fn, used_kps, poses=None):
 
 
 # TODO(wcrichto): allow pagination to make repeated requests to backend
-LIMIT = 10
+LIMIT = 100
 STRIDE = 1
 
 
@@ -131,7 +131,8 @@ def qs_to_result(result,
     except IndexError:
         return {'result': [], 'count': 0, 'type': ''}
 
-    count = result.count()
+    #count = result.count()
+    count = 0
 
     if shuffle:
         result = result.order_by('?')

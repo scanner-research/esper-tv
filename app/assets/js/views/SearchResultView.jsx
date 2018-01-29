@@ -62,11 +62,16 @@ class GroupsView extends React.Component {
         }
       }
 
+
       axios
         .post('/api/labeled', {dataset: DATASET, frames: labeled})
         .then(((response) => {
           console.log('Done!');
-          this.setState({positive_ex: green});
+          this.setState({
+            positive_ex: green,
+            selected_start: -1,
+            selected_end: -1
+          });
         }).bind(this));
     }
   }

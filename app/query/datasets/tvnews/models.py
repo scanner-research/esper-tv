@@ -16,6 +16,7 @@ class Video(base.Video):
     channel = base.ForeignKey(Channel)
     show = base.ForeignKey(Show)
     time = models.DateTimeField()
+    commercials_labeled = models.BooleanField(default=False)
 
     def get_stride(self):
         return int(math.ceil(self.fps) / 2)

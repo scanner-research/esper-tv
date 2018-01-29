@@ -120,11 +120,16 @@ class BoxView extends React.Component {
       opacity: DISPLAY_OPTIONS.annotation_opacity
     };
 
+    let gender_cls =
+      box.gender_id
+      ? `gender-${window.search_result.genders[box.gender_id].name}`
+      : '';
+
     return <div onMouseOver={this._onMouseOver}
                 onMouseOut={this._onMouseOut}
                 onMouseUp={this._onMouseUp}
                 onMouseDown={this._onMouseDown}
-                className={`bounding-box gender-${window.search_result.genders[box.gender_id].name}`}
+                className={`bounding-box ${gender_cls}`}
                 style={style}
                 ref={(n) => {this._div = n}} />;
   }

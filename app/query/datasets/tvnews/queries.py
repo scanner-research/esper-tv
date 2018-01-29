@@ -5,7 +5,11 @@ from query.datasets.queries import *
 @query("Non-handlabeled random faces/genders")
 def not_handlabeled():
     return qs_to_result(
-        FaceGender.objects.exclude(face__person__frame__tags__name='handlabeled-face:labeled'),
+        FaceGender.objects.exclude(
+            Q(face__person__frame__tags__name='handlabeled-face:labeled')
+            | Q(face__shot__in_commercial=True)
+            | Q(face__shot__video__commercials_labeled=False)
+            | Q(face__shot__isnull=True)),
         frame_major=True,
         shuffle=True)
 
