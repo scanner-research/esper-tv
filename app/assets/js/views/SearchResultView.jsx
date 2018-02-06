@@ -1,22 +1,29 @@
 import React from 'react';
 import * as Rb from 'react-bootstrap';
 import {observer} from 'mobx-react';
-import {observable} from 'mobx';
+import {observable, autorun, toJS} from 'mobx';
 import {Box, FrameView} from './FrameView.jsx';
 import axios from 'axios';
 
-class DisplayOptions {
-  @observable results_per_page = 50;
-  @observable annotation_opacity = 1.0;
-  @observable show_pose = true;
-  @observable show_face = true;
-  @observable show_hands = true;
-  @observable show_lr = false;
-  @observable crop_bboxes = false;
-  @observable playback_speed = 1.0;
-}
+let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.stringify({
+  results_per_page: 50,
+  annotation_opacity: 1.0,
+  show_pose: true,
+  show_face: true,
+  show_hands: true,
+  show_lr: false,
+  crop_bboxes: false,
+  playback_speed: 1.0,
+  show_middle_frame: true,
+  show_gender_as_border: true,
+}));
 
-window.DISPLAY_OPTIONS = new DisplayOptions;
+window.DISPLAY_OPTIONS = observable.map(displayOptions);
+window.IGNORE_KEYPRESS = false;
+
+autorun(() => {
+  localStorage.displayOptions = JSON.stringify(toJS(window.DISPLAY_OPTIONS));
+});
 
 @observer
 class GroupsView extends React.Component {
@@ -89,7 +96,7 @@ class GroupsView extends React.Component {
   }
 
   _numPages = () => {
-    return Math.floor((window.search_result.result.length - 1)/ DISPLAY_OPTIONS.results_per_page);
+    return Math.floor((window.search_result.result.length - 1)/ DISPLAY_OPTIONS.get('results_per_page'));
   }
 
   _prevPage = (e) => {
@@ -106,8 +113,8 @@ class GroupsView extends React.Component {
     return (
       <div className='groups'>
         <div>
-          {_.range(DISPLAY_OPTIONS.results_per_page * this.state.page,
-                   Math.min(DISPLAY_OPTIONS.results_per_page * (this.state.page + 1),
+          {_.range(DISPLAY_OPTIONS.get('results_per_page') * this.state.page,
+                   Math.min(DISPLAY_OPTIONS.get('results_per_page') * (this.state.page + 1),
                             window.search_result.result.length))
             .map((i) => <GroupView key={i} group={window.search_result.result[i]} group_id={i} onSelect={this._onSelect} colorClass={this.getColorClass(i)}/>)}
           <div className='clearfix' />
@@ -177,6 +184,10 @@ class ClipView extends React.Component {
   }
 
   _onKeyPress = (e) => {
+    if (IGNORE_KEYPRESS) {
+      return;
+    }
+
     let chr = String.fromCharCode(e.which);
     if (chr == 'p') {
       this.setState({
@@ -281,7 +292,11 @@ class ClipView extends React.Component {
     let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let video = this._videoMeta();
 
-    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${clip.start_frame}`;
+    let display_frame =
+      DISPLAY_OPTIONS.get('show_middle_frame') && clip.end_frame
+      ? Math.round((clip.end_frame + clip.start_frame) / 2)
+      : clip.start_frame;
+    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
 
     let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
     let meta = [];
@@ -307,7 +322,7 @@ class ClipView extends React.Component {
     let td_style = {width: `${100 / meta_per_row}%`};
 
     if (this._video) {
-      this._video.playbackRate = DISPLAY_OPTIONS.playback_speed;
+      this._video.playbackRate = DISPLAY_OPTIONS.get('playback_speed');
     }
 
     return (
@@ -335,7 +350,8 @@ class ClipView extends React.Component {
             height={video.height}
             onClick={this.props.onBoxClick}
             expand={this.state.expand}
-            onChange={() => {}}
+            onChangeGender={() => {}}
+            onChangeLabel={() => {}}
             onTrack={() => {}}
             onSetTrack={() => {}}
             onDeleteTrack={() => {}}
@@ -415,6 +431,11 @@ class OptionsView extends React.Component {
       name: 'Crop bboxes',
       key: 'crop_bboxes',
       type: 'radio'
+    },
+    {
+      name: 'Show gender as border',
+      key: 'show_gender_as_border',
+      type: 'radio'
     }
   ]
 
@@ -429,20 +450,20 @@ class OptionsView extends React.Component {
                 range: () => (
                   <span>
                     <input type="range" min={field.opts.min} max={field.opts.max}
-                           step={field.opts.step} defaultValue={DISPLAY_OPTIONS[field.key]}
-                           onChange={(e) => {DISPLAY_OPTIONS[field.key] = e.target.value}} />
+                           step={field.opts.step} defaultValue={DISPLAY_OPTIONS.get(field.key)}
+                           onChange={(e) => {DISPLAY_OPTIONS.set(field.key, e.target.value)}} />
                     {DISPLAY_OPTIONS[field.key]}
                   </span>),
                 number: () => (
                   <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
-                         defaultValue={DISPLAY_OPTIONS[field.key]}
+                         defaultValue={DISPLAY_OPTIONS.get(field.key)}
                          onKeyPress={(e) => {if (e.key === 'Enter') {
-                             DISPLAY_OPTIONS[field.key] = e.target.value; e.preventDefault();
+                             DISPLAY_OPTIONS.set(field.key, e.target.value); e.preventDefault();
                            }}} />),
                 radio: () => (
                   <Rb.ButtonToolbar>
-                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={DISPLAY_OPTIONS[field.key]}
-                                          onChange={(e) => {DISPLAY_OPTIONS[field.key] = e}}>
+                    <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={DISPLAY_OPTIONS.get(field.key)}
+                                          onChange={(e) => {DISPLAY_OPTIONS.set(field.key, e)}}>
                       <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
                       <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
                     </Rb.ToggleButtonGroup>
@@ -479,19 +500,19 @@ class MetadataView extends React.Component {
         <div className='meta-key'>Type</div>
         <div className='meta-val'>{window.search_result.type}</div>
       </div>
-      {/* <div className='meta-block colors'>
-          <div className='meta-key'>Labelers</div>
-          <div className='meta-val'>
+      <div className='meta-block colors'>
+        <div className='meta-key'>Labelers</div>
+        <div className='meta-val'>
           {_.values(window.search_result.labelers).map((labeler, i) =>
-          <div key={i}>
-          {labeler.name}: &nbsp;
-          <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
-          width: '10px', height: '10px', display: 'inline-box'}} />
-          </div>
+            <div key={i}>
+              {labeler.name}: &nbsp;
+              <div style={{backgroundColor: window.search_result.labeler_colors[labeler.id],
+                           width: '10px', height: '10px', display: 'inline-box'}} />
+            </div>
           )}
           <div className='clearfix' />
-          </div>
-          </div> */}
+        </div>
+      </div>
       <div className='meta-block'>
         <div className='meta-key'>Count</div>
         <div className='meta-val'>{window.search_result.count}</div>

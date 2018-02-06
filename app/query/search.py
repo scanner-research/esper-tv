@@ -27,6 +27,7 @@ def search(params):
     load_stdlib_models(params['dataset'])
 
     try:
+        fprint('Executing')
         ############### vvv DANGER -- REMOTE CODE EXECUTION vvv ###############
         exec (params['code']) in globals(), locals()
         result = FN()
@@ -42,7 +43,7 @@ def search(params):
 
         video_ids = set()
         frame_ids = set()
-        labeler_ids = set()
+        labeler_ids = set([Labeler.objects.get(name='handlabeled-face').id])
         gender_ids = set()
         for group in result['result']:
             for obj in group['elements']:
@@ -61,7 +62,7 @@ def search(params):
 
         videos = to_dict(Video.objects.filter(id__in=video_ids))
         frames = to_dict(Frame.objects.filter(id__in=frame_ids))
-        labelers = to_dict(Labeler.objects.all())
+        labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
         genders = to_dict(Gender.objects.all())
 
         return JsonResponse({

@@ -530,17 +530,18 @@ class Break(Exception):
 
 
 SPARK_DATA_PREFIX = '/app/spark-data'
+SPARK_MEMORY = '80g'  #'256g'
 
 
 class SparkWrapper:
     def __init__(self):
         self.spark = SparkSession.builder \
             .master("spark://spark:7077") \
-            .config("spark.driver.memory", "256g") \
-            .config("spark.worker.memory", "256g") \
-            .config("spark.executor.memory", "256g") \
+            .config("spark.driver.memory", SPARK_MEMORY) \
+            .config("spark.worker.memory", SPARK_MEMORY) \
+            .config("spark.executor.memory", SPARK_MEMORY) \
+            .config("spark.driver.maxResultSize", SPARK_MEMORY) \
             .config("spark.rpc.message.maxSize", "2047") \
-            .config("spark.driver.maxResultSize", "256g") \
             .getOrCreate()
         self.sc = self.spark.sparkContext
 
@@ -568,6 +569,9 @@ class SparkWrapper:
         # wcrichto 1-26-18: withColumn appears to fail in practice with inscrutable errors, so
         # we have to use a join instead.
         return df.join(col_df, df.id == col_df.id).drop(col_df.id)
+
+    def median(self, df, col):
+        return df.approxQuantile(col, [0.5], 0.001)[0]
 
     def load(self, key, fn, force=False):
         key = '{}/{}'.format(SPARK_DATA_PREFIX, key)

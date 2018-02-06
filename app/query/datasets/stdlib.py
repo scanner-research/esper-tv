@@ -126,25 +126,18 @@ def qs_to_result(result,
                  shuffle=False,
                  custom_order=False,
                  frame_major=False):
-    try:
-        sample = result[0]
-    except IndexError:
-        return {'result': [], 'count': 0, 'type': ''}
-
     #count = result.count()
     count = 0
 
     if shuffle:
         result = result.order_by('?')
 
-    # TODO(wcrichto): do something if custom_order=True
-
     materialized_result = []
-    cls = sample.__class__
-    bases = sample.__class__.__bases__
+    cls = result.model
+    bases = cls.__bases__
     if bases[0] is base_models.Frame:
-        if not shuffle and not custom_order:
-            result = result.order_by('video', 'number')
+        # if not shuffle and not custom_order:
+        #     result = result.order_by('video', 'number')
 
         for frame in result[:LIMIT * stride:stride]:
             materialized_result.append({
@@ -154,7 +147,6 @@ def qs_to_result(result,
             })
 
     elif bases[0] is base_models.Attribute:
-
         if cls is FaceGender:
             frame_path = 'face__person__frame'
             result = result.select_related('face', 'gender')
@@ -162,8 +154,8 @@ def qs_to_result(result,
             frame_path = 'person__frame'
         result = result.select_related(frame_path)
 
-        if not shuffle and not custom_order:
-            result = result.order_by(frame_path + '__video', frame_path + '__number')
+        # if not shuffle and not custom_order:
+        #     result = result.order_by(frame_path + '__video', frame_path + '__number')
 
         if cls is Face:
             fn = bbox_to_dict
@@ -175,16 +167,26 @@ def qs_to_result(result,
         if frame_major:
             frames = set()
             frame_ids = set()
-            for inst in result.values(frame_path + '__video', frame_path + '__number',
-                                      frame_path + '__id')[:LIMIT * stride:stride]:
-                frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
-                            inst[frame_path + '__id']))
-                frame_ids.add(inst[frame_path + '__id'])
+            with Timer('a'):
+                result.values(frame_path + '__video', frame_path + '__number',
+                              frame_path + '__id').print_sql()
+                sys.stdout.flush()
 
-            all_results = collect(
-                result.filter(**{
-                    frame_path + '__in': list(frame_ids)
-                }), lambda t: access(t, frame_path + '__id'))
+                for inst in list(
+                        result.values(frame_path + '__video', frame_path + '__number',
+                                      frame_path + '__id')[:LIMIT * stride:stride]):
+                    frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
+                                inst[frame_path + '__id']))
+                    frame_ids.add(inst[frame_path + '__id'])
+            sys.stdout.flush()
+
+            with Timer('b'):
+                all_results = collect(
+                    list(result.filter(**{
+                        frame_path + '__in': list(frame_ids)
+                    })), lambda t: access(t, frame_path + '__id'))
+            sys.stdout.flush()
+
             frames = list(frames)
             frames.sort(key=itemgetter(0, 1))
             for (video, frame_num, frame_id) in frames:

@@ -42,6 +42,7 @@ def _print(*args):
 # Renders home page
 def index(request):
     schemas = []
+    things = {}
     queries_ = {}
 
     common_queries = queries.queries['datasets']
@@ -69,6 +70,14 @@ def index(request):
             schema.append([cls, get_fields(getattr(ds, cls))])
         schemas.append([name, schema])
 
+        if hasattr(ds, 'Thing'):
+            things[name] = {
+                d['id']: d['name']
+                for d in ds.Thing.objects.all().order_by('name').values('id', 'name')
+            }
+        else:
+            things[name] = []
+
     return render(
         request, 'index.html', {
             'globals':
@@ -76,7 +85,8 @@ def index(request):
                 'bucket': BUCKET,
                 'selected': os.environ.get('DATASET'),
                 'schemas': schemas,
-                'queries': queries_
+                'queries': queries_,
+                'things': things
             })
         })
 

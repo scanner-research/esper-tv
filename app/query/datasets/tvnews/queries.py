@@ -4,14 +4,19 @@ from query.datasets.queries import *
 
 @query("Non-handlabeled random faces/genders")
 def not_handlabeled():
+    import random
+    l = Labeler.objects.get(name='rudecarnie')
+    t = Tag.objects.get(name='handlabeled-face:labeled')
+    i = random.randint(0, FaceGender.objects.aggregate(Max('id'))['id__max'])
     return qs_to_result(
-        FaceGender.objects.exclude(
-            Q(face__person__frame__tags__name='handlabeled-face:labeled')
+        FaceGender.objects.filter(labeler=l, id__gte=i).exclude(
+            Q(face__person__frame__tags=t)
             | Q(face__shot__in_commercial=True)
             | Q(face__shot__video__commercials_labeled=False)
             | Q(face__shot__isnull=True)),
         frame_major=True,
-        shuffle=True)
+        custom_order=True,
+        stride=50)
 
 
 @query("Commercials")
@@ -371,7 +376,7 @@ def segments_about_immigration():
 def panels():
     mtcnn = Labeler.objects.get(name='mtcnn')
     face_qs = Face.objects.annotate(height=BoundingBox.height_expr()).filter(
-        height__gte=0.25, labeler=mtcnn)
+        height__gte=0.25, labeler=mtcnn, shot__in_commercial=False)
     frames = Frame.objects.annotate(c=Subquery(
         face_qs.filter(person__frame=OuterRef('pk')) \
         .values('person__frame') \
