@@ -19,6 +19,16 @@ def not_handlabeled():
         stride=50)
 
 
+@query("Handlabeled faces/genders")
+def handlabeled():
+    return qs_to_result(FaceGender.objects.filter(labeler__name='handlabeled-gender'))
+
+
+@query("Donald Trump")
+def donald_trump():
+    return qs_to_result(FaceIdentity.objects.filter(identity__name='donald trump'))
+
+
 @query("Commercials")
 def commercials():
     return qs_to_result(Commercial.objects.filter(labeler__name='haotian-commercials'))

@@ -56,6 +56,12 @@ def gender_to_dict(f):
     return d
 
 
+def identity_to_dict(f):
+    d = bbox_to_dict(f.face)
+    d['identity_id'] = f.identity.id
+    return d
+
+
 def pose_to_dict(f):
     return {
         'id': f.id,
@@ -125,7 +131,7 @@ def qs_to_result(result,
                  stride=1,
                  shuffle=False,
                  custom_order=False,
-                 frame_major=False):
+                 frame_major=True):
     #count = result.count()
     count = 0
 
@@ -147,9 +153,12 @@ def qs_to_result(result,
             })
 
     elif bases[0] is base_models.Attribute:
-        if cls is FaceGender:
+        if cls is FaceGender or cls is FaceIdentity:
             frame_path = 'face__person__frame'
-            result = result.select_related('face', 'gender')
+            if cls is FaceGender:
+                result = result.select_related('face', 'gender')
+            else:
+                result = result.select_related('face', 'identity')
         else:
             frame_path = 'person__frame'
         result = result.select_related(frame_path)
@@ -161,6 +170,8 @@ def qs_to_result(result,
             fn = bbox_to_dict
         elif cls is FaceGender:
             fn = gender_to_dict
+        elif cls is FaceIdentity:
+            fn = identity_to_dict
         elif cls is Pose:
             fn = pose_to_dict
 

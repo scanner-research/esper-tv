@@ -71,9 +71,11 @@ def index(request):
         schemas.append([name, schema])
 
         if hasattr(ds, 'Thing'):
+            mod = importlib.import_module('query.datasets.{}.models'.format(name))
             things[name] = {
                 d['id']: d['name']
-                for d in ds.Thing.objects.all().order_by('name').values('id', 'name')
+                for d in ds.Thing.objects.filter(
+                    type=mod.ThingType.PERSON).order_by('name').values('id', 'name')
             }
         else:
             things[name] = []
@@ -212,12 +214,14 @@ def labeled(request):
 
     face_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-face')
     gender_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-gender')
+    identity_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-identity')
     labeled_tag, _ = m.Tag.objects.get_or_create(name='handlabeled-face:labeled')
 
     all_tags = []
     all_people = []
     all_faces = []
     all_genders = []
+    all_identities = []
     for (vid, frame_num, faces) in params['frames']:
         frame = m.Frame.objects.get(video_id=vid, number=frame_num)
         all_tags.append(
@@ -238,6 +242,13 @@ def labeled(request):
             all_genders.append(
                 m.FaceGender(face_id=None, gender_id=face['gender_id'], labeler=gender_labeler))
 
+            if 'identity_id' in face:
+                all_identities.append(
+                    m.FaceIdentity(
+                        face_id=None, identity_id=face['identity_id'], labeler=identity_labeler))
+            else:
+                all_identities.append(None)
+
     m.Frame.tags.through.objects.bulk_create(all_tags)
 
     m.Person.objects.bulk_create(all_people)
@@ -246,8 +257,11 @@ def labeled(request):
         f.person_id = p.id
     m.Face.objects.bulk_create(all_faces)
 
-    for (f, g) in zip(all_faces, all_genders):
+    for (f, g, i) in zip(all_faces, all_genders, all_identities):
         g.face_id = f.id
+        if i is not None:
+            i.face_id = f.id
     m.FaceGender.objects.bulk_create(all_genders)
+    m.FaceIdentity.objects.bulk_create([i for i in all_identities if i is not None])
 
     return JsonResponse({'success': True})

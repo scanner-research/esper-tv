@@ -16,6 +16,7 @@ let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.s
   playback_speed: 1.0,
   show_middle_frame: true,
   show_gender_as_border: true,
+  show_inline_metadata: false
 }));
 
 window.DISPLAY_OPTIONS = observable.map(displayOptions);
@@ -358,18 +359,21 @@ class ClipView extends React.Component {
             onSelect={() => {}}
             path={path} />
         </div>
-        <table className='search-result-meta' style={{width: img_width}}>
-          <tbody>
-            {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>
-              <tr key={i}>
-                {_.range(meta_per_row).map((j) => {
-                   let entry = meta[i*meta_per_row + j];
-                   if (entry === undefined) { return <td key={j} />; }
-                   return (<td key={j} style={td_style}><strong>{entry[0]}</strong>: {entry[1]}</td>);
+        {this.state.expand || DISPLAY_OPTIONS.get('show_inline_metadata')
+         ?
+         <table className='search-result-meta' style={{width: img_width}}>
+           <tbody>
+             {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>
+               <tr key={i}>
+                 {_.range(meta_per_row).map((j) => {
+                    let entry = meta[i*meta_per_row + j];
+                    if (entry === undefined) { return <td key={j} />; }
+                    return (<td key={j} style={td_style}><strong>{entry[0]}</strong>: {entry[1]}</td>);
                  })}
-              </tr>)}
-          </tbody>
-        </table>
+               </tr>)}
+           </tbody>
+         </table>
+         : <div />}
       </div>
     );
   }
@@ -408,6 +412,21 @@ class OptionsView extends React.Component {
       },
     },
     {
+      name: 'Crop bboxes',
+      key: 'crop_bboxes',
+      type: 'radio'
+    },
+    {
+      name: 'Show gender as border',
+      key: 'show_gender_as_border',
+      type: 'radio'
+    },
+    {
+      name: 'Show inline metadata',
+      key: 'show_inline_metadata',
+      type: 'radio'
+    },
+    {
       name: 'Show hands',
       key: 'show_hands',
       type: 'radio',
@@ -427,16 +446,6 @@ class OptionsView extends React.Component {
       key: 'show_lr',
       type: 'radio'
     },
-    {
-      name: 'Crop bboxes',
-      key: 'crop_bboxes',
-      type: 'radio'
-    },
-    {
-      name: 'Show gender as border',
-      key: 'show_gender_as_border',
-      type: 'radio'
-    }
   ]
 
   render() {

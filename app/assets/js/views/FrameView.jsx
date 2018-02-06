@@ -78,6 +78,10 @@ class BoxView extends React.Component {
 
   _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
+    if (IGNORE_KEYPRESS) {
+      return;
+    }
+
     let box = this.props.box;
     let {width, height} = this.props;
     if (chr == 'g') {
@@ -88,9 +92,7 @@ class BoxView extends React.Component {
       this.props.onDelete(this.props.i);
     } else if(chr == 't') {
       this.setState({showSelect: !this.state.showSelect});
-      if (this.state.showSelect) {
-        IGNORE_KEYPRESS = true;
-      }
+      IGNORE_KEYPRESS = this.state.showSelect;
       //this.props.onTrack(this.props.i);
     } else if(chr == 'q') {
       this.props.onSetTrack(this.props.i);
@@ -100,11 +102,12 @@ class BoxView extends React.Component {
   }
 
   _onSelect = (e) => {
+    console.log('hi');
     // NOTE: there's technically a bug where if the user opens two identity boxes simultaneously, after
     // closing the first, keypresses will not be ignored while typing into the second.
     IGNORE_KEYPRESS = false;
 
-    this.props.box.label_id = e.target.value;
+    this.props.box.identity_id = e.target.value;
     this.setState({showSelect: false});
     e.preventDefault();
   }
@@ -135,14 +138,20 @@ class BoxView extends React.Component {
 
     let things = GLOBALS.things[GLOBALS.selected];
 
+    let color =
+      DISPLAY_OPTIONS.get('show_gender_as_border') && box.gender_id
+      ? window.search_result.gender_colors[window.search_result.genders[box.gender_id].name]
+      : window.search_result.labeler_colors[box.labeler_id];
+
     let style = {
       left: box.bbox_x1 * this.props.width + offsetX,
       top: box.bbox_y1 * this.props.height + offsetY,
       width: (box.bbox_x2-box.bbox_x1) * this.props.width,
       height: (box.bbox_y2-box.bbox_y1) * this.props.height,
-      borderColor: window.search_result.labeler_colors[box.labeler_id],
+      borderColor: color,
       opacity: DISPLAY_OPTIONS.get('annotation_opacity')
     };
+
 
     let selectStyle = {
       left: style.left + style.width + 5,
@@ -172,22 +181,17 @@ class BoxView extends React.Component {
       }
     }).bind(this);
 
-    let gender_cls =
-      DISPLAY_OPTIONS.get('show_gender_as_border') && box.gender_id
-      ? `gender-${window.search_result.genders[box.gender_id].name}`
-      : '';
-
     return <div>
-      {box.label_id
+      {box.identity_id
        ? <div className='bbox-label' style={labelStyle}>
-         {modifyLabel(things[box.label_id])}
+         {modifyLabel(things[box.identity_id])}
        </div>
        : <div />}
       <div onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            onMouseUp={this._onMouseUp}
            onMouseDown={this._onMouseDown}
-           className={`bounding-box ${gender_cls}`}
+           className='bounding-box'
            style={style}
            ref={(n) => {this._div = n}} />
       {this.state.showSelect
@@ -195,8 +199,12 @@ class BoxView extends React.Component {
          <Select2
            ref={(n) => {this._select = n;}}
            data={_.map(things, (v, k) => ({text: v, id: k}))}
-           options={{placeholder: 'Search', width: this.props.expand ? 200 : 100}}
-           onSelect={this._onSelect} />
+           options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
+           onSelect={this._onSelect}
+           onClose={(e) => {
+               this.setState({showSelect: false});
+               IGNORE_KEYPRESS = false;
+           }} />
        </div>
        : <div />}
     </div>;
@@ -383,10 +391,6 @@ export class FrameView extends React.Component {
   }
 
   _onMouseDown = (e) => {
-    if (e.target != this._div) {
-      return;
-    }
-
     let rect = boundingRect(this._div);
     this.setState({
       startX: e.clientX - rect.left,
@@ -395,10 +399,6 @@ export class FrameView extends React.Component {
   }
 
   _onMouseMove = (e) => {
-    if (e.target != this._div) {
-      return;
-    }
-
     let rect = boundingRect(this._div);
     let curX = e.clientX - rect.left;
     let curY = e.clientY - rect.top;
@@ -409,10 +409,6 @@ export class FrameView extends React.Component {
   }
 
   _onMouseUp = (e) => {
-    if (e.target != this._div) {
-      return;
-    }
-
     this.props.bboxes.push(this._makeBox());
     this.setState({startX: -1});
   }

@@ -2,6 +2,7 @@ from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceT
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
+from query.datasets.tvnews.models import ThingType
 from django.db import connections, connection
 from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func
@@ -11,6 +12,7 @@ from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
 from pyspark.sql import SparkSession, Row
+from itertools import izip
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
 import django.db.models as models
