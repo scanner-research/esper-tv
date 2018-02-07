@@ -130,7 +130,7 @@ def qs_to_result(result,
                  segment=False,
                  stride=1,
                  shuffle=False,
-                 custom_order=False,
+                 deterministic_order=False,
                  frame_major=True):
     #count = result.count()
     count = 0
@@ -142,8 +142,8 @@ def qs_to_result(result,
     cls = result.model
     bases = cls.__bases__
     if bases[0] is base_models.Frame:
-        # if not shuffle and not custom_order:
-        #     result = result.order_by('video', 'number')
+        if not shuffle and deterministic_order:
+            result = result.order_by('video', 'number')
 
         for frame in result[:LIMIT * stride:stride]:
             materialized_result.append({
@@ -163,8 +163,8 @@ def qs_to_result(result,
             frame_path = 'person__frame'
         result = result.select_related(frame_path)
 
-        # if not shuffle and not custom_order:
-        #     result = result.order_by(frame_path + '__video', frame_path + '__number')
+        if not shuffle and deterministic_order:
+            result = result.order_by(frame_path + '__video', frame_path + '__number')
 
         if cls is Face:
             fn = bbox_to_dict
@@ -217,7 +217,7 @@ def qs_to_result(result,
                 materialized_result.append(r)
 
     elif bases[0] is base_models.Track:
-        if not shuffle and not custom_order:
+        if not shuffle and deterministic_order:
             result = result.order_by('video', 'min_frame')
 
         for t in result.annotate(duration=Track.duration_expr()).filter(duration__gt=0)[:LIMIT]:

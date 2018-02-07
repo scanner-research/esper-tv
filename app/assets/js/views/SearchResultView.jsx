@@ -32,9 +32,12 @@ class GroupsView extends React.Component {
     page: 0,
     selected_start: -1,
     selected_end: -1,
+    ignored: new Set(),
     positive_ex: new Set(),
     negative_ex: new Set()
   }
+
+  _lastResult = null;
 
   constructor() {
     super();
@@ -42,14 +45,15 @@ class GroupsView extends React.Component {
   }
 
   getColorClass(i){
-    if (this.state.selected_start == i || (this.state.selected_start <= i && i <= this.state.selected_end)){
+    if (this.state.ignored.has(i)) {
+      return 'ignored ';
+    } else if (this.state.selected_start == i || (this.state.selected_start <= i && i <= this.state.selected_end)){
       return 'selected ';
-    }else if (this.state.positive_ex.has(i)){
+    } else if (this.state.positive_ex.has(i)){
       return 'positive ';
-    }else if (this.state.negative_ex.has(i)){
-      return 'negative';
+    } else if (this.state.negative_ex.has(i)){
+      return 'negative ';
     }
-    return ''
   }
 
   _onKeyPress = (e) => {
@@ -63,13 +67,16 @@ class GroupsView extends React.Component {
 
       let labeled = [];
       for (let i = this.state.selected_start; i <= this.state.selected_end; i++) {
+        if (this.state.ignored.has(i)) {
+          continue;
+        }
+
         let frame = window.search_result.result[i].elements[0];
         labeled.push([frame.video, frame.start_frame, frame.objects]);
         if (!green.has(i)) {
           green.add(i);
         }
       }
-
 
       axios
         .post('/api/labeled', {dataset: DATASET, frames: labeled})
@@ -89,11 +96,25 @@ class GroupsView extends React.Component {
       this.setState({
         selected_start: e
       });
-    }else if (this.state.selected_start >=0 && e >= this.state.selected_start){
+    } else if (e == this.state.selected_start) {
+      this.setState({
+        selected_start: -1,
+        selected_end: -1
+      });
+    } else if (this.state.selected_start >= 0 && e > this.state.selected_start){
       this.setState({
         selected_end: e
       });
     }
+  }
+
+  _onIgnore = (e) => {
+    if (this.state.ignored.has(e)) {
+      this.state.ignored.delete(e);
+    } else {
+      this.state.ignored.add(e);
+    }
+    this.forceUpdate();
   }
 
   _numPages = () => {
@@ -110,6 +131,20 @@ class GroupsView extends React.Component {
     this.setState({page: Math.min(this.state.page + 1, this._numPages())});
   }
 
+  componentDidUpdate() {
+    if (window.search_result.result != this._lastResult) {
+      this._lastResult = window.search_result.result;
+      this.setState({
+        page: 0,
+        positive_ex: new Set(),
+        negative_ex: new Set(),
+        ignored: new Set(),
+        selected_start: -1,
+        selected_end: -1
+      });
+    }
+  }
+
   render () {
     return (
       <div className='groups'>
@@ -117,7 +152,8 @@ class GroupsView extends React.Component {
           {_.range(DISPLAY_OPTIONS.get('results_per_page') * this.state.page,
                    Math.min(DISPLAY_OPTIONS.get('results_per_page') * (this.state.page + 1),
                             window.search_result.result.length))
-            .map((i) => <GroupView key={i} group={window.search_result.result[i]} group_id={i} onSelect={this._onSelect} colorClass={this.getColorClass(i)}/>)}
+            .map((i) => <GroupView key={i} group={window.search_result.result[i]} group_id={i} onSelect={this._onSelect}
+                                   onIgnore={this._onIgnore} colorClass={this.getColorClass(i)}/>)}
           <div className='clearfix' />
         </div>
         <div className='page-buttons'>
@@ -143,7 +179,9 @@ class GroupView extends React.Component {
         <div>
           <div className='group-label'>{group.label}</div>
           <div className='group-elements'>
-            {group.elements.map((clip, i) => <ClipView key={i} clip={clip} group_id={this.props.group_id} onSelect={this.props.onSelect} colorClass={this.props.colorClass}/>)}
+            {group.elements.map((clip, i) =>
+              <ClipView key={i} clip={clip} group_id={this.props.group_id} onSelect={this.props.onSelect}
+                        onIgnore={this.props.onIgnore} colorClass={this.props.colorClass}/>)}
             <div className='clearfix' />
           </div>
         </div>
@@ -206,6 +244,8 @@ class ClipView extends React.Component {
       this.setState({expand: !this.state.expand});
     } else if (chr == 's') {
       this.props.onSelect(this.props.group_id);
+    } else if (chr == 'x') {
+      this.props.onIgnore(this.props.group_id);
     } else if (chr == 'y') {
       if (this.state.expand) {
         let frame = this._fromSeconds(this._video.currentTime);

@@ -39,10 +39,6 @@ class Labeler(base.Labeler):
     pass
 
 
-class Identity(base.Model):
-    name = base.CharField()
-
-
 class Gender(base.Model):
     name = base.CharField()
 
@@ -93,11 +89,6 @@ class Person(base.Noun):
     tracks = base.ManyToManyField(PersonTrack)
 
 
-class IdentityLabel(base.Attribute):
-    person = base.ForeignKey(Person)
-    identity = base.ForeignKey(Identity)
-
-
 class Pose(base.Attribute, base.Pose):
     person = base.ForeignKey(Person)
 
@@ -116,6 +107,14 @@ class Face(base.Attribute, base.BoundingBox):
 class FaceGender(base.Attribute):
     face = base.ForeignKey(Face)
     gender = base.ForeignKey(Gender)
+
+    class Meta:
+        unique_together = ('labeler', 'face')
+
+
+class FaceIdentity(base.Attribute):
+    face = base.ForeignKey(Face)
+    identity = base.ForeignKey(Thing)
 
     class Meta:
         unique_together = ('labeler', 'face')
