@@ -9,11 +9,12 @@ def not_handlabeled():
     t = Tag.objects.get(name='handlabeled-face:labeled')
     i = random.randint(0, FaceGender.objects.aggregate(Max('id'))['id__max'])
     return qs_to_result(
-        FaceGender.objects.annotate(m=F('id') % 50).filter(m=0, labeler=l, id__gte=i).exclude(
+        FaceGender.objects.filter(labeler=l, id__gte=i).exclude(
             Q(face__person__frame__tags=t)
             | Q(face__shot__in_commercial=True)
             | Q(face__shot__video__commercials_labeled=False)
-            | Q(face__shot__isnull=True)))
+            | Q(face__shot__isnull=True)),
+        stride=50)
 
 
 @query("Handlabeled faces/genders")

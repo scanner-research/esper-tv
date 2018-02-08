@@ -149,6 +149,22 @@ def bbox_iou(f1, f2):
     return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
 
 
+def bbox_area2(f):
+    return (f['bbox_x2'] - f['bbox_x1']) * (f['bbox_y2'] - f['bbox_y1'])
+
+
+def bbox_iou2(f1, f2):
+    x1 = max(f1['bbox_x1'], f2['bbox_x1'])
+    x2 = min(f1['bbox_x2'], f2['bbox_x2'])
+    y1 = max(f1['bbox_y1'], f2['bbox_y1'])
+    y2 = min(f1['bbox_y2'], f2['bbox_y2'])
+
+    if x1 > x2 or y1 > y2: return 0
+
+    intersection = (x2 - x1) * (y2 - y1)
+    return intersection / (bbox_area2(f1) + bbox_area2(f2) - intersection)
+
+
 def unzip(l, default=([], [])):
     x = tuple(zip(*l))
     if x == ():
@@ -355,6 +371,9 @@ class QuerySetMixin:
             return True
         except self.model.DoesNotExist:
             return False
+
+    def values_with(self, *fields):
+        return self.values(*([f.name for f in self.model._meta.get_fields()] + list(fields)))
 
     def save_to_csv(self, name):
         meta = self.model._meta
@@ -590,3 +609,40 @@ class SparkWrapper:
         else:
             with Timer('Reading data'):
                 return self.spark.read.load(key)
+
+
+# http://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html
+def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix', cmap=None):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    plt.figure(figsize=(4, 4))
+    plt.imshow(cm, interpolation='nearest', cmap=cmap or plt.cm.Blues)
+    plt.title(('Normalized ' if normalize else '') + title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(
+            j,
+            i,
+            format(cm[i, j], fmt),
+            horizontalalignment="center",
+            color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')

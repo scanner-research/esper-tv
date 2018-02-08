@@ -16,7 +16,8 @@ let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.s
   playback_speed: 1.0,
   show_middle_frame: true,
   show_gender_as_border: true,
-  show_inline_metadata: false
+  show_inline_metadata: false,
+  thumbnail_size: 1
 }));
 
 window.DISPLAY_OPTIONS = observable.map(displayOptions);
@@ -59,14 +60,15 @@ class GroupsView extends React.Component {
   _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
     if (chr == 'a') {
-      if (this.state.selected_start == -1 || this.state.selected_end == -1) {
+      if (this.state.selected_start == -1) {
         return;
       }
 
       let green = this.state.positive_ex;
 
       let labeled = [];
-      for (let i = this.state.selected_start; i <= this.state.selected_end; i++) {
+      let end = this.state.selected_end == -1 ? this.state.selected_start : this.state.selected_end;
+      for (let i = this.state.selected_start; i <= end; i++) {
         if (this.state.ignored.has(i)) {
           continue;
         }
@@ -452,6 +454,16 @@ class OptionsView extends React.Component {
       },
     },
     {
+      name: 'Thumbnail size',
+      key: 'thumbnail_size',
+      type: 'range',
+      opts: {
+        min: 1,
+        max: 3,
+        step: 1
+      },
+    },
+    {
       name: 'Crop bboxes',
       key: 'crop_bboxes',
       type: 'radio'
@@ -535,10 +547,12 @@ class MetadataView extends React.Component {
       ['l', 'play clip in loop']
     ];
     let label_keys = [
+      ['click/drag', 'create bounding box'],
       ['d', 'delete bounding box'],
       ['g', 'cycle gender'],
-      ['s', 'select frames'],
-      ['a', 'mark as labeled']
+      ['s', 'select frames to save'],
+      ['a', 'mark selected as labeled'],
+      ['x', 'mark frame to ignore']
       /* ['t', 'start track'],
        * ['q', 'add to track'],
        * ['u', 'delete track']*/

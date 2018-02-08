@@ -65,7 +65,6 @@ class BoxView extends React.Component {
     box.bbox_y1 += offsetY / height;
     box.bbox_y2 += offsetY / height;
     this.setState({clicked: false});
-    e.stopPropagation();
   }
 
   _onMouseOver = (e) => {
@@ -409,8 +408,10 @@ export class FrameView extends React.Component {
   }
 
   _onMouseUp = (e) => {
-    this.props.bboxes.push(this._makeBox());
-    this.setState({startX: -1});
+    if (this.state.startX != -1) {
+      this.props.bboxes.push(this._makeBox());
+      this.setState({startX: -1});
+    }
   }
 
   _onKeyPress = (e) => {
@@ -441,18 +442,18 @@ export class FrameView extends React.Component {
 
   _getDimensions() {
     return {
-      width: this.props.expand ? FULL_WIDTH : (this.props.width * (SMALL_HEIGHT / this.props.height)),
-      height: this.props.expand ? (this.props.height * (FULL_WIDTH / this.props.width)) : SMALL_HEIGHT
+      width: this.props.expand ? FULL_WIDTH : (this.props.width * (this._smallHeight / this.props.height)),
+      height: this.props.expand ? (this.props.height * (FULL_WIDTH / this.props.width)) : this._smallHeight
     };
   }
 
   _makeBox() {
     let {width, height} = this._getDimensions();
     return {
-      bbox_x1: this.state.startX/width,
-      bbox_y1: this.state.startY/height,
-      bbox_x2: this.state.curX/width,
-      bbox_y2: this.state.curY/height,
+      bbox_x1: (Math.min(this.state.startX, this.state.curX) + 1)/width,
+      bbox_y1: (Math.min(this.state.startY, this.state.curY) + 1)/height,
+      bbox_x2: (Math.max(this.state.curX, this.state.startX) - 1)/width,
+      bbox_y2: (Math.max(this.state.curY, this.state.startY) - 1)/height,
       labeler_id: _.find(window.search_result.labelers, (l) => l.name == 'handlabeled-face').id,
       gender_id: _.find(window.search_result.genders, (l) => l.name == 'U').id,
       type: 'bbox',
@@ -472,8 +473,9 @@ export class FrameView extends React.Component {
   }
 
   render() {
+    this._smallHeight = SMALL_HEIGHT * DISPLAY_OPTIONS.get('thumbnail_size');
     let target_width = this.props.expand ? FULL_WIDTH : null;
-    let target_height = this.props.expand ? null : SMALL_HEIGHT;
+    let target_height = this.props.expand ? null : this._smallHeight;
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'

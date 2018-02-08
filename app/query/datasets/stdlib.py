@@ -184,8 +184,9 @@ def qs_to_result(result,
                 sys.stdout.flush()
 
                 for inst in list(
-                        result.values(frame_path + '__video', frame_path + '__number',
-                                      frame_path + '__id')[:LIMIT * stride:stride]):
+                        result.values(
+                            frame_path + '__video', frame_path + '__number',
+                            frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:LIMIT]):
                     frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
                                 inst[frame_path + '__id']))
                     frame_ids.add(inst[frame_path + '__id'])
