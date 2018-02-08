@@ -69,15 +69,13 @@ class GroupsView extends React.Component {
       let labeled = [];
       let end = this.state.selected_end == -1 ? this.state.selected_start : this.state.selected_end;
       for (let i = this.state.selected_start; i <= end; i++) {
-        if (this.state.ignored.has(i)) {
+        if (this.state.ignored.has(i) || this.state.positive_ex.has(i)) {
           continue;
         }
 
         let frame = window.search_result.result[i].elements[0];
         labeled.push([frame.video, frame.start_frame, frame.objects]);
-        if (!green.has(i)) {
-          green.add(i);
-        }
+        green.add(i);
       }
 
       axios
@@ -103,10 +101,21 @@ class GroupsView extends React.Component {
         selected_start: -1,
         selected_end: -1
       });
-    } else if (this.state.selected_start >= 0 && e > this.state.selected_start){
-      this.setState({
-        selected_end: e
-      });
+    } else {
+      if (e < this.state.selected_start) {
+        if (this.state.selected_end == -1) {
+          this.setState({
+            selected_end: this.state.selected_start
+          });
+        }
+        this.setState({
+          selected_start: e
+        });
+      } else {
+        this.setState({
+          selected_end: e
+        });
+      }
     }
   }
 
