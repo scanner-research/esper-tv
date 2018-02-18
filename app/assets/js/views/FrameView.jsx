@@ -365,10 +365,6 @@ class ProgressiveImage extends React.Component {
   }
 }
 
-// TODO(wcrichto): can we link these with the equivalent values in the CSS?
-let SMALL_HEIGHT = 100;
-let FULL_WIDTH = 780;
-
 @observer
 export class FrameView extends React.Component {
   // FrameView encodes a fairly complicated state machine that enables intuitive bounding box drawing. See the various
@@ -516,15 +512,9 @@ export class FrameView extends React.Component {
     this.props.onDeleteTrack(box);
   }
 
-  _getDimensions() {
-    return {
-      width: this.props.expand ? FULL_WIDTH : (this.props.width * (this._smallHeight / this.props.height)),
-      height: this.props.expand ? (this.props.height * (FULL_WIDTH / this.props.width)) : this._smallHeight
-    };
-  }
-
   _makeBox() {
-    let {width, height} = this._getDimensions();
+    let width = this.props.small_width;
+    let height = this.props.small_height;
     return {
       bbox_x1: (Math.min(this.state.startX, this.state.curX) + 1)/width,
       bbox_y1: (Math.min(this.state.startY, this.state.curY) + 1)/height,
@@ -558,10 +548,6 @@ export class FrameView extends React.Component {
   }
 
   render() {
-    this._smallHeight = SMALL_HEIGHT * DISPLAY_OPTIONS.get('thumbnail_size');
-    let target_width = this.props.expand ? FULL_WIDTH : null;
-    let target_height = this.props.expand ? null : this._smallHeight;
-    let {width, height} = this._getDimensions();
     return (
       <div className='frame'
            onMouseDown={this._onMouseDownLocal}
@@ -573,20 +559,20 @@ export class FrameView extends React.Component {
          ? <ProgressiveImage
              src={this.props.path}
              crop={this.props.bboxes[0]}
-             width={width}
-             height={height}
-             target_width={width}
-             target_height={height}
+             width={this.props.full_width}
+             height={this.props.full_height}
+             target_width={this.props.small_width}
+             target_height={this.props.small_height}
              onLoad={() => this.setState({imageLoaded: true})} />
          : <div>
            {this.state.imageLoaded
             ? <div>
               {this.state.showDraw && this.state.startX != -1
-               ? <BoxView box={this._makeBox()} width={width} height={height} />
+               ? <BoxView box={this._makeBox()} width={this.props.small_width} height={this.props.small_height} />
                : <div />}
               {this.props.bboxes.map((box, i) => {
                  if (box.type == 'bbox') {
-                   return <BoxView box={box} key={i} i={i} width={width} height={height}
+                   return <BoxView box={box} key={i} i={i} width={this.props.small_width} height={this.props.small_height}
                                    onClick={this.props.onClick}
                                    onDelete={this._onDelete}
                                    onTrack={this._onTrack}
@@ -594,17 +580,17 @@ export class FrameView extends React.Component {
                                    onDeleteTrack={this._onDeleteTrack}
                                    expand={this.props.expand} />;
                  } else if (box.type == 'pose') {
-                   return <PoseView pose={box} key={i} width={width} height={height} expand={this.props.expand} />;
+                   return <PoseView pose={box} key={i} width={this.props.small_width} height={this.props.small_height} expand={this.props.expand} />;
                  }})}
             </div>
             : <div />}
            <ProgressiveImage
              src={this.props.path}
-             width={width}
-             height={height}
+             width={this.props.full_width}
+             height={this.props.full_height}
              crop={null}
-             target_width={width}
-             target_height={height}
+             target_width={this.props.small_width}
+             target_height={this.props.small_height}
              onLoad={() => this.setState({imageLoaded: true})} />
          </div>}
       </div>

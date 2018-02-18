@@ -77,8 +77,6 @@
     }
 
     .search-result {
-        $img-height: 100px;
-
         float: left;
         position: relative;
         z-index: 5;
@@ -90,7 +88,6 @@
 
         video {
             position: absolute;
-            height: $img-height;
             z-index: 0;
 
             /* Always show the control panel on search result tiny videos. */
@@ -168,11 +165,6 @@
                 td {
                     padding: 5px;
                 }
-            }
-
-            video {
-                height: auto;
-                width: 780px;
             }
         }
 

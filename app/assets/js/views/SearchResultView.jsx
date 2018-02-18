@@ -341,7 +341,6 @@ class ClipView extends React.Component {
 
   render() {
     let clip = this.props.clip;
-    let vidStyle = this.state.showVideo ? {'zIndex': 2} : {};
     let video = this._videoMeta();
 
     let display_frame =
@@ -350,7 +349,6 @@ class ClipView extends React.Component {
       : clip.start_frame;
     let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
 
-    let img_width = this.state.expand ? '780px' : (video.width * (100 / video.height));
     let meta = [];
 
     if (this.state.expand) {
@@ -378,8 +376,16 @@ class ClipView extends React.Component {
       this._video.playbackRate = DISPLAY_OPTIONS.get('playback_speed');
     }
 
+    let small_height = this.state.expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
+    let small_width = video.width * small_height / video.height;
+    let vidStyle = this.state.showVideo ? {
+      zIndex: 2,
+      width: small_width,
+      height: small_height
+    } : {};
+
     return (
-      <div className={'search-result ' + this.props.colorClass + (this.state.expand ? 'expanded' : '')}
+      <div className={`search-result ${this.props.colorClass} ${(this.state.expand ? 'expanded' : '')}`}
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}
            onClick={this._onClick}>
@@ -399,8 +405,10 @@ class ClipView extends React.Component {
            : <div />}
           <FrameView
             bboxes={clip.objects}
-            width={video.width}
-            height={video.height}
+            small_width={small_width}
+            small_height={small_height}
+            full_width={video.width}
+            full_height={video.height}
             onClick={this.props.onBoxClick}
             expand={this.state.expand}
             onChangeGender={() => {}}
@@ -413,7 +421,7 @@ class ClipView extends React.Component {
         </div>
         {this.state.expand || DISPLAY_OPTIONS.get('show_inline_metadata')
          ?
-         <table className='search-result-meta' style={{width: img_width}}>
+         <table className='search-result-meta' style={{width: small_width}}>
            <tbody>
              {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>
                <tr key={i}>
