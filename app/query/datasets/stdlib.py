@@ -46,6 +46,7 @@ def bbox_to_dict(f):
         'bbox_y1': f.bbox_y1,
         'bbox_y2': f.bbox_y2,
         'bbox_score': f.bbox_score,
+        'background': f.background,
         'labeler_id': f.labeler.id,
     }
 
@@ -53,6 +54,11 @@ def bbox_to_dict(f):
 def gender_to_dict(f):
     d = bbox_to_dict(f.face)
     d['gender_id'] = f.gender.id
+
+    # TODO(wcrichto): this is a hack
+    if hasattr(f, 'identity') and f.identity is not None:
+        d['identity_id'] = f.identity
+
     return d
 
 

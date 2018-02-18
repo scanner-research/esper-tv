@@ -99,6 +99,7 @@ class Pose(base.Attribute, base.Pose):
 class Face(base.Attribute, base.BoundingBox):
     person = base.ForeignKey(Person)
     shot = base.ForeignKey(Shot, null=True)
+    background = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('labeler', 'person')

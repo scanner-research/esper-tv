@@ -14,12 +14,14 @@ def not_handlabeled():
             | Q(face__shot__in_commercial=True)
             | Q(face__shot__video__commercials_labeled=False)
             | Q(face__shot__isnull=True)),
-        stride=50)
+        stride=1000)
 
 
 @query("Handlabeled faces/genders")
 def handlabeled():
-    return qs_to_result(FaceGender.objects.filter(labeler__name='handlabeled-gender'))
+    return qs_to_result(
+        FaceGender.objects.filter(labeler__name='handlabeled-gender').annotate(
+            identity=F('face__faceidentity__identity')))
 
 
 @query("Donald Trump")

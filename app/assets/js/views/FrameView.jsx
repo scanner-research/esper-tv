@@ -45,6 +45,11 @@ class BoxView extends React.Component {
       this.props.onClick(this.props.box);
     }
     e.stopPropagation();
+
+    // Since we rely on global clicks and not just React's synthetic click events to make the drawing work,
+    // we need to stop propagation of the native DOM event as well. See FrameView._onMouseDownGlobal for related bug.
+    // https://stackoverflow.com/questions/24415631/reactjs-syntheticevent-stoppropagation-only-works-with-react-events
+    e.nativeEvent.stopImmediatePropagation();
   }
 
   _onMouseMove = (e) => {
@@ -87,6 +92,10 @@ class BoxView extends React.Component {
       let keys = _.sortBy(_.map(_.keys(window.search_result.genders), (x) => parseInt(x)));
       box.gender_id = keys[(_.indexOf(keys, box.gender_id) + 1) % keys.length];
       e.preventDefault();
+    } else if (chr == 'b') {
+      box.background = !box.background;
+      console.log(box.background);
+      e.preventDefault();
     } else if (chr == 'd') {
       this.props.onDelete(this.props.i);
     } else if(chr == 't') {
@@ -101,7 +110,6 @@ class BoxView extends React.Component {
   }
 
   _onSelect = (e) => {
-    console.log('hi');
     // NOTE: there's technically a bug where if the user opens two identity boxes simultaneously, after
     // closing the first, keypresses will not be ignored while typing into the second.
     IGNORE_KEYPRESS = false;
@@ -148,6 +156,7 @@ class BoxView extends React.Component {
       width: (box.bbox_x2-box.bbox_x1) * this.props.width,
       height: (box.bbox_y2-box.bbox_y1) * this.props.height,
       borderColor: color,
+      borderStyle: box.background ? 'dashed' : 'solid',
       opacity: DISPLAY_OPTIONS.get('annotation_opacity')
     };
 
@@ -362,55 +371,122 @@ let FULL_WIDTH = 780;
 
 @observer
 export class FrameView extends React.Component {
+  // FrameView encodes a fairly complicated state machine that enables intuitive bounding box drawing. See the various
+  // mouse event methods for more details.
+
+  // TODO(wcrichto): right now there's an odd behavior that allows simultaneous creation of two bounding boxes when
+  // starting to draw in one frame and mousing into another. How to avoid this without a global event coordinator?
+
   state = {
     startX: -1,
     startY: -1,
     curX: -1,
     curY: -1,
     expand: false,
-    mouseIn: false,
-    imageLoaded: false
-  }
-
-  constructor(props) {
-    super(props);
+    imageLoaded: false,
+    clicked: false,
+    showDraw: false
   }
 
   _onMouseOver = (e) => {
-    document.addEventListener('mousemove', this._onMouseMove);
     document.addEventListener('keypress', this._onKeyPress);
-    if (!(e.buttons & 1)){
-      this.setState({startX: -1});
-    }
+
+    // When the user mouses into a frame, a bounding box should be drawn
+    this.setState({showDraw: true});
   }
 
   _onMouseOut = (e) => {
-    document.removeEventListener('mousemove', this._onMouseMove);
     document.removeEventListener('keypress', this._onKeyPress);
+
+    // This handles the case where the user starts drawing a bounding box, mouses out of the frame, and releases the mouse.
+    // mouseout is triggered when the mouse exits to sub-div on the same layer, e.g. a bounding box in the current frame
+    // as well as when the mouse exits to a different frame. We want to distinguish between these two cases so the reset
+    // only occurs when exiting the frame.
+    // See "Mousing out of a layer": https://www.quirksmode.org/js/events_mouse.html
+    let rel_target = e.relatedTarget;
+
+    // Corner case if the user clicks, tabs out, then comes back (and perhaps others?).
+    if (rel_target == null) {
+      return;
+    }
+
+    while (rel_target != this._div && rel_target.nodeName != 'BODY') {
+      rel_target = rel_target.parentNode;
+    }
+
+    // If the user left the current frame, then reset drawing state.
+    if (rel_target != this._div && !this.state.clicked) {
+      this.setState({showDraw: false});
+    }
   }
 
-  _onMouseDown = (e) => {
+
+  _onMouseDownLocal = (e) => {
+    // If the user clicks directly on a frame, we treat it the same as a global click, except we also register the direct
+    // click so that moving outside of the frame doesn't cause the box to disappear. We don't need to set showDraw since
+    // the user has to be moused in for the mouse down to register, so it would be redundant.
     let rect = boundingRect(this._div);
+    let [startX, startY] = this._clampCoords(e.clientX - rect.left, e.clientY - rect.top);
     this.setState({
-      startX: e.clientX - rect.left,
-      startY: e.clientY - rect.top
+      startX: startX,
+      startY: startY,
+      clicked: true
     });
+  }
+
+  _onMouseDownGlobal = (e) => {
+    let rect = boundingRect(this._div);
+
+    // For some reason, nativeEvent.stopImmediatePropagation() stops propagation on the global mouse down events for
+    // every div _except_ the one that was actually clicked...
+    if (rect.left <= e.clientX && e.clientX <= rect.left + rect.width &&
+        rect.top <= e.clientY && e.clientY <= rect.top + rect.height) {
+      return;
+    }
+
+    // If the user clicks anywhere on the page, register the click, but don't draw a bounding box until the user mouses in.
+    let [startX, startY] = this._clampCoords(e.clientX - rect.left, e.clientY - rect.top);
+    this.setState({
+      startX: startX,
+      startY: startY
+    });
+  }
+
+  _clampCoords = (x, y) => {
+    let rect = boundingRect(this._div);
+    let clamp = (n, a, b) => { return Math.max(Math.min(n, b), a); };
+    return [clamp(x, 0, rect.width), clamp(y, 0, rect.height)];
   }
 
   _onMouseMove = (e) => {
     let rect = boundingRect(this._div);
     let curX = e.clientX - rect.left;
     let curY = e.clientY - rect.top;
-    if (0 <= curX && curX <= rect.width &&
-        0 <= curY && curY <= rect.height) {
-      this.setState({curX: curX, curY: curY});
+    let [newX, newY] = this._clampCoords(curX, curY);
+    // Not very functional, but since this method is run for every frame on screen, it avoids unnecessary redraws since
+    // the bounding box won't change for most frames at a time when clamped.
+    if (newX != this.state.curX || newY != this.state.curY) {
+      this.setState({curX: newX, curY: newY});
     }
   }
 
-  _onMouseUp = (e) => {
-    if (this.state.startX != -1) {
+  _onMouseUpLocal = (e) => {
+    // Create the box when the user releases the mouse.
+    if (this.state.startX != -1 && this.state.showDraw) {
       this.props.bboxes.push(this._makeBox());
-      this.setState({startX: -1});
+      this.setState({startX: -1, clicked: false});
+    }
+  }
+
+  _onMouseUpGlobal = (e) => {
+    if (this.state.startX != -1) {
+      // Only save the bounding box if it is being shown. This allows for the user to start drawing a bbox inside of a
+      // frame, mouse out of the frame, and still register the clamped bbox.
+      if (this.state.showDraw) {
+        this._onMouseUpLocal(e);
+      } else {
+        this.setState({startX: -1, clicked: false});
+      }
     }
   }
 
@@ -457,7 +533,8 @@ export class FrameView extends React.Component {
       labeler_id: _.find(window.search_result.labelers, (l) => l.name == 'handlabeled-face').id,
       gender_id: _.find(window.search_result.genders, (l) => l.name == 'U').id,
       type: 'bbox',
-      id: -1
+      id: -1,
+      background: false
     }
   }
 
@@ -467,7 +544,15 @@ export class FrameView extends React.Component {
     }
   }
 
+  componentWillMount() {
+    document.addEventListener('mousedown', this._onMouseDownGlobal);
+    document.addEventListener('mouseup', this._onMouseUpGlobal);
+    document.addEventListener('mousemove', this._onMouseMove);
+  }
+
   componentWillUnmount() {
+    document.removeEventListener('mousedown', this._onMouseDownGlobal);
+    document.removeEventListener('mouseup', this._onMouseUpGlobal);
     document.removeEventListener('mousemove', this._onMouseMove);
     document.removeEventListener('keypress', this._onKeyPress);
   }
@@ -479,8 +564,8 @@ export class FrameView extends React.Component {
     let {width, height} = this._getDimensions();
     return (
       <div className='frame'
-           onMouseDown={this._onMouseDown}
-           onMouseUp={this._onMouseUp}
+           onMouseDown={this._onMouseDownLocal}
+           onMouseUp={this._onMouseUpLocal}
            onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
@@ -496,7 +581,7 @@ export class FrameView extends React.Component {
          : <div>
            {this.state.imageLoaded
             ? <div>
-              {this.state.startX != -1
+              {this.state.showDraw && this.state.startX != -1
                ? <BoxView box={this._makeBox()} width={width} height={height} />
                : <div />}
               {this.props.bboxes.map((box, i) => {

@@ -38,7 +38,7 @@ class GroupsView extends React.Component {
     negative_ex: new Set()
   }
 
-  _lastResult = null;
+  _lastResult = window.search_result.result;
 
   constructor() {
     super();
@@ -69,7 +69,7 @@ class GroupsView extends React.Component {
       let labeled = [];
       let end = this.state.selected_end == -1 ? this.state.selected_start : this.state.selected_end;
       for (let i = this.state.selected_start; i <= end; i++) {
-        if (this.state.ignored.has(i) || this.state.positive_ex.has(i)) {
+        if (this.state.ignored.has(i)) {
           continue;
         }
 
@@ -286,7 +286,7 @@ class ClipView extends React.Component {
   }
 
   _onClick = () => {
-    console.log('Clicked SearchResultView', this.props.clip.objects[0].id);
+    //console.log('Clicked SearchResultView', this.props.clip.objects[0].id);
   }
 
   _toSeconds = (frame) => {
@@ -355,6 +355,7 @@ class ClipView extends React.Component {
 
     if (this.state.expand) {
       meta.push(['Video', `${video.path.split(/[\\/]/).pop()} (${video.id})`]);
+      meta.push(['Frame', `${display_frame}`]);
     }
 
     if (clip.end_frame !== undefined) {
@@ -559,6 +560,7 @@ class MetadataView extends React.Component {
       ['click/drag', 'create bounding box'],
       ['d', 'delete bounding box'],
       ['g', 'cycle gender'],
+      ['b', 'mark as background face'],
       ['s', 'select frames to save'],
       ['a', 'mark selected as labeled'],
       ['x', 'mark frame to ignore']

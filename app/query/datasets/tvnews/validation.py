@@ -47,15 +47,18 @@ def face_validation(name, face_filter):
     print('# labels: {}'.format(true_pos + false_neg))
     print('Precision: {:.3f}, recall: {:.3f}'.format(face_precision, face_recall))
     print('')
-    return face_pairs
+
+    return face_pairs, (face_precision, face_recall)
 
 
 def gender_validation(name, face_pairs):
     handlabeled_frames = list(Frame.objects.filter(tags__name='handlabeled-face:labeled'))
-    all_genders = collect(
-        FaceGender.objects.filter(face__person__frame__in=handlabeled_frames).values_with(
-            'labeler__name', 'face__person__frame__id'),
-        itemgetter('face__person__frame__id'))
+    all_genders = defaultdict(
+        list,
+        collect(
+            FaceGender.objects.filter(face__person__frame__in=handlabeled_frames).values_with(
+                'labeler__name', 'face__person__frame__id'),
+            itemgetter('face__person__frame__id')))
     auto_labeler = 'rudecarnie'
     gt_labeler = 'handlabeled-gender'
     true_pos = 0
@@ -67,7 +70,8 @@ def gender_validation(name, face_pairs):
     y_true = []
     y_pred = []
     for frame in handlabeled_frames:
-        frame_genders = collect(all_genders[frame.id], itemgetter('labeler__name'))
+        frame_genders = defaultdict(list, collect(all_genders[frame.id],
+                                                  itemgetter('labeler__name')))
         gt_genders = {d['face']: d for d in frame_genders[gt_labeler]}
         for auto_gender in frame_genders[auto_labeler]:
             if not auto_gender['face'] in face_pairs_dict:
@@ -77,12 +81,15 @@ def gender_validation(name, face_pairs):
             y_true.append(gt_gender['gender'])
             y_pred.append(auto_gender['gender'])
 
+    gender_accuracy = metrics.accuracy_score(y_true, y_pred)
     print('== {} =='.format(name))
     print('# labels: {}'.format(len(y_true)))
-    print('Accuracy: {:.3f}'.format(metrics.accuracy_score(y_true, y_pred)))
+    print('Accuracy: {:.3f}'.format(gender_accuracy))
     print('')
 
     mat = metrics.confusion_matrix(y_true, y_pred)
-    plot_confusion_matrix(mat, [d['name'] for d in Gender.objects.values('name').order_by('id')])
+    # plot_confusion_matrix(mat, [d['name'] for d in Gender.objects.values('name').order_by('id')])
     plot_confusion_matrix(
         mat, [d['name'] for d in Gender.objects.values('name').order_by('id')], normalize=True)
+
+    return gender_accuracy

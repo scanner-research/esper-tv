@@ -3,4 +3,4 @@ loglevel = 'debug'
 errorlog = '-'
 accesslog = '-'
 timeout = 0
-workers = 4
+workers = 8

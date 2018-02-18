@@ -216,6 +216,17 @@ def labeled(request):
     gender_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-gender')
     identity_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-identity')
     labeled_tag, _ = m.Tag.objects.get_or_create(name='handlabeled-face:labeled')
+    verified_tag, _ = m.Tag.objects.get_or_create(name='tmp-verified')
+
+    frame_ids = [
+        m.Frame.objects.get(video_id=vid, number=frame_num).id
+        for (vid, frame_num, faces) in params['frames']
+    ]
+    m.Frame.tags.through.objects.filter(
+        tvnews_frame__id__in=frame_ids, tvnews_tag=labeled_tag).delete()
+    m.Frame.tags.through.objects.filter(
+        tvnews_frame__id__in=frame_ids, tvnews_tag=verified_tag).delete()
+    m.Face.objects.filter(person__frame__id__in=frame_ids, labeler=face_labeler).delete()
 
     all_tags = []
     all_people = []
@@ -226,6 +237,8 @@ def labeled(request):
         frame = m.Frame.objects.get(video_id=vid, number=frame_num)
         all_tags.append(
             m.Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=labeled_tag.id))
+        all_tags.append(
+            m.Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=verified_tag.id))
         for face in faces:
             all_people.append(m.Person(frame=frame))
 
@@ -234,6 +247,7 @@ def labeled(request):
                 'labeler': face_labeler,
                 'person_id': None,
                 'shot_id': None,
+                'background': face['background']
             }
             for k in ['bbox_x1', 'bbox_x2', 'bbox_y1', 'bbox_y2']:
                 face_params[k] = face[k]
@@ -253,6 +267,7 @@ def labeled(request):
 
     m.Person.objects.bulk_create(all_people)
 
+    _print(all_faces)
     for (p, f) in zip(all_people, all_faces):
         f.person_id = p.id
     m.Face.objects.bulk_create(all_faces)
@@ -262,6 +277,7 @@ def labeled(request):
         if i is not None:
             i.face_id = f.id
     m.FaceGender.objects.bulk_create(all_genders)
+    _print(all_identities)
     m.FaceIdentity.objects.bulk_create([i for i in all_identities if i is not None])
 
     return JsonResponse({'success': True})

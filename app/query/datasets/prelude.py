@@ -577,15 +577,15 @@ class SparkWrapper:
         return self.spark.createDataFrame(self.sc.parallelize(ds, 96).map(lambda d: Row(**d)))
 
     def append_column(self, df, name, col):
-        csv_path = '/app/tmp.csv'
+        csv_path = '/app/{}.csv'.format(name)
         with open(csv_path, 'wb') as f:
             writer = csv.writer(f, delimiter=',')
             writer.writerow(['id', name])
             for id, x in col:
-                writer.writerow([id, str(x).lower()])
+                writer.writerow([id, str(x).lower() if x is not None else ''])
         col_df = self.spark.read.format("csv").option("header", "true").option(
             "inferSchema", "true").load(csv_path)
-        os.remove(csv_path)
+        # os.remove(csv_path)
 
         # wcrichto 1-26-18: withColumn appears to fail in practice with inscrutable errors, so
         # we have to use a join instead.
