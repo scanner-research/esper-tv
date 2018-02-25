@@ -198,8 +198,9 @@ def subtitles(request):
     m = ModelDelegator(request.GET.get('dataset'))
     m.import_all(locals())
 
-    path = request.GET.get('video')
-    base, _ = os.path.splitext(path)
+    video_id = request.GET.get('video')
+    video = Video.objects.get(id=video_id)
+    base, _ = os.path.splitext(video.path)
 
     s = storage.read('{}.cc5.srt'.format(base)).decode('utf-8')
     vtt = srt_to_vtt(s)

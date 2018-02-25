@@ -34,6 +34,21 @@
             left: 0;
         }
 
+        .options {
+            input[type=range] {
+                display: inline-block;
+                width: 40%;
+                margin-right: 10px;
+                vertical-align: middle;
+            }
+
+            input[type=number] {
+                display: inline-block;
+                padding: 2px 6px;
+                width: 40%;
+            }
+        }
+
         .metadata {
             .meta-block {
                 margin-bottom: 10px;
@@ -62,15 +77,15 @@
     }
 
     .group {
+        padding: 5px;
+
         &.flat {
             float: left;
-
             .group-label { display: none; }
         }
 
         &.contiguous {
             float: left;
-            padding: 5px;
             margin: 5px;
             border: 2px solid #ccc;
         }
@@ -80,6 +95,7 @@
         .time-container {
             position: relative;
             float: left;
+            border: 1px solid black;
         }
 
         .time-marker {
@@ -91,7 +107,6 @@
         float: left;
         position: relative;
         z-index: 5;
-        padding: 8px;
 
         video, img {
             ufser-select: none;
