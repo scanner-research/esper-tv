@@ -76,6 +76,17 @@
         }
     }
 
+    .timeline {
+        .time-container {
+            position: relative;
+            float: left;
+        }
+
+        .time-marker {
+            position: absolute;
+        }
+    }
+
     .search-result {
         float: left;
         position: relative;
@@ -83,7 +94,7 @@
         padding: 8px;
 
         video, img {
-            user-select: none;
+            ufser-select: none;
         }
 
         video {

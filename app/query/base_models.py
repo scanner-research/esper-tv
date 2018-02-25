@@ -9,6 +9,8 @@ import sys
 import numpy as np
 import json
 import warnings
+import os
+import subprocess as sp
 
 MAX_STR_LEN = 256
 
@@ -131,6 +133,19 @@ class Video(models.Model):
         from query.datasets.prelude import storage
         with open(path, 'wb') as f:
             f.write(storage.read(self.path))
+
+    def url(self, expiry='1m'):
+        if os.environ['ESPER_ENV'] != 'google':
+            raise Exception('Video.url only works on GCS for now')
+
+        return sp.check_output(
+            "gsutil signurl -d {} /app/service-key.json gs://{}/{} | awk 'FNR==2{{print $5}}'".
+            format(expiry, os.environ['BUCKET'], self.path),
+            shell=True).strip()
+
+    def frame_time(self, frame):
+        return frame / self.fps
+
 
 class Frame(models.Model):
     __metaclass__ = DatasetMeta

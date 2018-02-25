@@ -17,7 +17,8 @@ let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.s
   show_middle_frame: true,
   show_gender_as_border: true,
   show_inline_metadata: false,
-  thumbnail_size: 1
+  thumbnail_size: 1,
+  timeline_view: true
 }));
 
 window.DISPLAY_OPTIONS = observable.map(displayOptions);
@@ -183,21 +184,140 @@ class GroupsView extends React.Component {
 // Displays results with basic pagination
 @observer
 class GroupView extends React.Component {
+  state = {
+    expand: false
+  }
+
+  _onKeyPress = (e) => {
+    if (IGNORE_KEYPRESS) {
+      return;
+    }
+
+    let chr = String.fromCharCode(e.which);
+    if (chr == 'f') {
+      this.setState({expand: !this.state.expand});
+    }
+  }
+
+  _onMouseEnter = () => {
+    document.addEventListener('keypress', this._onKeyPress);
+  }
+
+  _onMouseLeave = () => {
+    document.removeEventListener('keypress', this._onKeyPress);
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener('keypress', this._onKeyPress);
+  }
+  componentWillReceiveProps(props) {
+    if (this.props.group != props.group) {
+      this.setState({expand: false});
+    }
+  }
+
   render () {
     let group = this.props.group;
     return (
-      <div className={'group selected ' + group.type}>
-        <div>
-          <div className='group-label'>{group.label}</div>
-          <div className='group-elements'>
-            {group.elements.map((clip, i) =>
-              <ClipView key={i} clip={clip} group_id={this.props.group_id} onSelect={this.props.onSelect}
-                        onIgnore={this.props.onIgnore} colorClass={this.props.colorClass}/>)}
-            <div className='clearfix' />
-          </div>
-        </div>
+      <div onMouseEnter={this._onMouseEnter} onMouseLeave={this._onMouseLeave} >
+        {DISPLAY_OPTIONS.get('timeline_view') && group.type == 'contiguous'
+         ? <TimelineView group={group} group_id={this.props.group_id} expand={this.state.expand}/>
+         : <div className={'group selected ' + group.type}>
+           <div>
+             <div className='group-label'>{group.label}</div>
+             <div className='group-elements'>
+               {group.elements.map((clip, i) =>
+                 <ClipView key={i} clip={clip} group_id={this.props.group_id} onSelect={this.props.onSelect}
+                           onIgnore={this.props.onIgnore} colorClass={this.props.colorClass} showMeta={true}
+                           expand={this.state.expand} />)}
+               <div className='clearfix' />
+             </div>
+           </div>
+         </div>}
       </div>
     );
+  }
+}
+
+@observer
+class TimelineView extends React.Component {
+  state = {
+    currentTime: 0
+  }
+
+  _onTimeUpdate = (t) => {
+    this.setState({currentTime: t});
+  }
+
+  render() {
+    let group = this.props.group;
+    let expand = this.props.expand;
+
+    let clip = {
+      video: group.elements[0].video,
+      start_frame: group.elements[0].start_frame,
+      end_frame: group.elements[group.elements.length-1].end_frame
+    };
+
+    let video = window.search_result.videos[clip.video];
+    let small_height = expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
+    let small_width = video.width * small_height / video.height;
+
+    let style = {
+      width: small_width,
+    };
+
+    let timeboxStyle = {
+      width: small_width,
+      height: expand ? 60 : 20
+    }
+    let w = timeboxStyle.width;
+    let h = timeboxStyle.height;
+
+    let timeboxRange = 20;
+    let mw = expand ? 4 : 2;
+    let mh = timeboxStyle.height;
+    let mf = expand ? 16 : 12;
+
+    //<div className='time-marker' style={_.merge({left: timeboxStyle.width/2}, markerBaseStyle)} />
+
+    return (<div className='timeline' style={style}>
+      <ClipView clip={clip} group_id={this.props.group_id} onTimeUpdate={this._onTimeUpdate} showMeta={false}
+                expand={this.props.expand} />
+      <svg className='time-container' style={timeboxStyle}>
+        <line x1={w/2} x2={w/2} y1={0} y2={h} stroke="rgb(200, 30, 30)" strokeWidth={mw} />
+        <g>
+          {group.elements.map(((elt, i) => {
+             let label = elt.label;
+             let start = elt.start_frame / video.fps;
+             let end = elt.end_frame / video.fps;
+             return <g key={i}>{[[start, 'open'], [end, 'close']].map((([t, ty], j) => {
+                 let x = w/2 + (t - this.state.currentTime) / (timeboxRange/2) * w/2;
+                 if (0 <= x && x <= w) {
+                   let margin = mw;
+                   if (ty == 'open') {
+                     let points = `${mw*2},${margin} 0,${margin} 0,${mh-margin} ${mw*2},${mh-margin}`;
+                     return (<g key={j} transform={`translate(${x}, 0)`}>
+                       <polyline fill="none" stroke="black" strokeWidth={mw} points={points} />
+                       <text x={mw+4} y={h/2} alignmentBaseline="middle" fontSize={mf}>{label}</text>
+                     </g>);
+                   } else if (ty == 'close') {
+                     let points = `${-mw*2},${margin} 0,${margin} 0,${mh-margin} ${-mw*2},${mh-margin}`;
+                     return (<g key={j} transform={`translate(${x}, 0)`}>
+                       <polyline fill="none" stroke="black" strokeWidth={mw} points={points} />
+                       <text x={-(mw+4)} y={h/2} alignmentBaseline="middle" textAnchor="end" fontSize={mf}>{label}</text>
+                     </g>);
+                     return (<div key={j} />);
+                   }
+                 } else {
+                   return (<div key={j} />);
+                 }
+             }).bind(this))}
+             </g>;
+          }).bind(this))}
+        </g>
+      </svg>
+    </div>);
   }
 }
 
@@ -207,7 +327,6 @@ class ClipView extends React.Component {
   state = {
     showVideo: false,
     loadingVideo: false,
-    expand: false,
     loopVideo: false
   }
 
@@ -251,14 +370,12 @@ class ClipView extends React.Component {
         loadingVideo: true,
         loopVideo: true
       });
-    } else if (chr == 'f') {
-      this.setState({expand: !this.state.expand});
     } else if (chr == 's') {
       this.props.onSelect(this.props.group_id);
     } else if (chr == 'x') {
       this.props.onIgnore(this.props.group_id);
     } else if (chr == 'y') {
-      if (this.state.expand) {
+      if (this.props.expand) {
         let frame = this._fromSeconds(this._video.currentTime);
         this.frames.push(frame);
         console.log(JSON.stringify(this.frames));
@@ -273,7 +390,7 @@ class ClipView extends React.Component {
   _onMouseLeave = () => {
     document.removeEventListener('keypress', this._onKeyPress);
 
-    if (!this.state.expand) {
+    if (!this.props.expand) {
       if (this._video) {
         this._video.removeEventListener('seeked', this._onSeeked);
         this._video.removeEventListener('loadeddata', this._onLoadedData);
@@ -283,10 +400,6 @@ class ClipView extends React.Component {
       }
       this.setState({showVideo: false, loadingVideo: false});
     }
-  }
-
-  _onClick = () => {
-    //console.log('Clicked SearchResultView', this.props.clip.objects[0].id);
   }
 
   _toSeconds = (frame) => {
@@ -322,6 +435,15 @@ class ClipView extends React.Component {
       this._video.addEventListener('seeked', this._onSeeked);
       this._video.addEventListener('loadeddata', this._onLoadedData);
       this._video.addEventListener('timeupdate', this._onTimeUpdate);
+
+      if (this.props.onTimeUpdate) {
+        if (this._timeUpdateInterval) {
+          clearInterval(this._timeUpdateInterval);
+        }
+        this._timeUpdateInterval = setInterval(() => {
+          this.props.onTimeUpdate(this._video.currentTime);
+        }, 16);
+      }
     }
   }
 
@@ -329,14 +451,11 @@ class ClipView extends React.Component {
     return window.search_result.videos[this.props.clip.video];
   }
 
-  componentWillReceiveProps(props) {
-    if (this.props.clip != props.clip) {
-      this.setState({expand: false});
-    }
-  }
-
   componentWillUnmount() {
     document.removeEventListener('keypress', this._onKeyPress);
+    if (this._timeUpdateInterval) {
+      clearInterval(this._timeUpdateInterval);
+    }
   }
 
   render() {
@@ -351,7 +470,7 @@ class ClipView extends React.Component {
 
     let meta = [];
 
-    if (this.state.expand) {
+    if (this.props.expand) {
       meta.push(['Video', `${video.path.split(/[\\/]/).pop()} (${video.id})`]);
       meta.push(['Frame', `${display_frame}`]);
     }
@@ -361,7 +480,9 @@ class ClipView extends React.Component {
       meta.push(['Duration', `${duration.toFixed(1)}s`]);
     }
 
-    meta.push(['# objects', `${clip.objects.length}`]);
+    if (clip.objects !== undefined) {
+      meta.push(['# objects', `${clip.objects.length}`]);
+    }
 
     if (clip.metadata !== undefined) {
       clip.metadata.forEach((entry) => {
@@ -369,14 +490,14 @@ class ClipView extends React.Component {
       });
     }
 
-    let meta_per_row = this.state.expand ? 4 : 2;
+    let meta_per_row = this.props.expand ? 4 : 2;
     let td_style = {width: `${100 / meta_per_row}%`};
 
     if (this._video) {
       this._video.playbackRate = DISPLAY_OPTIONS.get('playback_speed');
     }
 
-    let small_height = this.state.expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
+    let small_height = this.props.expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
     let small_width = video.width * small_height / video.height;
     let vidStyle = this.state.showVideo ? {
       zIndex: 2,
@@ -385,10 +506,9 @@ class ClipView extends React.Component {
     } : {};
 
     return (
-      <div className={`search-result ${this.props.colorClass} ${(this.state.expand ? 'expanded' : '')}`}
+      <div className={`search-result ${this.props.colorClass} ${(this.props.expand ? 'expanded' : '')}`}
            onMouseEnter={this._onMouseEnter}
-           onMouseLeave={this._onMouseLeave}
-           onClick={this._onClick}>
+           onMouseLeave={this._onMouseLeave}>
         <div className='media-container'>
           {this.state.loadingVideo || this.state.showVideo
            ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
@@ -404,13 +524,13 @@ class ClipView extends React.Component {
            ? <div className='loading-video'><img className='spinner' /></div>
            : <div />}
           <FrameView
-            bboxes={clip.objects}
+            bboxes={clip.objects || []}
             small_width={small_width}
             small_height={small_height}
             full_width={video.width}
             full_height={video.height}
             onClick={this.props.onBoxClick}
-            expand={this.state.expand}
+            expand={this.props.expand}
             onChangeGender={() => {}}
             onChangeLabel={() => {}}
             onTrack={() => {}}
@@ -419,7 +539,7 @@ class ClipView extends React.Component {
             onSelect={() => {}}
             path={path} />
         </div>
-        {this.state.expand || DISPLAY_OPTIONS.get('show_inline_metadata')
+        {(this.props.expand || DISPLAY_OPTIONS.get('show_inline_metadata')) && this.props.showMeta
          ?
          <table className='search-result-meta' style={{width: small_width}}>
            <tbody>

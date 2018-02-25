@@ -406,7 +406,7 @@ export class FrameView extends React.Component {
       return;
     }
 
-    while (rel_target != this._div && rel_target.nodeName != 'BODY') {
+    while (rel_target != this._div && rel_target.nodeName != 'HTML') {
       rel_target = rel_target.parentNode;
     }
 
@@ -572,7 +572,8 @@ export class FrameView extends React.Component {
                : <div />}
               {this.props.bboxes.map((box, i) => {
                  if (box.type == 'bbox') {
-                   return <BoxView box={box} key={i} i={i} width={this.props.small_width} height={this.props.small_height}
+                   return <BoxView box={box} key={i} i={i} width={this.props.small_width}
+                                   height={this.props.small_height}
                                    onClick={this.props.onClick}
                                    onDelete={this._onDelete}
                                    onTrack={this._onTrack}
@@ -580,7 +581,8 @@ export class FrameView extends React.Component {
                                    onDeleteTrack={this._onDeleteTrack}
                                    expand={this.props.expand} />;
                  } else if (box.type == 'pose') {
-                   return <PoseView pose={box} key={i} width={this.props.small_width} height={this.props.small_height} expand={this.props.expand} />;
+                   return <PoseView pose={box} key={i} width={this.props.small_width}
+                                    height={this.props.small_height} expand={this.props.expand} />;
                  }})}
             </div>
             : <div />}

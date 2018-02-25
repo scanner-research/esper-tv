@@ -11,6 +11,26 @@ NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
 
 cores = multiprocessing.cpu_count()
+
+spark_config = DotMap(
+    yaml.load("""
+build:
+  context: ./spark
+ports: ['8080:8080', '8081:8081', '7077']
+environment: []
+depends_on: [db]
+volumes:
+  - ./app:/app
+"""))
+
+gentle_config = DotMap(
+    yaml.load("""
+image: lowerquality/gentle
+environment: []
+ports: ['8765']
+command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
+"""))
+
 config = DotMap(
     yaml.load("""
 version: '2'
@@ -32,15 +52,6 @@ services:
     environment:
       - 'WORKERS={workers}'
 
-  spark:
-    build:
-      context: ./spark
-    ports: ['8080:8080', '8081:8081', '7077']
-    environment: []
-    depends_on: [db]
-    volumes:
-      - ./app:/app
-
   app:
     build:
       context: ./app
@@ -48,7 +59,7 @@ services:
       args:
         https_proxy: "${{https_proxy}}"
     privileged: true
-    depends_on: [db, frameserver, spark]
+    depends_on: [db, frameserver]
     volumes:
       - ./app:/app
       - ${{HOME}}/.bash_history:/root/.bash_history
@@ -82,6 +93,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
+    parser.add_argument('--no-spark', action='store_true')
+    parser.add_argument('--no-gentle', action='store_true')
     parser.add_argument('--no-build', action='store_true')
     parser.add_argument('--no-build-base', action='store_true')
     parser.add_argument('--no-build-local', action='store_true')
@@ -110,6 +123,14 @@ def main():
     config.services.app.build.args.device = device
     config.services.app.environment.append('DEVICE={}'.format(device))
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
+
+    if not args.no_spark:
+        config.services.spark = spark_config
+        config.services.app.depends_on.append('spark')
+
+    if not args.no_gentle:
+        config.services.gentle = gentle_config
+        config.services.app.depends_on.append('gentle')
 
     if base_config.database.type == 'google':
         assert 'google' in base_config

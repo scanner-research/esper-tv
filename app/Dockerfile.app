@@ -8,8 +8,15 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y cron python-tk npm nodejs curl unzip jq gdb psmisc zsh && \
+    apt-get install -y cron python-tk npm nodejs curl unzip jq gdb psmisc zsh libgnutls-dev && \
     ln -s /usr/bin/nodejs /usr/bin/node
+
+RUN git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
+    cd ffmpeg && \
+    ./configure --prefix=/usr/local --extra-version=0ubuntu0.16.04.1 --toolchain=hardened --cc=cc --cxx=g++ --enable-gpl --enable-shared --disable-stripping --disable-decoder=libschroedinger --enable-avresample --enable-libx264 --enable-nonfree --enable-gnutls && \
+    make install -j32 && \
+    cd .. && \
+    rm -rf ffmpeg
 
 # Google Cloud SDK
 RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
@@ -43,6 +50,9 @@ RUN cat /tmp/common.sh >> /root/.bashrc
 
 ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
+RUN python -m spacy download en
 
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \

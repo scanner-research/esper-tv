@@ -18,3 +18,6 @@ pysrt==1.1.1
 sqlparse==0.2.4
 internetarchive
 pyspark
+textacy
+gensim
+pyopenssl

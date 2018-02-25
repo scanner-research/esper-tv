@@ -52,10 +52,11 @@ def search(params):
                 if 'end_frame' in obj:
                     frame_ids.add(obj['end_frame'])
 
-                for bbox in obj['objects']:
-                    labeler_ids.add(bbox['labeler_id'])
-                    if 'gender_id' in bbox:
-                        gender_ids.add(bbox['gender_id'])
+                if 'objects' in obj:
+                    for bbox in obj['objects']:
+                        labeler_ids.add(bbox['labeler_id'])
+                        if 'gender_id' in bbox:
+                            gender_ids.add(bbox['gender_id'])
 
         def to_dict(qs):
             return {t['id']: t for t in qs.values()}
