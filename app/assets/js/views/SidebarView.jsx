@@ -129,22 +129,26 @@ class OptionsView extends React.Component {
 class MetadataView extends React.Component {
   render() {
     (window.search_result.result); // ensure that we re-render when search result changes
-    let view_keys = [
-      ['f', 'expand thumbnail'],
-      ['p', 'play clip'],
-      ['l', 'play clip in loop']
-    ];
-    let label_keys = [
-      ['click/drag', 'create bounding box'],
-      ['d', 'delete bounding box'],
-      ['g', 'cycle gender'],
-      ['b', 'mark as background face'],
-      ['s', 'select frames to save'],
-      ['a', 'mark selected as labeled'],
-      ['x', 'mark frame to ignore']
-      /* ['t', 'start track'],
-       * ['q', 'add to track'],
-       * ['u', 'delete track']*/
+    let keys = [
+      ['Viewing',  [
+        ['f', 'expand thumbnail'],
+        ['p', 'play clip'],
+        ['l', 'play clip in loop'],
+        ['r', 'toggle playback speed']
+      ]],
+      ['Frame labeling', [
+        ['click/drag', 'create bounding box'],
+        ['d', 'delete bounding box'],
+        ['g', 'cycle gender'],
+        ['b', 'mark as background face'],
+        ['s', 'select frames to save'],
+        ['a', 'mark selected as labeled'],
+         ['x', 'mark frame to ignore']
+      ]],
+      ['Track labeling', [
+        ['m', 'merge current and last track'],
+        ['t', 'start/end new track']
+      ]]
     ];
     return <div className='metadata'>
       <h2>Metadata</h2>
@@ -172,16 +176,13 @@ class MetadataView extends React.Component {
       <h3>Help</h3>
       <div className='help'>
         On hover over a clip:
-        <div>
-          <strong>Viewing</strong>
-          {view_keys.map((entry, i) =>
-            <div key={i}><code>{entry[0]}</code> - {entry[1]}</div>)}
-        </div>
-        <div>
-          <strong>Labeling</strong>
-          {label_keys.map((entry, i) =>
-            <div key={i}><code>{entry[0]}</code> - {entry[1]}</div>)}
-        </div>
+        {keys.map(([name, sec_keys], i) =>
+          <div key={i} className='help-section'>
+            <strong>{name}</strong>
+          {sec_keys.map((entry, j) =>
+            <div key={j}><code>{entry[0]}</code> - {entry[1]}</div>)}
+          </div>
+        )}
       </div>
     </div>;
   }

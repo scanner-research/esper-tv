@@ -25,12 +25,19 @@ let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.s
 }));
 
 window.DISPLAY_OPTIONS = observable.map(displayOptions);
+
+// Hack used to prevent typing into non-React elements (e.g. a select2 box) from triggering keyboard
+// events on React elements (e.g. the clip viewer). This happens because React uses a synthetic event
+// system separate from the one built-in to the DOM, so it's difficult to deal with the cross-system
+// triggers. We use this global variable for any time when there should definitely be no keypress
+// events happening EXCEPT on the element the user is currently typing into.
 window.IGNORE_KEYPRESS = false;
 
 autorun(() => {
   localStorage.displayOptions = JSON.stringify(toJS(window.DISPLAY_OPTIONS));
 });
 
+// Displays results with basic pagination
 @observer
 class GroupsView extends React.Component {
   state = {
@@ -181,10 +188,8 @@ class GroupsView extends React.Component {
       </div>
     );
   }
-
 }
 
-// Displays results with basic pagination
 @observer
 class GroupView extends React.Component {
   state = {
@@ -241,7 +246,6 @@ class GroupView extends React.Component {
     );
   }
 }
-
 
 @observer
 export default class SearchResultView extends React.Component {

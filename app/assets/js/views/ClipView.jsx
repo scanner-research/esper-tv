@@ -61,6 +61,17 @@ export default class ClipView extends React.Component {
         this.frames.push(frame);
         console.log(JSON.stringify(this.frames));
       }
+    } else if (chr == ' ') {
+      if (this._video) {
+        let isPlaying = this._video.currentTime > 0 && !this._video.paused && !this._video.ended;
+        if (isPlaying) {
+          this._video.pause();
+        } else {
+          this._video.play();
+        }
+        e.stopPropagation();
+        e.preventDefault();
+      }
     }
   }
 
@@ -116,6 +127,12 @@ export default class ClipView extends React.Component {
       this._video.addEventListener('seeked', this._onSeeked);
       this._video.addEventListener('loadeddata', this._onLoadedData);
       this._video.addEventListener('timeupdate', this._onTimeUpdate);
+
+      if (this.props.onVideoPlay) {
+        this._video.addEventListener('playing', this.props.onVideoPlay);
+        this._video.addEventListener('pause', this.props.onVideoStop);
+        this._video.addEventListener('ended', this.props.onVideoStop);
+      }
 
       if (this._lastDisplayTime != this.props.displayTime) {
         this._video.currentTime = this.props.displayTime;
