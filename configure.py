@@ -58,6 +58,7 @@ services:
       dockerfile: Dockerfile.app
       args:
         https_proxy: "${{https_proxy}}"
+        cores: {cores}
     privileged: true
     depends_on: [db, frameserver]
     volumes:

@@ -1,6 +1,7 @@
 ARG device=cpu
 FROM scannerresearch/esper-base:${device}
 ARG https_proxy
+ARG cores=1
 ENV DJANGO_CONFIGURATION Docker
 ENV https_proxy=$https_proxy
 ENV http_proxy=$https_proxy
@@ -11,10 +12,11 @@ RUN apt-get update && \
     apt-get install -y cron python-tk npm nodejs curl unzip jq gdb psmisc zsh libgnutls-dev && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
+# Custom install of ffmpeg to include gnutls so we can do remote access to video files
 RUN git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
     cd ffmpeg && \
     ./configure --prefix=/usr/local --extra-version=0ubuntu0.16.04.1 --toolchain=hardened --cc=cc --cxx=g++ --enable-gpl --enable-shared --disable-stripping --disable-decoder=libschroedinger --enable-avresample --enable-libx264 --enable-nonfree --enable-gnutls && \
-    make install -j32 && \
+    make install -j${cores} && \
     cd .. && \
     rm -rf ffmpeg
 
@@ -25,10 +27,11 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
     apt-get update && apt-get install -y google-cloud-sdk kubectl
 
 # Python setup
-COPY .deps/nbconfig /root/.jupyter/nbconfig
 COPY requirements.app.txt ./
-RUN pip install -r requirements.app.txt && \
-    jupyter nbextension enable qgrid --py --sys-prefix && \
+RUN pip install -r requirements.app.txt
+COPY .deps/nbconfig /root/.jupyter/nbconfig
+COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
+RUN jupyter nbextension enable qgrid --py --sys-prefix && \
     jupyter nbextension install --sys-prefix --py vega && \
     jupyter nbextension enable vega --py --sys-prefix && \
     jupyter nbextension enable --py --sys-prefix widgetsnbextension && \

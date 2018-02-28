@@ -5,6 +5,24 @@ gender_names = {g.id: g.name for g in Gender.objects.all()}
 gender_ids = {v: k for k, v in gender_names.iteritems()}
 
 
+def bootstrap(pred_statistic, pred_sample, true_statistic, true_sample, k=500, trials=10000):
+    def invert(l):
+        return {k: [d[k] for d in l] for k in l[0].keys()}
+
+    all_stats = invert([pred_statistic(np.random.choice(pred_sample, k)) for _ in range(trials)])
+    true_stat = true_statistic(true_sample)
+    pred_stat = pred_statistic(pred_sample)
+    return {
+        k: {
+            'est': pred_stat[k],
+            'bias': pred_stat[k] - true_stat[k],
+            'std': np.std(k_stats),
+            # 'intvl': (pred_stat[k] - 2 * np.std(k_stats), pred_stat[k] + 2 * np.std(k_stats))
+        }
+        for k, k_stats in all_stats.iteritems()
+    }
+
+
 def face_validation(name, face_filter):
     handlabeled_frames = list(Frame.objects.filter(tags__name='handlabeled-face:labeled'))
     all_faces = collect(
@@ -130,7 +148,9 @@ def screentime_validation(name, face_filter, gender_cmat):
 
     labelers = ['rudecarnie', 'rudecarnie-adj', 'handlabeled-gender']
     counts = ['multicount', 'singlecount']
-    totals = {k1: {k2: defaultdict(int) for k2 in counts} for k1 in labelers}
+
+    true_gender = []
+    pred_gender = []
 
     for frame in handlabeled_frames:
         frame_genders = defaultdict(list, collect(all_genders[frame.id],
@@ -138,47 +158,73 @@ def screentime_validation(name, face_filter, gender_cmat):
         shot = Shot.objects.get(
             video=frame.video, min_frame__lte=frame.number, max_frame__gte=frame.number)
         duration = (shot.max_frame - shot.min_frame) / shot.video.fps
-        for k in labelers:
-            has_gender = set()
+        counts = defaultdict(lambda: {i: 0 for i in gender_ids.values()})
+        for k in ['rudecarnie', 'handlabeled-gender']:
             for g in frame_genders[k]:
-                has_gender.add(g['gender'])
-                totals[k]['multicount'][g['gender']] += 1  #duration
-            for g in has_gender:
-                totals[k]['singlecount'][g] += 1  #duration
+                counts[k][g['gender']] += 1
+
+        true_gender.append(counts['handlabeled-gender'])
+        pred_gender.append(counts['rudecarnie'])
 
     def P(y, yhat):
         indices = {'M': 0, 'F': 1, 'U': 2}
         return float(gender_cmat[indices[y]][indices[yhat]]) / sum(
             [gender_cmat[i][indices[yhat]] for i in indices.values()])
 
-    print(gender_cmat)
-    print(P('M', 'F'))
-    print(P('U', 'F'))
-    print(P('M', 'M'))
+    def mod_totals(totals):
+        totals = {gender_names[i]: v for i, v in totals.iteritems()}
+        totals['M/F'] = totals['M'] / float(totals['F'])
+        return totals
 
-    for c in counts:
-        base = totals['rudecarnie'][c]
-        for g in ['M', 'F', 'U']:
-            totals['rudecarnie-adj'][c][gender_ids[g]] = sum(
-                [base[gender_ids[g2]] * P(g, g2) for g2 in ['M', 'F', 'U']])
+    def singlecount(G):
+        totals = {i: 0 for i in gender_ids.values()}
+        for frame in G:
+            for i in gender_ids.values():
+                if frame[i] > 0:
+                    totals[i] += 1
+        return mod_totals(totals)
 
-    d = totals
-    print('== {} =='.format(name))
-    flat_dict = {(i, j): {gender_names[k]: d[i][j][k]
-                          for k in d[i][j].keys()}
-                 for i in d.keys() for j in d[i].keys()}
+    def singlecount_adj(G):
+        totals = singlecount(G)
+        adj_totals = {}
+        for g in gender_ids.values():
+            adj_totals[g] = sum(totals[gender_names[g2]] * P(gender_names[g], gender_names[g2])
+                                for g2 in gender_ids.values())
+        return mod_totals(adj_totals)
 
-    for l in labelers:
-        for c in counts:
-            flat_dict[(l, c)]['M/F'] = float(d[l][c][gender_ids['M']]) / d[l][c][gender_ids['F']]
+    def multicount(G):
+        totals = {i: 0 for i in gender_ids.values()}
+        for frame in G:
+            for i in gender_ids.values():
+                totals[i] += frame[i]
+        return mod_totals(totals)
 
-    df = pd.DataFrame.from_dict(flat_dict, orient='index').reset_index()
-    print(df.pivot_table(index=['level_1', 'level_0']))
-    print('')
+    def multicount_adj(G):
+        totals = multicount(G)
+        adj_totals = {}
+        for g in gender_ids.values():
+            adj_totals[g] = sum(totals[gender_names[g2]] * P(gender_names[g], gender_names[g2])
+                                for g2 in gender_ids.values())
+        return mod_totals(adj_totals)
 
+    def print_results(name, r):
+        print('== {} =='.format(name))
+        print(pd.DataFrame.from_dict(r, orient='index')[['est', 'bias',
+                                                         'std']]).reindex(['M', 'F', 'U', 'M/F'])
+        print('')
 
-# if __name__ == '__main__':
-#     screentime_validation('All faces', lambda x: x)
-#     # screentime_validation(
-#     #     'Face height > 0.2',
-#     #     lambda qs: qs.annotate(height=F('face__bbox_y2') - F('face__bbox_y1')).filter(height__gte=0.2))
+    metrics = [['multicount', [multicount, multicount_adj]],
+               ['singlecount', [singlecount, singlecount_adj]]]
+
+    print('{} {} {}\n'.format('=' * 20, name, '=' * 20))
+    for [name, submetrics] in metrics:
+        print('======= {} =======\n'.format(name.upper()))
+        print('== true ==')
+        print(pd.DataFrame.from_dict(submetrics[0](true_gender), orient='index').rename(
+            index=str, columns={
+                0: 'est'
+            }).reindex(['M', 'F', 'U', 'M/F']))
+        print('\n')
+        print_results('unadjusted', bootstrap(submetrics[0], pred_gender, submetrics[0],
+                                              true_gender))
+        print_results('adjusted', bootstrap(submetrics[1], pred_gender, submetrics[0], true_gender))
