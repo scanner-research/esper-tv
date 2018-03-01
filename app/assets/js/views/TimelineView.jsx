@@ -2,13 +2,13 @@ import React from 'react';
 import {boundingRect} from './FrameView.jsx';
 import ClipView from './ClipView.jsx';
 import {observer} from 'mobx-react';
+import {toJS} from 'mobx';
 
 @observer
 class MarkerView extends React.Component {
   render() {
-    let {t, w, h, mw, mh, mf, label, type, color, ..._} = this.props;
+    let {x, w, h, mw, mh, mf, label, type, color, ..._} = this.props;
     let margin = mw;
-    let x = w/2 + (t - this.props.currentTime) / (DISPLAY_OPTIONS.get('timeline_range')/2) * w/2;
     if (0 <= x && x <= w) {
       if (type == 'open') {
         let points = `${mw*2},${margin} 0,${margin} 0,${mh-2*margin} ${mw*2},${mh-2*margin}`;
@@ -75,11 +75,20 @@ class TrackView extends React.Component {
     let start = track.start_frame / video.fps;
     let end = track.end_frame / video.fps;
 
+    let range = DISPLAY_OPTIONS.get('timeline_range');
+    let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
+    let x1 = time_to_x(start);
+    let x2 = time_to_x(end);
+
     return (
       <g ref={(n) => {this._g = n;}}>
-        {[[start, 'open'], [end, 'close']].map(([t, ty], i) =>
-          <MarkerView key={i} t={t} type={ty} label={label} color="black" {...this.props} />
-        )}
+        <rect x={x1} width={x2-x1} y={0} height={h} fill={window.search_result.gender_colors[label]} />
+        {range < 600
+         ? <g>
+           <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
+           <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
+         </g>
+         : <g />}
       </g>
     );
   }
@@ -98,6 +107,7 @@ export default class TimelineView extends React.Component {
 
   _videoPlaying = false;
   _lastPlaybackSpeed = DISPLAY_OPTIONS.get('playback_speed');
+  _undoStack = [];
 
   _onTimeUpdate = (t) => {
     this.setState({currentTime: t});
@@ -147,19 +157,32 @@ export default class TimelineView extends React.Component {
     this._videoPlaying = false;
   }
 
+  _pushState = () => {
+    this._undoStack.push(_.cloneDeep(toJS(this.props.group.elements)));
+
+    // Keep the stack small to avoid using too much memory
+    let MAX_UNDO_STACK_SIZE = 10;
+    if (this._undoStack.length > MAX_UNDO_STACK_SIZE) {
+      this._undoStack.shift();
+    }
+  }
+
   _onTrackKeyPress = (e, i) => {
     let chr = String.fromCharCode(e.which);
     if (chr == 'g') {
+      this._pushState();
       let track = this.props.group.elements[i];
       track.label = (track.label == 'M' ? 'F' : 'M');
     }
 
     else if (chr == 'm') {
+      this._pushState();
       this.props.group.elements[i].start_frame = this.props.group.elements[i-1].start_frame;
       this.props.group.elements.splice(i-1, 1);
     }
 
     else if (chr == 'd') {
+      this._pushState();
       this.props.group.elements.splice(i, 1);
     }
   }
@@ -176,11 +199,15 @@ export default class TimelineView extends React.Component {
     if (chr == '\r') {
       let lastTrack = elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
         clip.start_frame <= curFrame);
-      let newTime = elements[lastTrack[lastTrack.length - 1][1] + 1].start_frame / fps + 0.1;
-      this.setState({
-        displayTime: newTime,
-        currentTime: newTime
-      });
+      let offset = e.shiftKey ? -1 : 1;
+      let index = lastTrack[lastTrack.length - 1][1] + offset;
+      if (0 <= index && index < elements.length) {
+        let newTime = elements[index].start_frame / fps + 0.1;
+        this.setState({
+          displayTime: newTime,
+          currentTime: newTime
+        });
+      }
     }
 
     else if (chr == 'r') {
@@ -197,6 +224,8 @@ export default class TimelineView extends React.Component {
       if (this.state.trackStart == -1) {
         this.setState({trackStart: this.state.currentTime});
       } else {
+        this._pushState();
+
         let start = Math.round(this.state.trackStart * fps);
         let end = Math.round(this.state.currentTime * fps);
 
@@ -229,9 +258,7 @@ export default class TimelineView extends React.Component {
           }
         });
 
-        console.log(elements[0].start_frame, elements[elements.length-1].start_frame, elements.length);
         _.reverse(to_delete);
-        console.log('Deleting', to_delete);
         to_delete.map((i) => elements.splice(i, -1));
         elements.push.apply(elements, to_add);
         elements.push({
@@ -242,6 +269,13 @@ export default class TimelineView extends React.Component {
         this.props.group.elements = _.sortBy(elements, ['start_frame']);
 
         this.setState({trackStart: -1});
+      }
+    }
+
+    else if (chr == 'z') {
+      if (this._undoStack.length > 0) {
+        let lastState = this._undoStack.pop();
+        this.props.group.elements = lastState;
       }
     }
 
@@ -301,8 +335,6 @@ export default class TimelineView extends React.Component {
       video: video
     };
 
-    //console.log(tprops);
-
     return (<div className='timeline' style={style}>
       <ClipView clip={clip} group_id={this.props.group_id} onTimeUpdate={this._onTimeUpdate} showMeta={false}
                 expand={this.props.expand} displayTime={this.state.displayTime}
@@ -313,13 +345,13 @@ export default class TimelineView extends React.Component {
            onMouseUp={this._onMouseUp}
            onMouseLeave={this._onMouseLeave}
            ref={(n) => {this._svg = n;}}>
-        <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(230, 20, 20)" strokeWidth={tprops.mw*1.5} />
-        {this.state.trackStart != -1
-         ? <MarkerView t={this.state.trackStart} type="open" color="rgb(20, 230, 20)" {...tprops} />
-         : <g />}
         <g>{group.elements.map((track, i) =>
           <TrackView key={i} i={i} track={track} onKeyPress={this._onTrackKeyPress} {...tprops} />)}
         </g>
+        {this.state.trackStart != -1
+         ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
+         : <g />}
+        <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(20, 230, 20)" strokeWidth={tprops.mw*1.5} />
       </svg>
     </div>);
   }

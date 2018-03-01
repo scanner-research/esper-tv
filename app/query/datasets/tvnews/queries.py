@@ -469,3 +469,28 @@ def animated_rachel_maddow():
         'objects':
         [bbox_to_dict(Face.objects.filter(person__frame__number=t.min_frame, person__tracks=t)[0])]
     } for t, score in all_dists], 'PersonTrack')
+
+
+@query("Audio labels")
+def audio_labels():
+    gender_seg = json.load(open('/app/gender_seg.json', 'rb'))
+    v = Video.objects.get(
+        path='tvnews/videos/MSNBCW_20160505_230000_Hardball_With_Chris_Matthews.mp4')
+    return {
+        'result': [{
+            'type':
+            'contiguous',
+            'label':
+            '',
+            'elements': [{
+                'video': v.id,
+                'start_frame': int(d['start'] * v.fps),
+                'end_frame': int((d['start'] + d['end']) * v.fps),
+                'label': d['gender']
+            } for d in sorted(gender_seg, key=itemgetter('start'))]
+        }],
+        'count':
+        0,
+        'type':
+        '_'
+    }

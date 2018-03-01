@@ -75,7 +75,7 @@ def index(request):
             things[name] = {
                 d['id']: d['name']
                 for d in ds.Thing.objects.filter(
-                    type=mod.ThingType.PERSON).order_by('name').values('id', 'name')
+                    type__name='person').order_by('name').values('id', 'name')
             }
         else:
             things[name] = []

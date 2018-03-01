@@ -2,7 +2,6 @@ from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceT
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
-from query.datasets.tvnews.models import ThingType
 from django.db import connections, connection
 from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func

@@ -43,29 +43,17 @@ class Gender(base.Model):
     name = base.CharField()
 
 
-class Topic(base.Model):
-    name = base.CharField()
-
-
-class TopicTrack(base.Track):
-    topic = base.ForeignKey(Topic)
-
-
 class Commercial(base.Track):
     pass
 
 
-class ThingType():
-    TOPIC = 1
-    PHRASE = 2
-    PERSON = 3
-    LOCATION = 4
-    ORGANIZATION = 5
+class ThingType(base.Model):
+    name = base.CharField()
 
 
 class Thing(base.Model):
     name = base.CharField()
-    type = models.IntegerField()
+    type = base.ForeignKey(ThingType)
 
     class Meta:
         unique_together = ('name', 'type')

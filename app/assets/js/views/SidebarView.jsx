@@ -147,7 +147,9 @@ class MetadataView extends React.Component {
       ]],
       ['Track labeling', [
         ['m', 'merge current and last track'],
-        ['t', 'start/end new track']
+        ['t', 'start/end new track'],
+        ['enter', 'skip to next track'],
+        ['z', 'undo last action']
       ]]
     ];
     return <div className='metadata'>
