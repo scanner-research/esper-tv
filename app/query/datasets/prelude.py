@@ -441,6 +441,41 @@ def model_repr(model):
 models.Model.__repr__ = model_repr
 
 
+def crop(img, bbox):
+    [h, w] = img.shape[:2]
+    return img[int(bbox.bbox_y1 * h):int(bbox.bbox_y2 * h),
+               int(bbox.bbox_x1 * w):int(bbox.bbox_x2 * w)]
+
+
+def resize(img, w, h):
+    th = int(img.shape[0] * (tw / float(img.shape[1]))) if h is None else h
+    tw = int(img.shape[1] * (th / float(img.shape[0]))) if w is None else w
+    return cv2.resize(img, (tw, th))
+
+
+def load_frame(video, frame, bboxes):
+    while True:
+        try:
+            r = requests.get(
+                'http://frameserver:7500/fetch', params={
+                    'path': video.path,
+                    'frame': frame,
+                })
+            break
+        except requests.ConnectionError:
+            pass
+    img = cv2.imdecode(np.fromstring(r.content, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    if img is None:
+        raise Exception("Bad frame {} for {}".format(frame, video.path))
+    for bbox in bboxes:
+        img = cv2.rectangle(
+            img, (int(bbox['bbox_x1'] * img.shape[1]), int(bbox['bbox_y1'] * img.shape[0])),
+            (int(bbox['bbox_x2'] * img.shape[1]), int(bbox['bbox_y2'] * img.shape[0])), (0, 0, 255),
+            8)
+
+    return img
+
+
 def make_montage(video,
                  frames,
                  output_path=None,
@@ -452,32 +487,13 @@ def make_montage(video,
                  progress=False):
     target_width = width / num_cols
 
-    def load_frame((video, n, bboxes)):
-        while True:
-            try:
-                r = requests.get(
-                    'http://frameserver:7500/fetch', params={
-                        'path': video.path,
-                        'frame': n,
-                    })
-                break
-            except requests.ConnectionError:
-                pass
-        img = cv2.imdecode(np.fromstring(r.content, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise Exception("Bad frame {} for {}".format(n, video.path))
-        for bbox in bboxes:
-            img = cv2.rectangle(
-                img, (int(bbox['bbox_x1'] * img.shape[1]), int(bbox['bbox_y1'] * img.shape[0])),
-                (int(bbox['bbox_x2'] * img.shape[1]), int(bbox['bbox_y2'] * img.shape[0])),
-                (0, 0, 255), 8)
-        th = int(img.shape[0] *
-                 (target_width / float(img.shape[1]))) if target_height is None else target_height
-        return cv2.resize(img, (target_width, th))
-
     bboxes = bboxes or [[] for _ in range(len(frames))]
     videos = video if isinstance(video, list) else [video for _ in range(len(frames))]
-    imgs = par_for(load_frame, zip(videos, frames, bboxes), progress=progress, workers=workers)
+    imgs = par_for(
+        lambda t: resize(load_frame(*t), target_width, target_height),
+        zip(videos, frames, bboxes),
+        progress=progress,
+        workers=workers)
     target_height = imgs[0].shape[0]
     num_rows = int(math.ceil(float(len(imgs)) / num_cols))
 
@@ -617,7 +633,9 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     Normalization can be applied by setting `normalize=True`.
     """
     if normalize:
+        cm = cm.T
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        cm = cm.T
         print("Normalized confusion matrix")
     else:
         print('Confusion matrix, without normalization')

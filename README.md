@@ -64,3 +64,12 @@ Next, check out the Jupyter programming environment by visiting [http://localhos
 ## Getting started
 
 TODO(wcrichto): getting started with your own dataset
+
+## Contributing
+
+TODO(wcrichto): more details here
+
+Run this:
+```
+git config --local include.path ../.gitconfig
+```

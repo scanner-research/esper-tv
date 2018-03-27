@@ -48,9 +48,9 @@ def search(params):
         for group in result['result']:
             for obj in group['elements']:
                 video_ids.add(obj['video'])
-                frame_ids.add(obj['start_frame'])
-                if 'end_frame' in obj:
-                    frame_ids.add(obj['end_frame'])
+                frame_ids.add(obj['min_frame'])
+                if 'max_frame' in obj:
+                    frame_ids.add(obj['max_frame'])
 
                 if 'objects' in obj:
                     for bbox in obj['objects']:

@@ -555,7 +555,7 @@ export class FrameView extends React.Component {
            onMouseOver={this._onMouseOver}
            onMouseOut={this._onMouseOut}
            ref={(n) => { this._div = n; }}>
-        {DISPLAY_OPTIONS.get('crop_bboxes')
+        {DISPLAY_OPTIONS.get('crop_bboxes') && this.props.bboxes.length > 0
          ? <ProgressiveImage
              src={this.props.path}
              crop={this.props.bboxes[0]}

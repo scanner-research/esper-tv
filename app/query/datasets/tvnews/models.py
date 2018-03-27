@@ -21,6 +21,9 @@ class Video(base.Video):
     def get_stride(self):
         return int(math.ceil(self.fps) / 2)
 
+    def item_name(self):
+        return '.'.join(self.path.split('/')[-1].split('.')[:-1])
+
 
 class Tag(base.Model):
     name = base.CharField()
@@ -69,12 +72,12 @@ class Shot(base.Track):
     in_commercial = models.BooleanField(default=False)
 
 
-class PersonTrack(base.Track):
-    pass
+class Speaker(base.Track):
+    gender = base.ForeignKey(Gender)
 
 
 class Person(base.Noun):
-    tracks = base.ManyToManyField(PersonTrack)
+    pass
 
 
 class Pose(base.Attribute, base.Pose):
@@ -88,6 +91,7 @@ class Face(base.Attribute, base.BoundingBox):
     person = base.ForeignKey(Person)
     shot = base.ForeignKey(Shot, null=True)
     background = models.BooleanField(default=False)
+    is_host = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('labeler', 'person')

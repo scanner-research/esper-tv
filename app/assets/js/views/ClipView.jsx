@@ -23,7 +23,7 @@ export default class ClipView extends React.Component {
     this.fullScreen = !this.fullScreen;
 
     if (this.fullScreen && this.state.showVideo) {
-      this._video.currentTime = this._toSeconds(this.props.clip.start_frame);
+      this._video.currentTime = this._toSeconds(this.props.clip.min_frame);
       this._video.pause();
       setTimeout(() => {
         if (this._video) {
@@ -51,16 +51,6 @@ export default class ClipView extends React.Component {
         loadingVideo: true,
         loopVideo: true
       });
-    } else if (chr == 's') {
-      this.props.onSelect(this.props.group_id);
-    } else if (chr == 'x') {
-      this.props.onIgnore(this.props.group_id);
-    } else if (chr == 'y') {
-      if (this.props.expand) {
-        let frame = this._fromSeconds(this._video.currentTime);
-        this.frames.push(frame);
-        console.log(JSON.stringify(this.frames));
-      }
     } else if (chr == ' ') {
       if (this._video) {
         let isPlaying = this._video.currentTime > 0 && !this._video.paused && !this._video.ended;
@@ -107,7 +97,7 @@ export default class ClipView extends React.Component {
   }
 
   _onLoadedData = () => {
-    this._video.currentTime = this._toSeconds(this.props.clip.start_frame);
+    this._video.currentTime = this._toSeconds(this.props.clip.min_frame);
     if (this._video.textTracks.length > 0) {
       this._video.textTracks[0].mode = 'showing';
     }
@@ -116,9 +106,9 @@ export default class ClipView extends React.Component {
 
   _onTimeUpdate = () => {
     if (this.state.loopVideo &&
-        this.props.clip.end_frame !== undefined &&
-        this._video.currentTime >= this._toSeconds(this.props.clip.end_frame)) {
-      this._video.currentTime = this._toSeconds(this.props.clip.start_frame);
+        this.props.clip.max_frame !== undefined &&
+        this._video.currentTime >= this._toSeconds(this.props.clip.max_frame)) {
+      this._video.currentTime = this._toSeconds(this.props.clip.min_frame);
     }
   }
 
@@ -172,9 +162,9 @@ export default class ClipView extends React.Component {
     let video = this._videoMeta();
 
     let display_frame =
-      DISPLAY_OPTIONS.get('show_middle_frame') && clip.end_frame
-      ? Math.round((clip.end_frame + clip.start_frame) / 2)
-      : clip.start_frame;
+      DISPLAY_OPTIONS.get('show_middle_frame') && clip.max_frame
+      ? Math.round((clip.max_frame + clip.min_frame) / 2)
+      : clip.min_frame;
     let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
 
     let meta = [];
@@ -184,8 +174,8 @@ export default class ClipView extends React.Component {
       meta.push(['Frame', `${display_frame}`]);
     }
 
-    if (clip.end_frame !== undefined) {
-      let duration = (clip.end_frame - clip.start_frame) / video.fps;
+    if (clip.max_frame !== undefined) {
+      let duration = (clip.max_frame - clip.min_frame) / video.fps;
       meta.push(['Duration', `${duration.toFixed(1)}s`]);
     }
 
@@ -215,7 +205,7 @@ export default class ClipView extends React.Component {
     } : {};
 
     return (
-      <div className={`search-result ${this.props.colorClass} ${(this.props.expand ? 'expanded' : '')}`}
+      <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}
            onMouseEnter={this._onMouseEnter}
            onMouseLeave={this._onMouseLeave}>
         <div className='media-container'>

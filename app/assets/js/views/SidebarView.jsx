@@ -85,9 +85,14 @@ class OptionsView extends React.Component {
       key: 'show_face',
       type: 'radio',
     },
+    /* {
+     *   name: 'Show left/right (blue/red)',
+     *   key: 'show_lr',
+     *   type: 'radio'
+     * },*/
     {
-      name: 'Show left/right (blue/red)',
-      key: 'show_lr',
+      name: 'Show middle frame',
+      key: 'show_middle_frame',
       type: 'radio'
     },
   ]

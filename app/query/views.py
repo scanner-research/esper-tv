@@ -208,20 +208,19 @@ def subtitles(request):
     return HttpResponse(vtt, content_type="text/vtt")
 
 
-# Register frames as labeled
-def labeled(request):
-    params = json.loads(request.body)
-    m = ModelDelegator(params['dataset'])
-
+def save_frame_labels(m, groups):
     face_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-face')
     gender_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-gender')
     identity_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-identity')
     labeled_tag, _ = m.Tag.objects.get_or_create(name='handlabeled-face:labeled')
     verified_tag, _ = m.Tag.objects.get_or_create(name='tmp-verified')
 
+    all_frames = [(elt['video'], elt['min_frame'], elt['objects'])
+                  for group in groups for elt in group['elements']]
+
     frame_ids = [
         m.Frame.objects.get(video_id=vid, number=frame_num).id
-        for (vid, frame_num, faces) in params['frames']
+        for (vid, frame_num, faces) in all_frames
     ]
     m.Frame.tags.through.objects.filter(
         tvnews_frame__id__in=frame_ids, tvnews_tag=labeled_tag).delete()
@@ -234,7 +233,7 @@ def labeled(request):
     all_faces = []
     all_genders = []
     all_identities = []
-    for (vid, frame_num, faces) in params['frames']:
+    for (vid, frame_num, faces) in all_frames:
         frame = m.Frame.objects.get(video_id=vid, number=frame_num)
         all_tags.append(
             m.Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=labeled_tag.id))
@@ -268,7 +267,6 @@ def labeled(request):
 
     m.Person.objects.bulk_create(all_people)
 
-    _print(all_faces)
     for (p, f) in zip(all_people, all_faces):
         f.person_id = p.id
     m.Face.objects.bulk_create(all_faces)
@@ -278,7 +276,50 @@ def labeled(request):
         if i is not None:
             i.face_id = f.id
     m.FaceGender.objects.bulk_create(all_genders)
-    _print(all_identities)
     m.FaceIdentity.objects.bulk_create([i for i in all_identities if i is not None])
+
+
+def save_speaker_labels(m, groups):
+    audio_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-audio')
+    segment_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-audio:labeled')
+    speakers = []
+    segments = []
+    for group in groups:
+        elements = group['elements']
+        frame_nums = []
+        for e in elements:
+            speakers.append(
+                m.Speaker(
+                    labeler=audio_labeler,
+                    video_id=e['video'],
+                    min_frame=e['min_frame'],
+                    max_frame=e['max_frame'],
+                    gender_id=e['gender_id']))
+            frame_nums.append(e['min_frame'])
+            frame_nums.append(e['max_frame'])
+
+        frame_nums.sort()
+        segments.append(
+            m.Segment(
+                labeler=segment_labeler,
+                video_id=elements[0]['video'],
+                min_frame=frame_nums[0],
+                max_frame=frame_nums[-1]))
+
+    m.Speaker.objects.bulk_create(speakers)
+    m.Segment.objects.bulk_create(segments)
+
+
+# Register frames as labeled
+def labeled(request):
+    params = json.loads(request.body)
+    m = ModelDelegator(params['dataset'])
+
+    groups = params['groups']
+    ty = groups[0]['type']
+    if ty == 'flat':
+        save_frame_labels(m, groups)
+    else:
+        save_speaker_labels(m, groups)
 
     return JsonResponse({'success': True})

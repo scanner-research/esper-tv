@@ -84,13 +84,12 @@ class GroupsView extends React.Component {
           continue;
         }
 
-        let frame = window.search_result.result[i].elements[0];
-        labeled.push([frame.video, frame.start_frame, frame.objects]);
+        labeled.push(window.search_result.result[i]);
         green.add(i);
       }
 
       axios
-        .post('/api/labeled', {dataset: DATASET, frames: labeled})
+        .post('/api/labeled', {dataset: DATASET, groups: labeled})
         .then(((response) => {
           console.log('Done!');
           this.setState({
@@ -174,8 +173,9 @@ class GroupsView extends React.Component {
           {_.range(DISPLAY_OPTIONS.get('results_per_page') * this.state.page,
                    Math.min(DISPLAY_OPTIONS.get('results_per_page') * (this.state.page + 1),
                             window.search_result.result.length))
-            .map((i) => <GroupView key={i} group={window.search_result.result[i]} group_id={i} onSelect={this._onSelect}
-                                   onIgnore={this._onIgnore} colorClass={this.getColorClass(i)}/>)}
+            .map((i) => <GroupView key={i} group={window.search_result.result[i]} group_id={i}
+                                   onSelect={this._onSelect} onIgnore={this._onIgnore}
+                                   colorClass={this.getColorClass(i)}/>)}
           <div className='clearfix' />
         </div>
         <div className='page-buttons'>
@@ -204,6 +204,10 @@ class GroupView extends React.Component {
     let chr = String.fromCharCode(e.which);
     if (chr == 'f') {
       this.setState({expand: !this.state.expand});
+    } else if (chr == 's') {
+      this.props.onSelect(this.props.group_id);
+    } else if (chr == 'x') {
+      this.props.onIgnore(this.props.group_id);
     }
   }
 
@@ -227,19 +231,16 @@ class GroupView extends React.Component {
   render () {
     let group = this.props.group;
     return (
-      <div onMouseEnter={this._onMouseEnter} onMouseLeave={this._onMouseLeave} >
+      <div className={'group ' + (this.props.colorClass || '')} onMouseEnter={this._onMouseEnter} onMouseLeave={this._onMouseLeave}>
         {DISPLAY_OPTIONS.get('timeline_view') && group.type == 'contiguous'
-         ? <TimelineView group={group} group_id={this.props.group_id} expand={this.state.expand}/>
-         : <div className={'group selected ' + group.type}>
-           <div>
-             <div className='group-label'>{group.label}</div>
-             <div className='group-elements'>
-               {group.elements.map((clip, i) =>
-                 <ClipView key={i} clip={clip} group_id={this.props.group_id} onSelect={this.props.onSelect}
-                           onIgnore={this.props.onIgnore} colorClass={this.props.colorClass} showMeta={true}
-                           expand={this.state.expand} />)}
-               <div className='clearfix' />
-             </div>
+         ? <TimelineView group={group} expand={this.state.expand}/>
+         : <div className={group.type}>
+           <div className='group-label'>{group.label}</div>
+           <div className='group-elements'>
+             {group.elements.map((clip, i) =>
+               <ClipView key={i} clip={clip} showMeta={true}
+                         expand={this.state.expand} />)}
+             <div className='clearfix' />
            </div>
          </div>}
       </div>

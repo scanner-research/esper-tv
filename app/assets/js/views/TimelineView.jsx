@@ -7,7 +7,10 @@ import {toJS} from 'mobx';
 @observer
 class MarkerView extends React.Component {
   render() {
-    let {x, w, h, mw, mh, mf, label, type, color, ..._} = this.props;
+    let {t, w, h, mw, mh, mf, label, type, color, ..._} = this.props;
+    let range = DISPLAY_OPTIONS.get('timeline_range');
+    let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
+    let x = time_to_x(t);
     let margin = mw;
     if (0 <= x && x <= w) {
       if (type == 'open') {
@@ -71,9 +74,9 @@ class TrackView extends React.Component {
 
   render() {
     let {track, w, h, mw, mh, mf, video, ..._} = this.props;
-    let label = track.label;
-    let start = track.start_frame / video.fps;
-    let end = track.end_frame / video.fps;
+    let label = track.gender_id;
+    let start = track.min_frame / video.fps;
+    let end = track.max_frame / video.fps;
 
     let range = DISPLAY_OPTIONS.get('timeline_range');
     let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
@@ -82,7 +85,7 @@ class TrackView extends React.Component {
 
     return (
       <g ref={(n) => {this._g = n;}}>
-        <rect x={x1} width={x2-x1} y={0} height={h} fill={window.search_result.gender_colors[label]} />
+        <rect x={x1} width={x2-x1} y={0} height={h} fill={window.search_result.gender_colors[window.search_result.genders[label].name]} />
         {range < 600
          ? <g>
            <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
@@ -172,13 +175,14 @@ export default class TimelineView extends React.Component {
     if (chr == 'g') {
       this._pushState();
       let track = this.props.group.elements[i];
-      track.label = (track.label == 'M' ? 'F' : 'M');
+      let keys = _.sortBy(_.map(_.keys(window.search_result.genders), (x) => parseInt(x)));
+      track.gender_id = keys[(_.indexOf(keys, track.gender_id) + 1) % keys.length];
     }
 
     else if (chr == 'm') {
       this._pushState();
-      this.props.group.elements[i].start_frame = this.props.group.elements[i-1].start_frame;
-      this.props.group.elements.splice(i-1, 1);
+      this.props.group.elements[i-1].max_frame = this.props.group.elements[i].max_frame;
+      this.props.group.elements.splice(i, 1);
     }
 
     else if (chr == 'd') {
@@ -193,16 +197,17 @@ export default class TimelineView extends React.Component {
     }
 
     let chr = String.fromCharCode(e.which);
+
     let fps = this._video().fps;
     let curFrame = this.state.currentTime * fps;
     let elements = this.props.group.elements;
     if (chr == '\r') {
       let lastTrack = elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
-        clip.start_frame <= curFrame);
+        clip.min_frame <= curFrame);
       let offset = e.shiftKey ? -1 : 1;
       let index = lastTrack[lastTrack.length - 1][1] + offset;
       if (0 <= index && index < elements.length) {
-        let newTime = elements[index].start_frame / fps + 0.1;
+        let newTime = elements[index].min_frame / fps + 0.1;
         this.setState({
           displayTime: newTime,
           currentTime: newTime
@@ -235,25 +240,25 @@ export default class TimelineView extends React.Component {
           // +++ is the new clip, --- is old clip, overlap prioritized to new clip
 
           // [---[++]+++]
-          if (clip.start_frame <= start && start <= clip.end_frame && clip.end_frame <= end) {
-            clip.end_frame = start;
+          if (clip.min_frame <= start && start <= clip.max_frame && clip.max_frame <= end) {
+            clip.max_frame = start;
           }
 
           // [+++[+++]---]
-          else if(start <= clip.start_frame && clip.start_frame <= end && end <= clip.end_frame){
-            clip.start_frame = end;
+          else if(start <= clip.min_frame && clip.min_frame <= end && end <= clip.max_frame){
+            clip.min_frame = end;
           }
 
           // [---[+++]---]
-          else if (clip.start_frame <= start && end <= clip.end_frame) {
+          else if (clip.min_frame <= start && end <= clip.max_frame) {
             let new_clip = _.clone(clip);
-            new_clip.start_frame = end;
-            clip.end_frame = start;
+            new_clip.min_frame = end;
+            clip.max_frame = start;
             to_add.push(new_clip);
           }
 
           // [+++[+++]+++]
-          else if (start <= clip.start_frame && clip.end_frame <= end) {
+          else if (start <= clip.min_frame && clip.max_frame <= end) {
             to_delete.push(i);
           }
         });
@@ -262,11 +267,12 @@ export default class TimelineView extends React.Component {
         to_delete.map((i) => elements.splice(i, -1));
         elements.push.apply(elements, to_add);
         elements.push({
-          start_frame: start,
-          end_frame: end,
-          label: 'M'
+          video: elements[0].video,
+          min_frame: start,
+          max_frame: end,
+          gender_id: _.find(window.search_result.genders, (l) => l.name == 'M').id
         });
-        this.props.group.elements = _.sortBy(elements, ['start_frame']);
+        this.props.group.elements = _.sortBy(elements, ['min_frame']);
 
         this.setState({trackStart: -1});
       }
@@ -281,7 +287,7 @@ export default class TimelineView extends React.Component {
 
     else {
       let curTracks = this.props.group.elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
-        clip.start_frame <= curFrame && curFrame <= clip.end_frame);
+        clip.min_frame <= curFrame && curFrame <= clip.max_frame);
       if (curTracks.length == 0) {
         console.warn('No tracks to process');
       } else if (curTracks.length > 1) {
@@ -294,6 +300,9 @@ export default class TimelineView extends React.Component {
 
   componentDidMount() {
     document.addEventListener('keypress', this._onKeyPress);
+    this.setState({
+      currentTime: this.props.group.elements[0].min_frame / this._video().fps
+    })
   }
 
   componentWillUnmount() {
@@ -308,8 +317,8 @@ export default class TimelineView extends React.Component {
 
     let clip = {
       video: group.elements[0].video,
-      start_frame: group.elements[0].start_frame,
-      end_frame: group.elements[group.elements.length-1].end_frame
+      min_frame: group.elements[0].min_frame,
+      max_frame: group.elements[group.elements.length-1].max_frame
     };
 
     let video = this._video();
@@ -336,7 +345,7 @@ export default class TimelineView extends React.Component {
     };
 
     return (<div className='timeline' style={style}>
-      <ClipView clip={clip} group_id={this.props.group_id} onTimeUpdate={this._onTimeUpdate} showMeta={false}
+      <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
                 expand={this.props.expand} displayTime={this.state.displayTime}
                 onVideoPlay={this._onVideoPlay}
                 onVideoStop={this._onVideoStop} />
@@ -352,6 +361,8 @@ export default class TimelineView extends React.Component {
          ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
          : <g />}
         <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(20, 230, 20)" strokeWidth={tprops.mw*1.5} />
+        <MarkerView t={clip.min_frame/video.fps} type="open" color="black" {...tprops} />
+        <MarkerView t={clip.max_frame/video.fps} type="close" color="black"  {...tprops} />
       </svg>
     </div>);
   }

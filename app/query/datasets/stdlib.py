@@ -82,19 +82,6 @@ def pose_to_dict(f):
     }
 
 
-def group_result(materialized_result):
-    grouped_result = defaultdict(list)
-    for r in materialized_result:
-        grouped_result[(r['video'], r['start_frame'])].extend(r['objects'])
-
-    flat_result = [{
-        'video': t1,
-        'start_frame': t2,
-        'objects': r
-    } for (t1, t2), r in grouped_result.iteritems()]
-    return sorted(flat_result, key=itemgetter('video', 'start_frame'))
-
-
 def simple_result(result, ty):
     return {
         'result': [{
@@ -126,20 +113,16 @@ def filter_poses(ty, fn, used_kps, poses=None):
     return filtered
 
 
-# TODO(wcrichto): allow pagination to make repeated requests to backend
-LIMIT = 100
-STRIDE = 1
-
-
 def qs_to_result(result,
-                 group=False,
-                 segment=False,
                  stride=1,
+                 group=False,
                  shuffle=False,
                  deterministic_order=False,
-                 frame_major=True):
-    #count = result.count()
-    count = 0
+                 frame_major=True,
+                 show_count=False,
+                 limit=100):
+
+    count = result.count() if show_count else 0
 
     if shuffle:
         result = result.order_by('?')
@@ -151,10 +134,10 @@ def qs_to_result(result,
         if not shuffle and deterministic_order:
             result = result.order_by('video', 'number')
 
-        for frame in result[:LIMIT * stride:stride]:
+        for frame in result[:limit * stride:stride]:
             materialized_result.append({
                 'video': frame.video.id,
-                'start_frame': frame.number,
+                'min_frame': frame.number,
                 'objects': []
             })
 
@@ -192,7 +175,7 @@ def qs_to_result(result,
                 for inst in list(
                         result.values(
                             frame_path + '__video', frame_path + '__number',
-                            frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:LIMIT]):
+                            frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:limit]):
                     frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
                                 inst[frame_path + '__id']))
                     frame_ids.add(inst[frame_path + '__id'])
@@ -210,15 +193,15 @@ def qs_to_result(result,
             for (video, frame_num, frame_id) in frames:
                 materialized_result.append({
                     'video': video,
-                    'start_frame': frame_num,
+                    'min_frame': frame_num,
                     'objects': [fn(inst) for inst in all_results[frame_id]]
                 })
 
         else:
-            for inst in result[:LIMIT * stride:stride]:
+            for inst in result[:limit * stride:stride]:
                 r = {
                     'video': inst.person.frame.video.id,
-                    'start_frame': inst.person.frame.number,
+                    'min_frame': inst.person.frame.number,
                     'objects': [fn(inst)]
                 }
                 materialized_result.append(r)
@@ -227,119 +210,44 @@ def qs_to_result(result,
         if not shuffle and deterministic_order:
             result = result.order_by('video', 'min_frame')
 
-        for t in result.annotate(duration=Track.duration_expr()).filter(duration__gt=0)[:LIMIT]:
-            if cls is PersonTrack:
-                model = Person
-            else:
-                model = None
-
+        for t in result.annotate(duration=Track.duration_expr()).filter(duration__gt=0)[:limit]:
             result = {
                 'video': t.video.id,
                 'track': t.id,
-                'start_frame': t.min_frame,
-                'end_frame': t.max_frame,
+                'min_frame': t.min_frame,
+                'max_frame': t.max_frame,
             }
 
-            if model is not None and False:
-                min_model = model.objects.filter(frame__number=t.min_frame, tracks=t)[0]
-                result['objects'] = [pose_to_dict(Pose.objects.filter(person=min_model)[0])]
-            else:
-                result['objects'] = []
+            # if model is not None and False:
+            #     min_model = model.objects.filter(frame__number=t.min_frame, tracks=t)[0]
+            #     result['objects'] = [pose_to_dict(Pose.objects.filter(person=min_model)[0])]
+            # else:
+            #     result['objects'] = []
+
+            if cls is Speaker:
+                result['gender_id'] = t.gender_id
 
             materialized_result.append(result)
+        materialized_result.sort(key=itemgetter('video', 'min_frame'))
 
-        materialized_result.sort(key=itemgetter('video', 'start_frame'))
+    elif bases[0] is base_models.Video:
+        if not shuffle and deterministic_order:
+            result = result.order_by('id')
+
+        for v in result[:limit]:
+            materialized_result.append({'video': v.id, 'min_frame': 0})
 
     else:
         raise Exception("Unsupported class")
 
     ty_name = cls.__name__
-
     if group:
-        materialized_result = group_result(materialized_result)
-        ty_name = 'Frame grouped by {}'.format(ty_name)
-
-    if segment:
-        tracks = [r['track'] for r in materialized_result]
-        assert (len(tracks) > 0)
-        intervals = [(r['video'], r['start_frame'], r['end_frame']) for r in materialized_result]
-        points = []
-        for (video, start, end) in intervals:
-            points.extend([(video, start, False), (video, end, True)])
-        points.sort(key=itemgetter(0, 1, 2))
-
-        pprint(points)
-        sys.stdout.flush()
-
-        # TODO(wcrichto): this is probably broken after change from frame id -> frame number
-
-        intervals_active = 0
-        boundaries = []
-        i = 0
-        intvl_id = 0
-        while i < len(points) - 1:
-            num_intervals = 1
-            (_, _, frame, is_end) = points[i]
-            while i < len(points) - 1:
-                if points[i + 1][1] == frame:
-                    num_intervals += 1
-                    i += 1
-                else:
-                    break
-
-            pprint((points[i], num_intervals))
-            sys.stdout.flush()
-
-            if not is_end:
-                intervals_active += num_intervals
-                boundaries.append((frame, points[i + 1][1], intvl_id))
-            else:
-                intervals_active -= num_intervals
-                if intervals_active > 0:
-                    boundaries.append((frame, points[i + 1][1], intvl_id))
-                else:
-                    intvl_id += 1
-
-            i += 1
-
-        groups = []
-        materialized_result = []
-        cur_intvl_id = boundaries[0][2]
-        for (start, end, intvl_id) in boundaries:
-            if intvl_id != cur_intvl_id:
-                video = Video.objects.get(id=materialized_result[0]['video'])
-                intvl_start = materialized_result[0]['start_frame']
-                intvl_end = materialized_result[-1]['end_frame']
-                format_time = lambda t: time.strftime('%H:%M:%S', time.gmtime(math.floor(t / video.fps)))
-
-                groups.append({
-                    'type':
-                    'contiguous',
-                    'label':
-                    '{} -- {}'.format(
-                        format_time(Frame.objects.get(id=intvl_start).number),
-                        format_time(Frame.objects.get(id=intvl_end).number)),
-                    'elements':
-                    materialized_result
-                })
-                materialized_result = []
-                cur_intvl_id = intvl_id
-
-            f = Frame.objects.filter(id=start).select_related('video').get()
-            materialized_result.append({
-                'video':
-                f.video.id,
-                'start_frame':
-                start,
-                'end_frame':
-                end,
-                'objects': [
-                    bbox_to_dict(face)
-                    for face in Face.objects.filter(person__frame=f, person__tracks__in=tracks)
-                ]
-            })
-
-        ty_name = '{} (segmented)'.format(ty_name)
+        by_video = collect(materialized_result, itemgetter('video'))
+        groups = [{
+            'type': 'contiguous',
+            'label': video,
+            'elements': sorted(by_video[video], key=itemgetter('min_frame'))
+        } for video in sorted(by_video.keys())]
     else:
         groups = [{'type': 'flat', 'label': '', 'elements': [r]} for r in materialized_result]
 

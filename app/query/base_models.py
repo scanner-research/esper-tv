@@ -122,6 +122,7 @@ class DatasetMeta(ModelBase):
 
 class Video(models.Model):
     __metaclass__ = DatasetMeta
+
     path = CharField(db_index=True)
     num_frames = models.IntegerField()
     fps = models.FloatField()

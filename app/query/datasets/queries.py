@@ -71,7 +71,7 @@ def man_left_of_woman():
 
     return simple_result([{
         'video': frame.video.id,
-        'start_frame': frame.id,
+        'min_frame': frame.id,
         'objects': [bbox_to_dict(f) for f in faces]
     } for (frame, faces) in frames], 'Frame')
 
@@ -96,6 +96,6 @@ def two_poses_with_two_hands_above_head():
 
     return simple_result([{
         'video': frame.video.id,
-        'start_frame': frame.id,
+        'min_frame': frame.id,
         'objects': [pose_to_dict(p) for p in poses]
     } for (frame, poses) in frames], 'Frame')

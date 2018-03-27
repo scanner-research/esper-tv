@@ -88,16 +88,13 @@ def talking_heads_tracks():
                     .values('c'),
                     models.IntegerField())) \
             .filter(c__gt=0) \
-            .values('tracks')),
-        segment=True)
+            .values('tracks')))
 
 
 @query("Faces on Poppy Harlow")
 def faces_on_poppy_harlow():
     return qs_to_result(
-        Face.objects.filter(person__frame__video__show='CNN Newsroom With Poppy Harlow'),
-        group=True,
-        stride=24)
+        Face.objects.filter(person__frame__video__show='CNN Newsroom With Poppy Harlow'), stride=24)
 
 
 @query("Female faces on Poppy Harlow")
@@ -106,7 +103,6 @@ def female_faces_on_poppy_harlow():
         Face.objects.filter(
             person__frame__video__show='CNN Newsroom With Poppy Harlow',
             facegender__gender__name='female'),
-        group=True,
         stride=24)
 
 
@@ -117,7 +113,6 @@ def talking_heads_on_poppy_harlow():
             height__gte=0.3,
             person__frame__video__show='CNN Newsroom With Poppy Harlow',
             facegender__gender__name='female'),
-        group=True,
         stride=24)
 
 
@@ -136,7 +131,7 @@ def two_female_faces_on_poppy_harlow():
                 if len(faces) == 2:
                     r.append({
                         'video': frame.video.id,
-                        'start_frame': frame.number,
+                        'min_frame': frame.number,
                         'objects': [bbox_to_dict(f) for f in faces]
                     })
                 if len(r) > 100:
@@ -214,7 +209,7 @@ def mtcnn_vs_handlabeled():
         for frame, (faces, other_faces) in frames.iteritems():
             result.append({
                 'video': video,
-                'start_frame': frame,
+                'min_frame': frame,
                 'objects': [bbox_to_dict(f) for f in faces + other_faces]
             })
 
@@ -274,7 +269,7 @@ def mtcnn_vs_openpose():
         for frame, (faces, other_faces) in frames.iteritems():
             result.append({
                 'video': video,
-                'start_frame': frame,
+                'min_frame': frame,
                 'objects': [bbox_to_dict(f) for f in other_faces + faces]
             })
 
@@ -317,7 +312,7 @@ def people_sitting():
 
     return simple_result([{
         'video': frame.video.id,
-        'start_frame': frame.number,
+        'min_frame': frame.number,
         'objects': [pose_to_dict(p) for p in poses]
     } for (frame, poses) in frames], 'Frame')
 
@@ -362,8 +357,8 @@ def obama_pictures():
 
     return simple_result([{
         'video': t.video_id,
-        'start_frame': Frame.objects.get(video=t.video, number=t.min_frame).id,
-        'end_frame': Frame.objects.get(video=t.video, number=t.max_frame).id,
+        'min_frame': Frame.objects.get(video=t.video, number=t.min_frame).id,
+        'max_frame': Frame.objects.get(video=t.video, number=t.max_frame).id,
         'objects': [bbox_to_dict(f)]
     } for (t, f) in out_tracks], 'FaceTrack')
 
@@ -374,7 +369,7 @@ def segments_about_immigration():
     return simple_result([{
         'video':
         track.video.id,
-        'start_frame':
+        'min_frame':
         Frame.objects.get(
             number=(track.max_frame + track.min_frame) / 2 / 30 * 30, video=track.video).id,
         'objects': []
@@ -412,7 +407,7 @@ def panels_():
     from query.datasets.tvnews.queries import panels
     return simple_result([{
         'video': frame.video.id,
-        'start_frame': frame.number,
+        'min_frame': frame.number,
         'objects': [bbox_to_dict(f) for f in faces]
     } for (frame, faces) in panels()], 'Frame')
 
@@ -461,9 +456,9 @@ def animated_rachel_maddow():
         t.video.id,
         'track':
         t.id,
-        'start_frame':
+        'min_frame':
         Frame.objects.get(video=t.video, number=t.min_frame).id,
-        'end_frame':
+        'max_frame':
         Frame.objects.get(video=t.video, number=t.max_frame).id,
         'metadata': [['score', '{:.03f}'.format(score)]],
         'objects':
@@ -473,24 +468,40 @@ def animated_rachel_maddow():
 
 @query("Audio labels")
 def audio_labels():
-    gender_seg = json.load(open('/app/gender_seg.json', 'rb'))
-    v = Video.objects.get(
-        path='tvnews/videos/MSNBCW_20160505_230000_Hardball_With_Chris_Matthews.mp4')
-    return {
-        'result': [{
-            'type':
-            'contiguous',
-            'label':
-            '',
-            'elements': [{
-                'video': v.id,
-                'start_frame': int(d['start'] * v.fps),
-                'end_frame': int((d['start'] + d['end']) * v.fps),
-                'label': d['gender']
-            } for d in sorted(gender_seg, key=itemgetter('start'))]
-        }],
-        'count':
-        0,
-        'type':
-        '_'
-    }
+    return qs_to_result(Speaker.objects.all(), group=True, limit=10000)
+
+
+@query("Non-handlabeled random audio")
+def nonhandlabeled_random_audio():
+    import random
+    videos = Video.objects.annotate(
+        c=Subquery(
+            Speaker.objects.filter(video=OuterRef('pk')).values('video').annotate(
+                c=Count('video')).values('c'))) \
+        .filter(c__gt=0).order_by('?')[:3]
+
+    conds = []
+    for v in videos:
+        commercials = list(Commercial.objects.filter(video=v).values())
+        dur = int(300 * v.fps)
+        for i in range(10):
+            start = random.randint(0, v.num_frames - dur - 1)
+            end = start + dur
+            in_commercial = False
+            for c in commercials:
+                minf, maxf = (c['min_frame'], c['max_frame'])
+                if (minf <= start and start <= max) or (minf <= end and end <= maxf) \
+                    or (start <= minf and minf <= end and start <= maxf and maxf <= end):
+                    in_commercial = True
+                    break
+            if not in_commercial:
+                break
+        else:
+            continue
+        conds.append({'video': v, 'min_frame__gte': start, 'max_frame__lte': end})
+
+    return qs_to_result(
+        Speaker.objects.filter(labeler__name='lium').filter(
+            reduce(lambda a, b: a | b, [Q(**c) for c in conds])),
+        group=True,
+        limit=None)
