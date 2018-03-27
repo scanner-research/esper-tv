@@ -69,7 +69,7 @@ TODO(wcrichto): getting started with your own dataset
 
 TODO(wcrichto): more details here
 
-Run this:
+Install [jq](https://stedolan.github.io/jq/). Then run this:
 ```
 git config --local include.path ../.gitconfig
 ```
