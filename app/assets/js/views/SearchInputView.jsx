@@ -53,7 +53,7 @@ class SchemaView extends React.Component {
             }
             this.setState({showExamples: true});
           }).bind(this))
-          .catch((error) => console.error(error))
+          .catch((error) => console.error(error.response))
           .then((() => {
             this.setState({loadingExamples: false});
           }));
@@ -120,6 +120,7 @@ export default class SearchInputView extends React.Component {
         }
       })
       .catch((error) => {
+        console.error(error);
         this.setState({error: error});
       })
       .then(() => {

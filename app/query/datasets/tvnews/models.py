@@ -2,6 +2,7 @@ from django.db import models
 import query.base_models as base
 import math
 import numpy as np
+import tempfile
 
 
 class Show(base.Model):
@@ -72,8 +73,14 @@ class Shot(base.Track):
     in_commercial = models.BooleanField(default=False)
 
 
+class Identity(base.Model):
+    name = base.CharField(null=True)
+    thing = base.ForeignKey(Thing, null=True)
+
+
 class Speaker(base.Track):
     gender = base.ForeignKey(Gender)
+    identity = base.ForeignKey(Identity, null=True)
 
 
 class Person(base.Noun):

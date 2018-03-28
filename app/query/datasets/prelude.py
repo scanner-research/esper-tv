@@ -663,3 +663,8 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
+
+
+def readlines(path):
+    with open(path, 'r') as f:
+        return [s.strip() for s in f.readlines()]

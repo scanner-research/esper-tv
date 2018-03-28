@@ -21,7 +21,8 @@ let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.s
   show_inline_metadata: false,
   thumbnail_size: 1,
   timeline_view: true,
-  timeline_range: 20
+  timeline_range: 20,
+  track_color_identity: false
 }));
 
 window.DISPLAY_OPTIONS = observable.map(displayOptions);

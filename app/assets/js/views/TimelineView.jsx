@@ -75,6 +75,7 @@ class TrackView extends React.Component {
   render() {
     let {track, w, h, mw, mh, mf, video, ..._} = this.props;
     let label = track.gender_id;
+    let identity = track.identity;
     let start = track.min_frame / video.fps;
     let end = track.max_frame / video.fps;
 
@@ -83,13 +84,21 @@ class TrackView extends React.Component {
     let x1 = time_to_x(start);
     let x2 = time_to_x(end);
 
+    let ident_colors = window.search_result.labeler_colors
+    let color = DISPLAY_OPTIONS.get('track_color_identity')
+         ? ident_colors[identity % ident_colors.length]
+         : window.search_result.gender_colors[window.search_result.genders[label].name];
+
     return (
       <g ref={(n) => {this._g = n;}}>
-        <rect x={x1} width={x2-x1} y={0} height={h} fill={window.search_result.gender_colors[window.search_result.genders[label].name]} />
+        <rect x={x1} width={x2-x1} y={0} height={h} fill={color} />
         {range < 600
          ? <g>
            <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
            <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
+           {identity !== undefined
+            ? <text x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">{identity}</text>
+            : <g />}
          </g>
          : <g />}
       </g>

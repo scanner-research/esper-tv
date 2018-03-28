@@ -226,6 +226,8 @@ def qs_to_result(result,
 
             if cls is Speaker:
                 result['gender_id'] = t.gender_id
+                if t.identity is not None:
+                    result['identity'] = t.identity.id
 
             materialized_result.append(result)
         materialized_result.sort(key=itemgetter('video', 'min_frame'))

@@ -29,6 +29,7 @@ class OptionsView extends React.Component {
       name: 'Annotation opacity',
       key: 'annotation_opacity',
       type: 'range',
+      filter: (g) => g.elements[0].objects,
       opts: {
         min: 0,
         max: 1,
@@ -49,6 +50,7 @@ class OptionsView extends React.Component {
       name: 'Timeline range (s)',
       key: 'timeline_range',
       type: 'range',
+      filter: (g) => g.type == 'contiguous',
       opts: {
         min: 1,
         max: 300,
@@ -58,12 +60,14 @@ class OptionsView extends React.Component {
     {
       name: 'Crop bboxes',
       key: 'crop_bboxes',
-      type: 'radio'
+      type: 'radio',
+      filter: (g) => g.elements[0].objects,
     },
     {
       name: 'Show gender as border',
       key: 'show_gender_as_border',
-      type: 'radio'
+      type: 'radio',
+      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].gender_id
     },
     {
       name: 'Show inline metadata',
@@ -74,27 +78,38 @@ class OptionsView extends React.Component {
       name: 'Show hands',
       key: 'show_hands',
       type: 'radio',
+      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
     },
     {
       name: 'Show pose',
       key: 'show_pose',
       type: 'radio',
+      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
     },
     {
       name: 'Show face',
       key: 'show_face',
       type: 'radio',
+      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
     },
-    /* {
-     *   name: 'Show left/right (blue/red)',
-     *   key: 'show_lr',
-     *   type: 'radio'
-     * },*/
+    {
+      name: 'Show left/right (blue/red)',
+      key: 'show_lr',
+      type: 'radio',
+      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
+    },
     {
       name: 'Show middle frame',
       key: 'show_middle_frame',
-      type: 'radio'
+      type: 'radio',
+      filter: (g) => g.elements[0].max_frame !== undefined
     },
+    {
+      name: 'Color tracks by identity',
+      key: 'track_color_identity',
+      type: 'radio',
+      filter: (g) => g.type == 'contiguous'
+    }
   ]
 
   render() {
@@ -102,7 +117,8 @@ class OptionsView extends React.Component {
       <h2>Options</h2>
       <form>
         {this.fields.map((field, i) =>
-           <Rb.FormGroup key={i}>
+          !field.filter || field.filter(window.search_result.result[0])
+          ?  <Rb.FormGroup key={i}>
              <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
              {{
                 range: () => (
@@ -124,6 +140,7 @@ class OptionsView extends React.Component {
                   </Rb.ButtonToolbar>)
              }[field.type]()}
            </Rb.FormGroup>
+           : <div key={i} />
         )}
       </form>
     </div>;

@@ -144,6 +144,27 @@ class Video(models.Model):
             format(expiry, os.environ['BUCKET'], self.path),
             shell=True).strip()
 
+    def extract_audio(self, output_path=None, ext='wav', segment=None):
+        if output_path is None:
+            output_path = tempfile.NamedTemporaryFile(suffix='.{}'.format(ext), delete=False).name
+
+        def fmt_time(t):
+            return '{:02d}:{:02d}:{:02d}.{:03d}'.format(
+                int(t / 3600), int(t / 60 % 60), int(t % 60), int(t * 1000 % 1000))
+
+        if segment is not None:
+            (start, end) = segment
+            start_str = '-ss {}'.format(fmt_time(start))
+            end_str = '-t {}'.format(fmt_time(end - start))
+        else:
+            start_str = ''
+            end_str = ''
+
+        sp.check_call(
+            'ffmpeg -y {} -i "{}" {} {}'.format(start_str, self.url(), end_str, output_path),
+            shell=True)
+        return output_path
+
     def frame_time(self, frame):
         return frame / self.fps
 
