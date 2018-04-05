@@ -1,19 +1,25 @@
+# Data/build/debug directories
+scanner_db
 node_modules
 deps
 nets
-scanner_db
-assets/bundles
-assets/thumbnails
-assets/audio
-service-key.json
-.ipynb_checkpoints
-**/yapf*.py
-npm-debug.log
 .cache
 spark-data
 pg
 subs
+tmp
+assets/bundles
+assets/thumbnails
+assets/audio
+.ipynb_checkpoints
+
+# Specific files
+service-key.json
+npm-debug.log
+
+# File kinds
 db.bk.*
+yapf*.py
 *.sql
 *.bin
 *.mkv

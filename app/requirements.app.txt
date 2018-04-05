@@ -21,3 +21,4 @@ pyspark
 textacy
 gensim
 pyopenssl
+statsmodels

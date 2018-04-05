@@ -16,6 +16,7 @@
     "nbextensions_configurator/config_menu/main": true,
     "codefolding/main": false,
     "hide_input/main": true,
+    "python-markdown/main": true,
     "code_prettify/autopep8": true,
     "notify/notify": true,
     "contrib_nbextensions_help_item/main": true

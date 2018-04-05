@@ -22,7 +22,7 @@ def bootstrap(pred_statistic, pred_sample, true_statistic, true_sample, k=500, t
     }
 
 
-def face_validation(name, face_filter):
+def face_validation(name, face_filter, noprint=False):
     handlabeled_frames = list(Frame.objects.filter(tags__name='handlabeled-face:labeled'))
     all_faces = collect(
         face_filter(
@@ -65,15 +65,16 @@ def face_validation(name, face_filter):
 
     face_precision = true_pos / float(true_pos + false_pos)
     face_recall = true_pos / float(true_pos + false_neg)
-    print('== {} =='.format(name))
-    print('# labels: {}'.format(true_pos + false_neg))
-    print('Precision: {:.3f}, recall: {:.3f}'.format(face_precision, face_recall))
-    print('')
+    if not noprint:
+        print('== {} =='.format(name))
+        print('# labels: {}'.format(true_pos + false_neg))
+        print('Precision: {:.3f}, recall: {:.3f}'.format(face_precision, face_recall))
+        print('')
 
-    return face_pairs, missed_faces, (face_precision, face_recall)
+    return face_pairs, missed_faces, (face_precision, face_recall, len(handlabeled_frames))
 
 
-def gender_validation(name, (face_pairs, missed_faces, _)):
+def gender_validation(name, (face_pairs, missed_faces, _), noprint=False):
     handlabeled_frames = list(Frame.objects.filter(tags__name='handlabeled-face:labeled'))
     all_genders = defaultdict(
         list,
@@ -120,17 +121,19 @@ def gender_validation(name, (face_pairs, missed_faces, _)):
             for k, v in dist.iteritems()
         })
 
-    print('== {} =='.format(name))
-    print('# labels: {}'.format(len(y_true)))
-    print('Accuracy: {:.3f}'.format(gender_accuracy))
-    print_distribution('Total distribution', total_distribution)
-    print_distribution('Missed distribution', missed_distribution)
-    print('')
-
     mat = metrics.confusion_matrix(y_true, y_pred)
-    # plot_confusion_matrix(mat, [d['name'] for d in Gender.objects.values('name').order_by('id')])
-    plot_confusion_matrix(
-        mat, [d['name'] for d in Gender.objects.values('name').order_by('id')], normalize=True)
+
+    if not noprint:
+        print('== {} =='.format(name))
+        print('# labels: {}'.format(len(y_true)))
+        print('Accuracy: {:.3f}'.format(gender_accuracy))
+        print_distribution('Total distribution', total_distribution)
+        print_distribution('Missed distribution', missed_distribution)
+        print('')
+
+        # plot_confusion_matrix(mat, [d['name'] for d in Gender.objects.values('name').order_by('id')])
+        plot_confusion_matrix(
+            mat, [d['name'] for d in Gender.objects.values('name').order_by('id')], normalize=True)
 
     return gender_accuracy, mat
 
@@ -236,13 +239,14 @@ def overlap(a, b):
         return None
 
 
-def speaking_validation():
+def speaking_validation(noprint=False):
     all_handlabeled_segments = list(
         Segment.objects.filter(labeler__name='handlabeled-audio:labeled').select_related('video'))
     all_handlabeled_speakers = collect(
         list(Speaker.objects.filter(labeler__name='handlabeled-audio')), lambda s: s.video_id)
 
     Ct = {k1: {k2: 0 for k2 in gender_ids.values()} for k1 in gender_ids.values()}
+    total_duration = 0
     for segment in all_handlabeled_segments:
         v = segment.video
         autolabeled_speakers = sorted(
@@ -255,6 +259,7 @@ def speaking_validation():
             key=lambda s: s.min_frame)
 
         handlabeled_speakers = sorted(all_handlabeled_speakers[v.id], key=lambda s: s.min_frame)
+        total_duration += segment.duration()
 
         C = {k1: {k2: 0 for k2 in gender_ids.values()} for k1 in gender_ids.values()}
 
@@ -277,11 +282,14 @@ def speaking_validation():
 
     df = pd.DataFrame.from_dict(Ct, orient='index').as_matrix().astype(np.int32)
 
-    print('Minutes labeled: {:.2f}'.format(
-        float(sum([t.duration() for t in all_handlabeled_segments])) / 60))
-    print('Overall accuracy: {:.3f}'.format(np.trace(df) / float(df.sum())))
-    print('True ratio (M/F): {:.3f}'.format(df[0, :].sum() / float(df[1, :].sum())))
-    print('Predicted ratio (M/F): {:.3f}'.format(df[:, 0].sum() / float(df[:, 1].sum())))
+    if not noprint:
+        print('Minutes labeled: {:.2f}'.format(
+            float(sum([t.duration() for t in all_handlabeled_segments])) / 60))
+        print('Overall accuracy: {:.3f}'.format(np.trace(df) / float(df.sum())))
+        print('True ratio (M/F): {:.3f}'.format(df[0, :].sum() / float(df[1, :].sum())))
+        print('Predicted ratio (M/F): {:.3f}'.format(df[:, 0].sum() / float(df[:, 1].sum())))
 
-    plot_confusion_matrix(
-        df, [d['name'] for d in Gender.objects.values('name').order_by('id')], normalize=True)
+        plot_confusion_matrix(
+            df, [d['name'] for d in Gender.objects.values('name').order_by('id')], normalize=False)
+
+    return df, total_duration

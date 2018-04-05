@@ -33,6 +33,8 @@ import requests
 import cv2
 import itertools
 import shutil
+import tempfile
+from contextlib import contextmanager
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -243,16 +245,20 @@ def make_scanner_db(kube=False):
 
 
 class Timer:
-    def __init__(self, s):
-        self.s = s
-        log.debug('-- START: {}'.format(s))
+    def __init__(self, s, run=True):
+        self._s = s
+        self._run = run
+        if run:
+            log.debug('-- START: {}'.format(s))
 
     def __enter__(self):
         self.start = now()
 
     def __exit__(self, a, b, c):
         t = int(now() - self.start)
-        log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self.s, t / 3600, t / 60, t % 60))
+        if self._run:
+            log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self._s, t / 3600, t / 60,
+                                                                  t % 60))
 
 
 CACHE_DIR = '/app/.cache'
@@ -566,7 +572,7 @@ class Break(Exception):
 
 
 SPARK_DATA_PREFIX = '/app/spark-data'
-SPARK_MEMORY = '80g'  #'256g'
+SPARK_MEMORY = '15g'  #'80g'  #'256g'
 
 
 class SparkWrapper:
@@ -633,9 +639,9 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     Normalization can be applied by setting `normalize=True`.
     """
     if normalize:
-        cm = cm.T
+        # cm = cm.T
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        cm = cm.T
+        # cm = cm.T
         print("Normalized confusion matrix")
     else:
         print('Confusion matrix, without normalization')
@@ -668,3 +674,36 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
 def readlines(path):
     with open(path, 'r') as f:
         return [s.strip() for s in f.readlines()]
+
+
+class WithMany:
+    def __init__(self, *args):
+        self._args = args
+
+    def __enter__(self):
+        return tuple([obj.__enter__() for obj in self._args])
+
+    def __exit__(self, *args, **kwargs):
+        for obj in self._args:
+            obj.__exit__(*args, **kwargs)
+
+
+@contextmanager
+def named_temp_dir(delete=True, **kwargs):
+    dir = tempfile.mkdtemp(**kwargs)
+    try:
+        yield dir
+    finally:
+        if delete:
+            shutil.rmtree(dir)
+
+
+# https://gist.github.com/howardhamilton/537e13179489d6896dd3
+@contextmanager
+def pushd(new_dir):
+    previous_dir = os.getcwd()
+    os.chdir(new_dir)
+    try:
+        yield
+    finally:
+        os.chdir(previous_dir)
