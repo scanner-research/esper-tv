@@ -1,4 +1,4 @@
-from scannerpy.stdlib import parsers
+from scannerpy.stdlib import readers
 from scannerpy import Kernel
 from carnie_helper import RudeCarnie
 import cv2
@@ -16,7 +16,7 @@ class GenderKernel(Kernel):
         [img, bboxes] = columns
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         [h, w] = img.shape[:2]
-        bboxes = parsers.bboxes(bboxes, self.protobufs)
+        bboxes = readers.bboxes(bboxes, self.protobufs)
         imgs = [img[int(bbox.y1):int(bbox.y2), int(bbox.x1):int(bbox.x2)] for bbox in bboxes]
         genders = self.rc.get_gender_batch(imgs)
         outputs = [struct.pack('=cf', label, score) for [label, score] in genders]

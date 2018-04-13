@@ -4,6 +4,7 @@ from scannerpy.stdlib import pipelines, parsers
 LABELER, _ = Labeler.objects.get_or_create(name='tinyfaces')
 LABELED_TAG, _ = Tag.objects.get_or_create(name='tinyfaces:labeled')
 cwd = os.path.dirname(os.path.abspath(__file__))
+from scannerpy.stdlib import pipelines, readers
 
 METHOD = 'mtcnn'
 

@@ -1,5 +1,5 @@
 from query.datasets.prelude import *
-from scannerpy.stdlib import parsers
+from scannerpy.stdlib import readers
 from scipy.spatial import distance
 from unionfind import unionfind
 import bisect
@@ -30,10 +30,10 @@ def compute_histograms(db, videos, force=False):
 
     if len(jobs) > 0:
         log.debug('Running Scanner histogram job on {} videos'.format(len(jobs)))
-        bulk_job = BulkJob(output=output, jobs=jobs)
 
         db.run(
-            bulk_job,
+            output,
+            jobs,
             force=True,
             io_packet_size=100000,
             work_packet_size=500,
@@ -75,11 +75,11 @@ def compute_shot_boundaries_scanner(db, videos, tables):
         }) for video, t in zip(videos, tables)
         if not db.has_table(output_name(video)) or not db.table(output_name(video)).committed()
     ]
-    bulk_job = BulkJob(output=output, jobs=jobs)
 
     log.debug('Running Scanner shot detection job on {} videos'.format(len(jobs)))
     ts = db.run(
-        bulk_job,
+        output,
+        jobs,
         force=True,
         io_packet_size=batch,
         work_packet_size=batch,
@@ -96,7 +96,7 @@ def compute_shot_boundaries_scanner(db, videos, tables):
 
 def compute_shot_boundaries(table):
     log.debug('Loading histograms')
-    hists = [h for _, h in table.load(['histogram'], parsers.histograms)]
+    hists = [h for _, h in table.column('histogram').load(readers.histograms)]
     log.debug('Loaded!')
 
     # Compute the mean difference between each pair of adjacent frames
@@ -327,22 +327,6 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
 
 STITCHED_LABELER, _ = Labeler.objects.get_or_create(name='shot-stitched')
 FEATURE_DISTANCE_THRESHOLD = 0.5
-
-
-def bbox_area2(f):
-    return (f['bbox_x2'] - f['bbox_x1']) * (f['bbox_y2'] - f['bbox_y1'])
-
-
-def bbox_iou2(f1, f2):
-    x1 = max(f1['bbox_x1'], f2['bbox_x1'])
-    x2 = min(f1['bbox_x2'], f2['bbox_x2'])
-    y1 = max(f1['bbox_y1'], f2['bbox_y1'])
-    y2 = min(f1['bbox_y2'], f2['bbox_y2'])
-
-    if x1 > x2 or y1 > y2: return 0
-
-    intersection = (x2 - x1) * (y2 - y1)
-    return intersection / (bbox_area2(f1) + bbox_area2(f2) - intersection)
 
 
 def should_stitch((left_faces, left_features), (right_faces, right_features)):

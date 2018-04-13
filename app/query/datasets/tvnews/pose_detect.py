@@ -69,8 +69,7 @@ def pose_detect(videos, all_frames, force=False):
 
             if len(jobs) > 0:
                 log.debug('Running {} Scanner pose jobs'.format(len(jobs)))
-                bulk_job = BulkJob(output=output, jobs=jobs)
-                outputs = db.run(bulk_job, force=True, io_packet_size=500, work_packet_size=100)
+                outputs = db.run(output, jobs, force=True, io_packet_size=500, work_packet_size=100)
                 log.debug('Done!')
             else:
                 log.debug('No Scanner jobs to run')

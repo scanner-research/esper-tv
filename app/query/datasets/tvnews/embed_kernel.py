@@ -1,5 +1,5 @@
 import scannerpy
-from scannerpy.stdlib import kernel, parsers
+from scannerpy.stdlib import kernel, readers
 import tensorflow as tf
 import facenet
 import cv2
@@ -29,7 +29,7 @@ class EmbedFaceKernel(kernel.TensorFlowKernel):
         # TODO(wcrichto): make this batched
 
         out_size = 160
-        bboxes = parsers.bboxes(bboxes, self.protobufs)
+        bboxes = readers.bboxes(bboxes, self.protobufs)
         outputs = ''
         for bbox in bboxes:
             # NOTE: if using output of mtcnn, not-normalized, so removing de-normalization factors here

@@ -1,5 +1,5 @@
 from scannerpy import Kernel
-from scannerpy.stdlib import parsers
+from scannerpy.stdlib import readers
 import numpy as np
 from scipy.spatial import distance
 from unionfind import unionfind
@@ -27,7 +27,7 @@ class ShotDetectionKernel(Kernel):
         self.hists = []
 
     def execute(self, input_columns):
-        self.hists.extend([parsers.histograms([buf], self.protobufs) for buf in input_columns[0]])
+        self.hists.extend([readers.histograms(buf, self.protobufs) for buf in input_columns[0]])
         assert (len(self.hists) > 0)
 
         try:

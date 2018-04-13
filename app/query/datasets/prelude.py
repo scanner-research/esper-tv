@@ -1,4 +1,4 @@
-from scannerpy import ProtobufGenerator, Config, Database, Job, BulkJob, DeviceType, ColumnType, ScannerException
+from scannerpy import ProtobufGenerator, Config, Database, Job, DeviceType, ColumnType, ScannerException
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
 from query.datasets.stdlib import *
@@ -482,6 +482,15 @@ def load_frame(video, frame, bboxes):
     return img
 
 
+def face_to_dict(face):
+    return {
+        'bbox_x1': face.bbox_x1,
+        'bbox_x2': face.bbox_x2,
+        'bbox_y1': face.bbox_y1,
+        'bbox_y2': face.bbox_y2,
+    }
+
+
 def make_montage(video,
                  frames,
                  output_path=None,
@@ -572,7 +581,7 @@ class Break(Exception):
 
 
 SPARK_DATA_PREFIX = '/app/spark-data'
-SPARK_MEMORY = '15g'  #'80g'  #'256g'
+SPARK_MEMORY = '50g'  #'80g'  #'256g'
 
 
 class SparkWrapper:
@@ -707,3 +716,8 @@ def pushd(new_dir):
         yield
     finally:
         os.chdir(previous_dir)
+
+
+def imshow(img):
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    plt.axis('off')

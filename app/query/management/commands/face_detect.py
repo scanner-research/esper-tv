@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from query.base_models import ModelDelegator
 from scannerpy import Database, DeviceType, Job
-from scannerpy.stdlib import parsers, pipelines
+from scannerpy.stdlib import readers, pipelines
 import os
 import cv2
 import math
@@ -50,7 +50,7 @@ class Command(BaseCommand):
                 table = db.table(path)
                 imgs = table.load(['frame'], rows=range(0, table.num_rows(), stride))
                 video_faces = video_faces_table.load(
-                    ['bboxes'], lambda lst, db: parsers.bboxes(lst[0], db.protobufs))
+                    ['bboxes'], lambda lst, db: readers.bboxes(lst[0], db.protobufs))
 
                 for (i, frame_faces), (_, img) in zip(video_faces, imgs):
                     frame = Frame.objects.get(video=video, number=i * stride)

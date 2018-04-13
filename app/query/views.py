@@ -3,7 +3,6 @@ from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from base_models import ModelDelegator
 from timeit import default_timer as now
-from scannerpy import Config, Database, Job, BulkJob, DeviceType
 import django.db.models as models
 from concurrent.futures import ThreadPoolExecutor
 from django.views.decorators.csrf import csrf_exempt
@@ -91,63 +90,6 @@ def index(request):
                 'things': things
             })
         })
-
-
-# Write out requested thumbnails to disk
-def extract(frames, dataset):
-    with Database() as db:
-        frame = db.ops.FrameInput()
-        gathered = frame.sample()
-        device = DeviceType.GPU if os.environ['DEVICE'] == 'gpu' else DeviceType.CPU
-        resized = db.ops.Resize(frame=gathered, width=640, preserve_aspect=True, device=device)
-        compressed = db.ops.ImageEncoder(frame=resized)
-        output = db.ops.Output(columns=[compressed])
-        job = Job(
-            op_args={
-                frame: db.table(frames[0].video.path).column('frame'),
-                gathered: db.sampler.gather([frame.number for frame in frames]),
-                output: '_ignore'
-            })
-
-        start = now()
-        [output] = db.run(BulkJob(output=output, jobs=[job]), force=True)
-        _print('Extract: {:.3f}'.format(now() - start))
-
-        start = now()
-        jpgs = [(jpg[0], frame) for (_, jpg), frame in zip(output.load(['img']), frames)]
-        _print('Loaded: {:.3f}'.format(now() - start))
-
-        if ESPER_ENV == 'google':
-            temp_dir = tempfile.mkdtemp()
-
-            def write_jpg((jpg, frame)):
-                with open('{}/frame_{}.jpg'.format(temp_dir, frame.id), 'w') as f:
-                    f.write(jpg)
-
-            start = now()
-            with ThreadPoolExecutor(max_workers=64) as executor:
-                list(executor.map(write_jpg, jpgs))
-            sp.check_call(
-                shlex.split('gsutil -m mv "{}/*" gs://{}/{}/thumbnails/{}'.format(
-                    temp_dir, BUCKET, DATA_PATH, dataset)))
-            _print('Write: {:.3f}'.format(now() - start))
-
-        elif ESPER_ENV == 'local':
-            try:
-                os.makedirs('assets/thumbnails/' + dataset)
-            except OSError:
-                pass
-
-            def write_jpg((jpg, frame)):
-                with open('assets/thumbnails/{}/frame_{}.jpg'.format(dataset, frame.id), 'w') as f:
-                    f.write(jpg)
-
-            start = now()
-            with ThreadPoolExecutor(max_workers=64) as executor:
-                list(executor.map(write_jpg, jpgs))
-            _print('Write: {:.3f}'.format(now() - start))
-
-        return jpg
 
 
 # Run search routine
