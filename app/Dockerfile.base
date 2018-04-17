@@ -1,9 +1,9 @@
-ARG device
-FROM scannerresearch/scanner:${device}
+ARG tag
+FROM scannerresearch/scanner:${tag}
 # ARGS before FROM aren't accessible after the FROM, so we need to replicate the device arg.
 ARG build_tf=off
-ARG tf_version=1.2.0
-ARG device2=cpu
+ARG tf_version=1.5.0
+ARG device=cpu
 ARG cores=1
 
 ENV APPDIR=/app

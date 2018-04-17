@@ -58,7 +58,8 @@ def gender_detect(videos, all_frames, all_faces):
         ]
 
         db.run(
-            BulkJob(output=output, jobs=jobs),
+            output,
+            jobs,
             force=True,
             io_packet_size=50000,
             work_packet_size=500,

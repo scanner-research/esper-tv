@@ -581,7 +581,7 @@ class Break(Exception):
 
 
 SPARK_DATA_PREFIX = '/app/spark-data'
-SPARK_MEMORY = '50g'  #'80g'  #'256g'
+SPARK_MEMORY = '80g'  #'80g'  #'256g'
 
 
 class SparkWrapper:

@@ -33,7 +33,7 @@ command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 
 config = DotMap(
     yaml.load("""
-version: '2'
+version: '2.3'
 services:
   nginx:
     build:
@@ -94,14 +94,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
-    parser.add_argument('--no-spark', action='store_true')
-    parser.add_argument('--no-gentle', action='store_true')
-    parser.add_argument('--no-build', action='store_true')
-    parser.add_argument('--no-build-base', action='store_true')
-    parser.add_argument('--no-build-local', action='store_true')
-    parser.add_argument('--no-build-kube', action='store_true')
+    parser.add_argument('--extra-services', nargs='*', default=[], choices=['spark', 'gentle'])
+    parser.add_argument(
+        '--build', nargs='*', default=['base', 'local'], choices=['base', 'local', 'kube', 'tf'])
     parser.add_argument('--kube-device', default='cpu')
-    parser.add_argument('--build-tf', action='store_true')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -121,15 +117,19 @@ def main():
             device = 'cpu'
     else:
         device = 'cpu'
+
     config.services.app.build.args.device = device
+    if device == 'gpu':
+        config.services.app.runtime = 'nvidia'
+
     config.services.app.environment.append('DEVICE={}'.format(device))
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
-    if not args.no_spark:
+    if 'spark' in args.extra_services:
         config.services.spark = spark_config
         config.services.app.depends_on.append('spark')
 
-    if not args.no_gentle:
+    if 'gentle' in args.extra_services:
         config.services.gentle = gentle_config
         config.services.app.depends_on.append('gentle')
 
@@ -185,46 +185,45 @@ def main():
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
-    if not args.no_build:
-        if not args.no_build_base:
-            devices = list(
-                set(([device] if not args.no_build_local else []) +
-                    ([args.kube_device] if not args.no_build_kube else [])))
-            for device in devices:
-                build_args = {
-                    'cores': cores,
-                    'device': device,
-                    'device2': device,
-                    'tf_version': '1.2.0' if device == 'gpu' else '1.4.1',
-                    'build_tf': 'on' if args.build_tf else 'off'
-                }
+    if 'base' in args.build:
+        devices = list(
+            set(([device] if 'local' in args.build else []) +
+                ([args.kube_device] if 'kube' in args.build else [])))
 
+        for device in devices:
+            build_args = {
+                'cores': cores,
+                'tag': 'cpu' if device == 'cpu' else 'gpu-9.1-cudnn7',
+                'device': device,
+                'tf_version': '1.7.0',
+                'build_tf': 'on' if 'tf' in args.build else 'off'
+            }
+
+            sp.check_call(
+                'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+                format(
+                    device=device,
+                    build_args=' '.join(
+                        ['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
+                shell=True)
+
+    if 'kube' in args.build:
+        if 'google' in base_config:
+            base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
+
+            def build(tag):
+                fmt_args = {'base_url': base_url, 'tag': tag, 'device': args.kube_device}
                 sp.check_call(
-                    'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
-                    format(
-                        device=device,
-                        build_args=' '.join(
-                            ['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
+                    'docker build -t {base_url}/scanner-{tag}:{device} --build-arg device={device} -f app/kube/Dockerfile.{tag} app'.
+                    format(**fmt_args),
+                    shell=True)
+                sp.check_call(
+                    'gcloud docker -- push {base_url}/scanner-{tag}:{device}'.format(**fmt_args),
                     shell=True)
 
-        if not args.no_build_kube:
-            if 'google' in base_config:
-                base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
-
-                def build(tag):
-                    fmt_args = {'base_url': base_url, 'tag': tag, 'device': args.kube_device}
-                    sp.check_call(
-                        'docker build -t {base_url}/scanner-{tag}:{device} --build-arg device={device} -f app/kube/Dockerfile.{tag} app'.
-                        format(**fmt_args),
-                        shell=True)
-                    sp.check_call(
-                        'gcloud docker -- push {base_url}/scanner-{tag}:{device}'.format(
-                            **fmt_args),
-                        shell=True)
-
-                build('master')
-                build('worker')
-                # build('loader')
+            build('master')
+            build('worker')
+            # build('loader')
 
     print('Successfully configured Esper.')
 
