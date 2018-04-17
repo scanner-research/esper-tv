@@ -18,7 +18,7 @@ $ docker --version
 Docker version 17.12.0-ce, build c97c6d6
 ```
 
-~~If you have a GPU and are running on Linux, then [install nvidia-docker.](https://github.com/NVIDIA/nvidia-docker#quick-start) For any command below that uses `docker-compose`, use `nvidia-docker-compose` instead.~~ Nvidia changed `nvidia-docker`, incoming fix is WIP.
+> Note: If you have a GPU and are running on Linux, then install [nvidia-docker2.](https://github.com/NVIDIA/nvidia-docker). Set `gpu = true` in `config/local.toml`.
 
 Next, you will need to configure your Esper installation. If you are using Google Cloud, follow the instructions in [Getting started with Google Cloud](https://github.com/scanner-research/esper/blob/master/guides/google.md) and replace `local.toml` with `google.toml` below. Otherwise, edit any relevant configuration values in `config/local.toml`. Then run:
 
