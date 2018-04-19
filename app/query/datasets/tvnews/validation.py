@@ -2,12 +2,12 @@ from query.datasets.prelude import *
 from sklearn import metrics
 
 gender_names = {g.id: g.name for g in Gender.objects.all()}
-gender_ids = {v: k for k, v in gender_names.iteritems()}
+gender_ids = {v: k for k, v in list(gender_names.items())}
 
 
 def bootstrap(pred_statistic, pred_sample, true_statistic, true_sample, k=500, trials=10000):
     def invert(l):
-        return {k: [d[k] for d in l] for k in l[0].keys()}
+        return {k: [d[k] for d in l] for k in list(l[0].keys())}
 
     all_stats = invert([pred_statistic(np.random.choice(pred_sample, k)) for _ in range(trials)])
     true_stat = true_statistic(true_sample)
@@ -18,7 +18,7 @@ def bootstrap(pred_statistic, pred_sample, true_statistic, true_sample, k=500, t
             'bias': np.mean(k_stats - np.full(len(k_stats), true_stat[k])),
             'std': np.std(k_stats),
         }
-        for k, k_stats in all_stats.iteritems()
+        for k, k_stats in list(all_stats.items())
     }
 
 
@@ -66,15 +66,16 @@ def face_validation(name, face_filter, noprint=False):
     face_precision = true_pos / float(true_pos + false_pos)
     face_recall = true_pos / float(true_pos + false_neg)
     if not noprint:
-        print('== {} =='.format(name))
-        print('# labels: {}'.format(true_pos + false_neg))
-        print('Precision: {:.3f}, recall: {:.3f}'.format(face_precision, face_recall))
+        print(('== {} =='.format(name)))
+        print(('# labels: {}'.format(true_pos + false_neg)))
+        print(('Precision: {:.3f}, recall: {:.3f}'.format(face_precision, face_recall)))
         print('')
 
     return face_pairs, missed_faces, (face_precision, face_recall, len(handlabeled_frames))
 
 
-def gender_validation(name, (face_pairs, missed_faces, _), noprint=False):
+def gender_validation(name, xxx_todo_changeme, noprint=False):
+    (face_pairs, missed_faces, _) = xxx_todo_changeme
     handlabeled_frames = list(Frame.objects.filter(tags__name='handlabeled-face:labeled'))
     all_genders = defaultdict(
         list,
@@ -115,18 +116,18 @@ def gender_validation(name, (face_pairs, missed_faces, _), noprint=False):
         missed_distribution[FaceGender.objects.get(face_id=face['id']).gender_id] += 1
 
     def print_distribution(name, dist):
-        print('{}:'.format(name))
+        print(('{}:'.format(name)))
         pprint({
             gender_names[k]: '{:.3f}'.format(v / float(sum(dist.values())))
-            for k, v in dist.iteritems()
+            for k, v in list(dist.items())
         })
 
     mat = metrics.confusion_matrix(y_true, y_pred)
 
     if not noprint:
-        print('== {} =='.format(name))
-        print('# labels: {}'.format(len(y_true)))
-        print('Accuracy: {:.3f}'.format(gender_accuracy))
+        print(('== {} =='.format(name)))
+        print(('# labels: {}'.format(len(y_true))))
+        print(('Accuracy: {:.3f}'.format(gender_accuracy)))
         print_distribution('Total distribution', total_distribution)
         print_distribution('Missed distribution', missed_distribution)
         print('')
@@ -160,7 +161,7 @@ def screentime_validation(name, face_filter, gender_cmat):
         shot = Shot.objects.get(
             video=frame.video, min_frame__lte=frame.number, max_frame__gte=frame.number)
         duration = (shot.max_frame - shot.min_frame) / shot.video.fps
-        counts = defaultdict(lambda: {i: 0 for i in gender_ids.values()})
+        counts = defaultdict(lambda: {i: 0 for i in list(gender_ids.values())})
         for k in ['rudecarnie', 'handlabeled-gender']:
             for g in frame_genders[k]:
                 counts[k][g['gender']] += 1
@@ -169,19 +170,19 @@ def screentime_validation(name, face_filter, gender_cmat):
         pred_gender.append(counts['rudecarnie'])
 
     def mod_totals(totals):
-        totals = {gender_names[i]: v for i, v in totals.iteritems()}
+        totals = {gender_names[i]: v for i, v in list(totals.items())}
         totals['M/F'] = totals['M'] / float(totals['F'])
         return totals
 
     def P(y, yhat):
         indices = {'M': 0, 'F': 1, 'U': 2}
         return float(gender_cmat[indices[y]][indices[yhat]]) / sum(
-            [gender_cmat[i][indices[yhat]] for i in indices.values()])
+            [gender_cmat[i][indices[yhat]] for i in list(indices.values())])
 
     def singlecount(G):
-        totals = {i: 0 for i in gender_ids.values()}
+        totals = {i: 0 for i in list(gender_ids.values())}
         for frame in G:
-            for i in gender_ids.values():
+            for i in list(gender_ids.values()):
                 if frame[i] > 0:
                     totals[i] += 1
         return mod_totals(totals)
@@ -189,43 +190,43 @@ def screentime_validation(name, face_filter, gender_cmat):
     def singlecount_adj(G):
         totals = singlecount(G)
         adj_totals = {}
-        for g in gender_ids.values():
+        for g in list(gender_ids.values()):
             adj_totals[g] = sum(totals[gender_names[g2]] * P(gender_names[g], gender_names[g2])
-                                for g2 in gender_ids.values())
+                                for g2 in list(gender_ids.values()))
         return mod_totals(adj_totals)
 
     def multicount(G):
-        totals = {i: 0 for i in gender_ids.values()}
+        totals = {i: 0 for i in list(gender_ids.values())}
         for frame in G:
-            for i in gender_ids.values():
+            for i in list(gender_ids.values()):
                 totals[i] += frame[i]
         return mod_totals(totals)
 
     def multicount_adj(G):
         totals = multicount(G)
         adj_totals = {}
-        for g in gender_ids.values():
+        for g in list(gender_ids.values()):
             adj_totals[g] = sum(totals[gender_names[g2]] * P(gender_names[g], gender_names[g2])
-                                for g2 in gender_ids.values())
+                                for g2 in list(gender_ids.values()))
         return mod_totals(adj_totals)
 
     def print_results(name, r):
-        print('== {} =='.format(name))
-        print(pd.DataFrame.from_dict(r, orient='index')[['est', 'bias',
-                                                         'std']]).reindex(['M', 'F', 'U', 'M/F'])
+        print(('== {} =='.format(name)))
+        print(((pd.DataFrame.from_dict(r, orient='index')[['est', 'bias',
+                                                         'std']]).reindex(['M', 'F', 'U', 'M/F'])))
         print('')
 
     metrics = [['multicount', [multicount, multicount_adj]],
                ['singlecount', [singlecount, singlecount_adj]]]
 
-    print('{} {} {}\n'.format('=' * 20, name, '=' * 20))
+    print(('{} {} {}\n'.format('=' * 20, name, '=' * 20)))
     for [name, submetrics] in metrics:
-        print('======= {} =======\n'.format(name.upper()))
+        print(('======= {} =======\n'.format(name.upper())))
         print('== true ==')
-        print(pd.DataFrame.from_dict(submetrics[0](true_gender), orient='index').rename(
+        print((pd.DataFrame.from_dict(submetrics[0](true_gender), orient='index').rename(
             index=str, columns={
                 0: 'est'
-            }).reindex(['M', 'F', 'U', 'M/F']))
+            }).reindex(['M', 'F', 'U', 'M/F'])))
         print('\n')
         print_results('unadjusted', bootstrap(submetrics[0], pred_gender, submetrics[0],
                                               true_gender))
@@ -245,7 +246,7 @@ def speaking_validation(noprint=False):
     all_handlabeled_speakers = collect(
         list(Speaker.objects.filter(labeler__name='handlabeled-audio')), lambda s: s.video_id)
 
-    Ct = {k1: {k2: 0 for k2 in gender_ids.values()} for k1 in gender_ids.values()}
+    Ct = {k1: {k2: 0 for k2 in list(gender_ids.values())} for k1 in list(gender_ids.values())}
     total_duration = 0
     for segment in all_handlabeled_segments:
         v = segment.video
@@ -261,7 +262,7 @@ def speaking_validation(noprint=False):
         handlabeled_speakers = sorted(all_handlabeled_speakers[v.id], key=lambda s: s.min_frame)
         total_duration += segment.duration()
 
-        C = {k1: {k2: 0 for k2 in gender_ids.values()} for k1 in gender_ids.values()}
+        C = {k1: {k2: 0 for k2 in list(gender_ids.values())} for k1 in list(gender_ids.values())}
 
         i = 0
         for j, hand_spk in enumerate(handlabeled_speakers):
@@ -276,18 +277,18 @@ def speaking_validation(noprint=False):
                 else:
                     i += 1
 
-        for k1 in gender_ids.values():
-            for k2 in gender_ids.values():
+        for k1 in list(gender_ids.values()):
+            for k2 in list(gender_ids.values()):
                 Ct[k1][k2] += C[k1][k2]
 
     df = pd.DataFrame.from_dict(Ct, orient='index').as_matrix().astype(np.int32)
 
     if not noprint:
-        print('Minutes labeled: {:.2f}'.format(
-            float(sum([t.duration() for t in all_handlabeled_segments])) / 60))
-        print('Overall accuracy: {:.3f}'.format(np.trace(df) / float(df.sum())))
-        print('True ratio (M/F): {:.3f}'.format(df[0, :].sum() / float(df[1, :].sum())))
-        print('Predicted ratio (M/F): {:.3f}'.format(df[:, 0].sum() / float(df[:, 1].sum())))
+        print(('Minutes labeled: {:.2f}'.format(
+            float(sum([t.duration() for t in all_handlabeled_segments])) / 60)))
+        print(('Overall accuracy: {:.3f}'.format(np.trace(df) / float(df.sum()))))
+        print(('True ratio (M/F): {:.3f}'.format(df[0, :].sum() / float(df[1, :].sum()))))
+        print(('Predicted ratio (M/F): {:.3f}'.format(df[:, 0].sum() / float(df[:, 1].sum()))))
 
         plot_confusion_matrix(
             df, [d['name'] for d in Gender.objects.values('name').order_by('id')], normalize=False)

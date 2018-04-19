@@ -9,7 +9,7 @@ def csv_path(t):
 
 
 def export_table(t):
-    print('Exporting table {}'.format(t))
+    print(('Exporting table {}'.format(t)))
     p = pexpect.spawn(
         """bash -c "echo 'select * from query_tvnews_{}' | psql -h db esper will -t -F ',' -A > {}""".
         format(t, csv_path(t)),
@@ -25,7 +25,7 @@ DEFAULT_BATCH_SIZE = 100000
 def batch_update(Model, models, batch_size=1000):
     if DRY_RUN: return
     for i in range(0, len(models), batch_size):
-        print('{}/{}'.format(i, len(models) / batch_size))
+        print(('{}/{}'.format(i, len(models) / batch_size)))
         Model.objects.bulk_update(models[i:i + batch_size])
 
 
@@ -161,7 +161,7 @@ tables = [
 ]
 
 for t in tables:
-    print('Loading table {}'.format(t))
+    print(('Loading table {}'.format(t)))
     path = csv_path(t.lower())
     if not os.path.isfile(path):
         export_table(t.lower())

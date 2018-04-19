@@ -9,3 +9,5 @@ function kpod() {
 function klog() {
     kc logs ${*:2} po/$(kpod $1)
 }
+
+source /root/.cargo/env

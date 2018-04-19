@@ -14,12 +14,12 @@ class Command(BaseCommand):
         parser.add_argument('path')
 
     def handle_video(self, path, rude_carnie):
-        print path
+        print(path)
         video = Video.objects.filter(path=path).get()
         labelset = video.detected_labelset()
         faces = Face.objects.filter(frame__labelset=labelset).all()
         faces = [f for f in faces if f.gender == '0']
-        print(len(faces))
+        print((len(faces)))
         
         imgs = ['./assets/thumbnails/{}_{}.png'.format(labelset.id, f.id) for f in faces]
         male_ids = []

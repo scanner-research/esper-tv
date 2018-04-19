@@ -14,4 +14,4 @@ class Command(BaseCommand):
             frame_counts = np.zeros((video.num_frames))
             for face in Face.objects.filter(video=video):
                 frame_counts[face.frame] += 1
-            print np.mean(frame_counts), np.std(frame_counts)
+            print((np.mean(frame_counts), np.std(frame_counts)))

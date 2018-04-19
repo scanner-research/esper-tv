@@ -4,7 +4,6 @@ from django.db.models import F, ExpressionWrapper
 from django.db.models.base import ModelBase
 from django.db.models.functions import Cast
 from django_bulk_update.manager import BulkUpdateManager
-from scannerpy import ProtobufGenerator, Config
 import sys
 import numpy as np
 import json
@@ -97,14 +96,14 @@ class DatasetMeta(ModelBase):
 
         # Add mixins
         for mixin in mixins:
-            for k, v in mixin.__dict__.iteritems():
+            for k, v in list(mixin.__dict__.items()):
                 if not hasattr(super(mixin), k) and k not in [
                         '__dict__', '__weakref__', '__module__'
                 ]:
                     attrs[k] = v
 
         # Initialize foreign keys with class name
-        for key, val in attrs.iteritems():
+        for key, val in list(attrs.items()):
             if isinstance(val, ForeignKey) or isinstance(val, ManyToManyField):
                 attrs[key] = val._make_key(name)
 
@@ -120,9 +119,7 @@ class DatasetMeta(ModelBase):
         return new_cls
 
 
-class Video(models.Model):
-    __metaclass__ = DatasetMeta
-
+class Video(models.Model, metaclass=DatasetMeta):
     path = CharField(db_index=True)
     num_frames = models.IntegerField()
     fps = models.FloatField()
@@ -169,22 +166,19 @@ class Video(models.Model):
         return frame / self.fps
 
 
-class Frame(models.Model):
-    __metaclass__ = DatasetMeta
+class Frame(models.Model, metaclass=DatasetMeta):
     number = models.IntegerField(db_index=True)
 
 
-class Labeler(models.Model):
-    __metaclass__ = DatasetMeta
+class Labeler(models.Model, metaclass=DatasetMeta):
     name = CharField()
 
 
-class Noun(models.Model):
-    __metaclass__ = DatasetMeta
+class Noun(models.Model, metaclass=DatasetMeta):
+    pass
 
 
-class Track(models.Model):
-    __metaclass__ = DatasetMeta
+class Track(models.Model, metaclass=DatasetMeta):
     min_frame = models.IntegerField()
     max_frame = models.IntegerField()
 
@@ -198,12 +192,12 @@ class Track(models.Model):
         return (self.max_frame - self.min_frame) / int(self.video.fps)
 
 
-class Attribute(models.Model):
-    __metaclass__ = DatasetMeta
+class Attribute(models.Model, metaclass=DatasetMeta):
+    pass
 
 
-class Model(models.Model):
-    __metaclass__ = DatasetMeta
+class Model(models.Model, metaclass=DatasetMeta):
+    pass
 
 
 class BoundingBox(object):

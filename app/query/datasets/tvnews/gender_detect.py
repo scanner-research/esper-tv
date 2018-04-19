@@ -54,7 +54,7 @@ def gender_detect(videos, all_frames, all_faces):
                     frame_sampled: db.sampler.gather(vid_frames),
                     bboxes: db.table(vid_faces).column('bboxes'),
                     output: output_name(video, vid_frames)
-                }) for video, vid_frames, vid_faces in tqdm(zip(videos, all_frames, all_faces))
+                }) for video, vid_frames, vid_faces in tqdm(list(zip(videos, all_frames, all_faces)))
         ]
 
         db.run(

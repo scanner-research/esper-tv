@@ -1,4 +1,3 @@
-from __future__ import print_function
 from django.http import JsonResponse
 from collections import defaultdict
 import django.db.models as models
@@ -29,8 +28,14 @@ def search(params):
     try:
         fprint('Executing')
         ############### vvv DANGER -- REMOTE CODE EXECUTION vvv ###############
-        exec (params['code']) in globals(), locals()
-        result = FN()
+        _globals = {}
+        _locals = {}
+        for k in globals():
+            _globals[k] = globals()[k]
+        for k in locals():
+            _locals[k] = locals()[k]
+        exec ((params['code']), _globals, _locals)
+        result = _locals['FN']()
         ############### ^^^ DANGER -- REMOTE CODE EXECUTION ^^^ ###############
 
         if not isinstance(result, dict):
@@ -59,7 +64,7 @@ def search(params):
                             gender_ids.add(bbox['gender_id'])
 
         def to_dict(qs):
-            return {t['id']: t for t in qs.values()}
+            return {t['id']: t for t in list(qs.values())}
 
         videos = to_dict(Video.objects.filter(id__in=video_ids))
         frames = to_dict(Frame.objects.filter(id__in=frame_ids))

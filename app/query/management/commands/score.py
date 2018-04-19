@@ -1,5 +1,5 @@
-from __future__ import print_function
-from __future__ import division
+
+
 from django.core.management.base import BaseCommand
 from query.models import Video, Face, LabelSet, Frame
 from scannerpy import ProtobufGenerator, Config

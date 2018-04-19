@@ -9,7 +9,7 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y cron python-tk npm nodejs curl unzip jq gdb psmisc zsh libgnutls-dev && \
+    apt-get install -y cron npm nodejs curl unzip jq gdb psmisc zsh libgnutls-dev && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # Custom install of ffmpeg to include gnutls so we can do remote access to video files
@@ -28,7 +28,8 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 
 # Python setup
 COPY requirements.app.txt ./
-RUN pip install -r requirements.app.txt
+RUN pip3 install -r requirements.app.txt
+RUN pip install supervisor==3.3.3
 COPY .deps/nbconfig /root/.jupyter/nbconfig
 COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
 RUN jupyter nbextension enable qgrid --py --sys-prefix && \
@@ -55,9 +56,10 @@ ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
-RUN python -m spacy download en
+# Download Spacy english text model
+# RUN python3 -m spacy download en
 
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
-    python scripts/set-jupyter-password.py && \
+    python3 scripts/set-jupyter-password.py && \
     supervisord -c supervisord.conf

@@ -29,7 +29,7 @@ class Command(BaseCommand):
         with open(options['path']) as f:
             paths = [s.strip() for s in f.readlines()]
         model_path = '/app/deps/facenet/models/20170512-110547/'
-        print model_path
+        print(model_path)
 
         #load facenet models and start tensorflow
         out_size = 160
@@ -52,7 +52,7 @@ class Command(BaseCommand):
 
             faces = [f for f in faces if f.bbox_x2 - f.bbox_x1 >= .04]
 
-            print len(faces)
+            print((len(faces)))
             whitened_batch = []
             face_indexes = []
             #index in the face array NOT the face id
@@ -71,7 +71,7 @@ class Command(BaseCommand):
                 curr_img = facenet.prewhiten(curr_img)
                 whitened_batch.append(curr_img)
                 if len(whitened_batch) == batch_size:
-                    print face_idx + 1
+                    print((face_idx + 1))
                     feed_dict = {images_placeholder: whitened_batch, phase_train_placeholder: False}
                     embs = sess.run(embeddings, feed_dict=feed_dict)
                     features = [

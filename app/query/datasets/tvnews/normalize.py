@@ -1,6 +1,6 @@
 from query.scripts.script_util import *
 
-print 'Normalizing bboxes...'
+print('Normalizing bboxes...')
 insts = FaceInstance.objects.filter().select_related('frame__video')
 for inst in insts:
     video = inst.frame.video
@@ -10,7 +10,7 @@ for inst in insts:
     inst.bbox.y1 /= h
     inst.bbox.y2 /= h
 
-print 'Saving changes...'
+print('Saving changes...')
 FaceInstance.objects.bulk_update(insts, update_fields=['bbox'], batch_size=100)
 
-print 'Done!'
+print('Done!')

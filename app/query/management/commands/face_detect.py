@@ -48,7 +48,7 @@ class Command(BaseCommand):
                 video = Video.objects.filter(path=path).get()
 
                 table = db.table(path)
-                imgs = table.load(['frame'], rows=range(0, table.num_rows(), stride))
+                imgs = table.load(['frame'], rows=list(range(0, table.num_rows(), stride)))
                 video_faces = video_faces_table.load(
                     ['bboxes'], lambda lst, db: readers.bboxes(lst[0], db.protobufs))
 

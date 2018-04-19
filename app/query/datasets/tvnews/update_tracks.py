@@ -2,7 +2,7 @@ from query.datasets.prelude import *
 
 tracks = list(PersonTrack.objects.filter(video__videotag__tag__name='pose-test'))
 for i, track in enumerate(tracks):
-    print i
+    print(i)
     faces = list(Face.objects.filter(person__tracks=track).select_related('person__frame'))
     if len(faces) == 0:
         continue

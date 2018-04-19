@@ -12,8 +12,10 @@ IPYTHON_PORT = '8888'
 
 cores = multiprocessing.cpu_count()
 
-spark_config = DotMap(
-    yaml.load("""
+extra_services = {
+    'spark':
+    DotMap(
+        yaml.load("""
 build:
   context: ./spark
 ports: ['8080:8080', '8081:8081', '7077']
@@ -21,15 +23,16 @@ environment: []
 depends_on: [db]
 volumes:
   - ./app:/app
-"""))
-
-gentle_config = DotMap(
-    yaml.load("""
+""")),
+    'gentle':
+    DotMap(
+        yaml.load("""
 image: lowerquality/gentle
 environment: []
 ports: ['8765']
 command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 """))
+}
 
 config = DotMap(
     yaml.load("""
@@ -63,7 +66,8 @@ services:
     depends_on: [db, frameserver]
     volumes:
       - ./app:/app
-      - ${{HOME}}/.bash_history:/root/.bash_history
+      - ${{HOME}}/.esper/bash_history:/root/.bash_history
+      - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter"]
@@ -125,13 +129,9 @@ def main():
     config.services.app.environment.append('DEVICE={}'.format(device))
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
-    if 'spark' in args.extra_services:
-        config.services.spark = spark_config
-        config.services.app.depends_on.append('spark')
-
-    if 'gentle' in args.extra_services:
-        config.services.gentle = gentle_config
-        config.services.app.depends_on.append('gentle')
+    for svc in args.extra_services:
+        config.services[svc] = extra_services[svc]
+        config.services.app.depends_on.append(svc)
 
     if base_config.database.type == 'google':
         assert 'google' in base_config
@@ -164,7 +164,7 @@ def main():
 
     config.services.frameserver.environment.append('FILESYSTEM={}'.format(base_config.storage.type))
 
-    for service in config.services.values():
+    for service in list(config.services.values()):
         env_vars = [
             'ESPER_ENV={}'.format(base_config.storage.type), 'DATASET={}'.format(args.dataset),
             'DATA_PATH={}'.format(base_config.storage.path)
@@ -195,7 +195,7 @@ def main():
                 'cores': cores,
                 'tag': 'cpu' if device == 'cpu' else 'gpu-9.1-cudnn7',
                 'device': device,
-                'tf_version': '1.7.0',
+                'tf_version': '1.5.0',
                 'build_tf': 'on' if 'tf' in args.build else 'off'
             }
 
@@ -204,7 +204,7 @@ def main():
                 format(
                     device=device,
                     build_args=' '.join(
-                        ['--build-arg {}={}'.format(k, v) for k, v in build_args.iteritems()])),
+                        ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
                 shell=True)
 
     if 'kube' in args.build:

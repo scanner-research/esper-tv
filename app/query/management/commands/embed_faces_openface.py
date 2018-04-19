@@ -34,7 +34,7 @@ class Command(BaseCommand):
             paths = [s.strip() for s in f.readlines()]
         model_path = '/app/deps/openface/models'
         of = OpenFaceHelper(model_path)
-        print model_path
+        print(model_path)
 
         #load facenet models and start tensorflow
         out_size = 160
@@ -44,11 +44,11 @@ class Command(BaseCommand):
         for path in paths:
             if path == '':
                 return
-            print path
+            print(path)
             video = Video.objects.get(path=path)
             faces = FaceInstance.objects.filter(frame__video=video).all()
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
-            print len(faces)
+            print((len(faces)))
             #index in the face array NOT the face id
             for face_idx in range(len(faces)):
                 curr_face = faces[face_idx]
@@ -60,4 +60,4 @@ class Command(BaseCommand):
                 curr_face.features = json.dumps(rep.tolist())
                 curr_face.save()
                 if (face_idx + 1) % 100 == 0:
-                    print face_idx
+                    print(face_idx)

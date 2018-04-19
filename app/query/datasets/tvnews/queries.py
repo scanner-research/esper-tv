@@ -1,5 +1,6 @@
 from query.datasets.prelude import *
 from query.datasets.queries import *
+from functools import reduce
 
 
 @query("Non-handlabeled random faces/genders")
@@ -180,8 +181,8 @@ def mtcnn_vs_handlabeled():
     DIST_THRESHOLD = 0.10
 
     mistakes = defaultdict(lambda: defaultdict(tuple))
-    for video, frames in videos.iteritems():
-        for frame, labelers in frames.iteritems():
+    for video, frames in list(videos.items()):
+        for frame, labelers in list(frames.items()):
             labeler = 'handlabeled'
             faces = labelers[labeler]
             for face in faces:
@@ -205,8 +206,8 @@ def mtcnn_vs_handlabeled():
                 break
 
     result = []
-    for video, frames in list(mistakes.iteritems())[:100]:
-        for frame, (faces, other_faces) in frames.iteritems():
+    for video, frames in list(mistakes.items())[:100]:
+        for frame, (faces, other_faces) in list(frames.items()):
             result.append({
                 'video': video,
                 'min_frame': frame,
@@ -240,8 +241,8 @@ def mtcnn_vs_openpose():
     DIST_THRESHOLD = 0.10
 
     mistakes = defaultdict(lambda: defaultdict(tuple))
-    for video, frames in videos.iteritems():
-        for frame, labelers in frames.iteritems():
+    for video, frames in list(videos.items()):
+        for frame, labelers in list(frames.items()):
             labeler = 'openpose'
             faces = labelers[labeler]
             for face in faces:
@@ -265,8 +266,8 @@ def mtcnn_vs_openpose():
                 break
 
     result = []
-    for video, frames in list(mistakes.iteritems())[:100]:
-        for frame, (faces, other_faces) in frames.iteritems():
+    for video, frames in list(mistakes.items())[:100]:
+        for frame, (faces, other_faces) in list(frames.items()):
             result.append({
                 'video': video,
                 'min_frame': frame,
@@ -342,7 +343,7 @@ def obama_pictures():
                                 labeler__name='mtcnn').select_related('person__frame'))
         face_tracks[track.id] = (track, faces)
 
-    for track, faces in face_tracks.values():
+    for track, faces in list(face_tracks.values()):
         faces.sort(lambda a, b: a.person.frame.number - b.person.frame.number)
         valid = True
         for i in range(len(faces) - 1):

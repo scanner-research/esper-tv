@@ -60,11 +60,11 @@ def extract_audio(video):
 
 def ingest_scanner(paths):
     with Database() as db:
-        print 'Ingesting videos into Scanner...'
+        print('Ingesting videos into Scanner...')
         tables, failed = db.ingest_videos([(p, p) for p in paths], force=True)
         for path, _ in failed:
             paths.remove(path)
-        print('Scanner failed on: ', failed)
+        print(('Scanner failed on: ', failed))
         return paths
 
 

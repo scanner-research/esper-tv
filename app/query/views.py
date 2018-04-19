@@ -1,7 +1,6 @@
-from __future__ import print_function
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
-from base_models import ModelDelegator
+from .base_models import ModelDelegator
 from timeit import default_timer as now
 import django.db.models as models
 from concurrent.futures import ThreadPoolExecutor
@@ -16,9 +15,10 @@ import math
 import importlib
 import pysrt
 import requests
+
 from storehouse import StorageConfig, StorageBackend
 
-import search
+from . import search
 import query.datasets.queries as queries
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
@@ -34,7 +34,7 @@ storage = StorageBackend.make_from_config(storage_config)
 
 # Prints and flushes (necessary for gunicorn logs)
 def _print(*args):
-    print(*args)
+    print((*args))
     sys.stdout.flush()
 
 
@@ -54,7 +54,7 @@ def index(request):
         fields = cls._meta.get_fields()
         return [f.name for f in fields if isinstance(f, models.Field)]
 
-    for name, ds in ModelDelegator().datasets().iteritems():
+    for name, ds in list(ModelDelegator().datasets().items()):
         schema = []
 
         # Get queries for dataset
@@ -94,7 +94,7 @@ def index(request):
 
 # Run search routine
 def search2(request):
-    params = json.loads(request.body)
+    params = json.loads(request.body.decode('utf-8'))
     return search.search(params)
 
 
@@ -121,10 +121,10 @@ def srt_to_vtt(s):
     subs = pysrt.from_string(s)
     subs.shift(seconds=-5)  # Seems like TV news captions are delayed by a few seconds
 
-    entry_fmt = u'{position}\n{start} --> {end}\n{text}'
+    entry_fmt = '{position}\n{start} --> {end}\n{text}'
 
     def fmt_time(t):
-        return u'{:02d}:{:02d}:{:02d}.{:03d}'.format(t.hours, t.minutes, t.seconds, t.milliseconds)
+        return '{:02d}:{:02d}:{:02d}.{:03d}'.format(t.hours, t.minutes, t.seconds, t.milliseconds)
 
     entries = [
         entry_fmt.format(
@@ -132,7 +132,7 @@ def srt_to_vtt(s):
         for i, sub in enumerate(subs)
     ]
 
-    return u'\n\n'.join([u'WEBVTT'] + entries)
+    return '\n\n'.join(['WEBVTT'] + entries)
 
 
 # Get subtitles for video

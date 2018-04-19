@@ -30,12 +30,12 @@ class Command(BaseCommand):
 
             for track in tracks:
                 if track.gender != '0':
-                    print 'skipping_track', track.id
+                    print(('skipping_track', track.id))
                     continue
                 faces = Face.objects.filter(track=track)
-                print track.id
+                print((track.id))
 
-                print("len of faces for path {}, is {}".format(path, len(faces)))
+                print(("len of faces for path {}, is {}".format(path, len(faces))))
                 imgs = ['./assets/thumbnails/{}_{}.jpg'.format(labelset.id, f.id)
                         for f in faces]
 

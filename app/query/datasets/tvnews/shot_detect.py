@@ -213,7 +213,7 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
                             next(t.column('shots').load(rows=[t.num_rows() - 1]))[1])
                     except Exception:
                         traceback.print_exc()
-                        print(t.name())
+                        print((t.name()))
                         return None
 
                 log.debug('Getting tables')
@@ -229,7 +229,7 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
 
         log.debug('Filtering bad results')
         indices2, filtered_boundaries = unzip(
-            [(idx, combined) for idx, combined in tqdm(zip(indices, all_boundaries))
+            [(idx, combined) for idx, combined in tqdm(list(zip(indices, all_boundaries)))
              if combined is not None])
 
         log.debug('Converting to shots')
@@ -237,7 +237,7 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
             [(boundaries_to_shots(video, vid_boundaries), vid_blackframes)
              for video, (
                  vid_boundaries,
-                 vid_blackframes) in tqdm(zip(gather(videos, indices2), filtered_boundaries))])
+                 vid_blackframes) in tqdm(list(zip(gather(videos, indices2), filtered_boundaries)))])
 
         log.debug('Done!')
         return indices2, all_shots, all_blackframes
@@ -281,7 +281,7 @@ def shot_detect(videos, save=True, evaluate=False, force=False):
 
     if save:
         log.debug('Saving shots')
-        for (video, vid_shots) in tqdm(zip(videos, all_shots)):
+        for (video, vid_shots) in tqdm(list(zip(videos, all_shots))):
             Shot.objects.filter(video=video, labeler=LABELER).delete()
             Shot.objects.bulk_create(vid_shots)
 
@@ -329,7 +329,9 @@ STITCHED_LABELER, _ = Labeler.objects.get_or_create(name='shot-stitched')
 FEATURE_DISTANCE_THRESHOLD = 0.5
 
 
-def should_stitch((left_faces, left_features), (right_faces, right_features)):
+def should_stitch(xxx_todo_changeme, xxx_todo_changeme1):
+    (left_faces, left_features) = xxx_todo_changeme
+    (right_faces, right_features) = xxx_todo_changeme1
     if len(left_faces) == 0 or len(right_faces) == 0 or len(left_faces) != len(right_faces):
         return False
 
@@ -348,13 +350,14 @@ def should_stitch((left_faces, left_features), (right_faces, right_features)):
     return len(right_faces) == 0
 
 
-def do_stitch((vid_shots, vid_shot_frames, vid_faces, vid_features)):
+def do_stitch(xxx_todo_changeme2):
     # frame_map = defaultdict(
     #     lambda: ([], []), {
     #         frame_faces[0].person.frame.number: (frame_faces, frame_features)
     #         for (frame_faces, frame_features) in zip(vid_faces, vid_features)
     #     })
 
+    (vid_shots, vid_shot_frames, vid_faces, vid_features) = xxx_todo_changeme2
     u = unionfind(len(vid_shots))
 
     for i in range(len(vid_shots) - 1):
@@ -391,7 +394,7 @@ def shot_stitch(videos, all_shots, all_shot_frames, all_faces, all_features, for
         return unzip(
             par_for(
                 do_stitch,
-                zip(all_shots, all_shot_frames, all_faces, all_features),
+                list(zip(all_shots, all_shot_frames, all_faces, all_features)),
                 process=True,
                 workers=50))
 

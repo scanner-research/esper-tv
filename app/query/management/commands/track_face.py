@@ -61,7 +61,7 @@ class Command(BaseCommand):
         for path in paths:
             if path == '':
                 return
-            print path
+            print(path)
             video = Video.objects.filter(path=path).get()
             face_features = FaceFeatures.objects.filter(
                 face__person__frame__video=video,
@@ -152,8 +152,8 @@ class Command(BaseCommand):
                     in_seq += 1
                     seq_face.save()
                     last_frame = seq_face.person.frame.number
-            print 'total faces: ', faces_len
-            print 'in output seq: ', in_seq
-            print 'dropped in short seq: ', short_seq
-            print 'low confidence', low_confidence
-            print 'accounted for: ', (low_confidence + short_seq + in_seq)
+            print(('total faces: ', faces_len))
+            print(('in output seq: ', in_seq))
+            print(('dropped in short seq: ', short_seq))
+            print(('low confidence', low_confidence))
+            print(('accounted for: ', (low_confidence + short_seq + in_seq)))

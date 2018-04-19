@@ -40,13 +40,13 @@ class Command(BaseCommand):
             video = Video.objects.filter(path=path).get()
             labelset = video.detected_labelset()
             faces = Face.objects.filter(frame__labelset=labelset).all()
-            print("len of faces for path {}, is {}".format(path, len(faces)))
+            print(("len of faces for path {}, is {}".format(path, len(faces))))
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= .05]
             imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                     for f in faces]
             best = rc.get_gender(imgs, single_look=True)
             for comb in zip(imgs, best):
-                print('{} : {}'.format(comb[0], comb[1]))
+                print(('{} : {}'.format(comb[0], comb[1])))
 
             # Update each of the faces.
             for i, face in enumerate(faces):
@@ -62,5 +62,5 @@ class Command(BaseCommand):
 
                 face.save()
 
-            print('confident = {}, not confident = {}'.format(confident,
-                len(faces)-confident))
+            print(('confident = {}, not confident = {}'.format(confident,
+                len(faces)-confident)))

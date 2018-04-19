@@ -20,7 +20,7 @@ class Command(BaseCommand):
     def detect_faces_batch(self, frame_ids, batch, minsize, pnet, rnet, onet, threshold, factor, vmargin, hmargin, video, frame_map):
         detections = align.detect_face.bulk_detect_face(batch, minsize, pnet, rnet, onet, threshold, factor)
         face_obj_batch = []
-        print(len(frame_ids))
+        print((len(frame_ids)))
         for (frame_id, bounding_boxes, img) in zip(frame_ids, detections, batch):
 
             if bounding_boxes == None:
@@ -63,7 +63,7 @@ class Command(BaseCommand):
                 f.bbox_score = confidence
 
                 face_obj_batch.append(f)
-        print(len(face_obj_batch))
+        print((len(face_obj_batch)))
         Face.objects.bulk_create(face_obj_batch)
 
 

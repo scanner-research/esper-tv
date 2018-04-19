@@ -7,8 +7,8 @@ def parse(path):
     with open(path, 'r') as f:
         while True:
             path = f.next()[:-1]  # this will raise StopIteration for us when we reach EOF
-            num_rows = int(math.ceil(int(f.next()) / 24.0))
-            print path, num_rows
+            num_rows = int(math.ceil(int(next(f)) / 24.0))
+            print((path, num_rows))
             yield path, [f.next()[:-1] for _ in range(num_rows)]
 
 to_ingest = [
@@ -18,7 +18,7 @@ to_ingest = [
 ]  # yapf: disable
 
 for fpath, labeler_name in to_ingest:
-    print fpath
+    print(fpath)
 
     labeler, _ = Labeler.objects.get_or_create(name=labeler_name)
     bar = progress_bar(len(list(parse(fpath))))
@@ -46,7 +46,7 @@ for fpath, labeler_name in to_ingest:
                 where=['number mod 24=0']))
         faces = [
             Instance(labeler=labeler, frame=frames[j], bbox=bbox)
-            for j, frame_boxes in video_boxes.iteritems() for bbox in frame_boxes
+            for j, frame_boxes in list(video_boxes.items()) for bbox in frame_boxes
         ]
 
         with transaction.atomic():
@@ -59,4 +59,4 @@ for fpath, labeler_name in to_ingest:
 
         bar.update(vi)
 
-    print 'Failed to find: {}'.format(json.dumps(does_not_exist))
+    print(('Failed to find: {}'.format(json.dumps(does_not_exist))))

@@ -171,7 +171,7 @@ def animatedness(videos, exemplar):
 
     for video, vid_tracks in zip(videos, all_tracks):
         scores = [(track.id, animated_score(track)) for track in vid_tracks]
-        print(sorted(scores, key=itemgetter(1)))
+        print((sorted(scores, key=itemgetter(1))))
 
 
 def main():

@@ -59,7 +59,7 @@ def match_segments(df, commercials, segments):
 
     in_commercial_dict = {d['id']: False for d in tqdm(shots_list)}
     segment_col = []
-    for video_id, vid_shots in tqdm(grouped_shots.iteritems()):
+    for video_id, vid_shots in tqdm(iter(list(grouped_shots.items()))):
         if video_id not in grouped_commercials: continue
         vid_commercials = grouped_commercials[video_id]
         vid_segments = grouped_segments[video_id]
@@ -134,7 +134,7 @@ def filter_hosts(speakers2, faces, shots):
         return b['min_frame'] <= a['min_frame'] and a['max_frame'] <= b['max_frame']
 
     has_host_dict = {d['id']: False for d in tqdm(speakers_list)}
-    for video_id, vid_speakers in tqdm(list(grouped_speakers.iteritems())):
+    for video_id, vid_speakers in tqdm(list(grouped_speakers.items())):
         if video_id not in grouped_shots: continue
         vid_shots = grouped_shots[video_id]
 

@@ -7,12 +7,12 @@ nets
 spark-data
 pg
 subs
-subs2
 tmp
 assets/bundles
 assets/thumbnails
 assets/audio
 .ipynb_checkpoints
+rust-scripts/target
 
 # Specific files
 service-key.json

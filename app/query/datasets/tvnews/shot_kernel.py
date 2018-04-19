@@ -31,7 +31,7 @@ class ShotDetectionKernel(Kernel):
         assert (len(self.hists) > 0)
 
         try:
-            print('Processing {} hists'.format(len(self.hists)))
+            print(('Processing {} hists'.format(len(self.hists))))
             start = now()
             diffs = np.array([
                 np.mean(
@@ -40,7 +40,7 @@ class ShotDetectionKernel(Kernel):
             ])
             diffs = np.insert(diffs, 0, 0)
             n = len(diffs)
-            print('Diffs: {:.3f}'.format(now() - start))
+            print(('Diffs: {:.3f}'.format(now() - start)))
 
             # Do simple outlier detection to find boundaries between shots
             start = now()
@@ -57,7 +57,7 @@ class ShotDetectionKernel(Kernel):
                     if abs(bi - bj) < GROUP_THRESHOLD:
                         u.unite(i, j)
                         break
-            print('Groups: {:.3f}'.format(now() - start))
+            print(('Groups: {:.3f}'.format(now() - start)))
 
             grouped_boundaries = [boundaries[g[len(g) / 2]] for g in u.groups()]
 
@@ -67,7 +67,7 @@ class ShotDetectionKernel(Kernel):
             for i, h in enumerate(self.hists):
                 if h[0][0] > threshold and h[1][0] > threshold and h[2][0] > threshold:
                     black_frames.append(i)
-            print('Black frames: {:.3f}'.format(now() - start))
+            print(('Black frames: {:.3f}'.format(now() - start)))
 
             print('Done!')
             return [['_' for _ in range(len(input_columns[0]) - 1)] + \

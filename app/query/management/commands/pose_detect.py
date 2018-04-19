@@ -40,7 +40,7 @@ class Command(BaseCommand):
 
             for (video, output) in zip(videos, outputs):
                 poses = []
-                print(video.path)
+                print((video.path))
                 frames = list(Frame.objects.filter(video=video).order_by('number'))
                 for i, buf in output.column('pose').load():
                     if len(buf) == 1: continue

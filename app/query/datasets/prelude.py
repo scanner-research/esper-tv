@@ -11,7 +11,8 @@ from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
 from pyspark.sql import SparkSession, Row
-from itertools import izip
+from functools import reduce
+
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
 import django.db.models as models
@@ -22,7 +23,7 @@ import pandas as pd
 import sys
 import sqlparse
 import logging
-import cPickle as pickle
+import pickle as pickle
 import marshal
 import json
 import multiprocessing as mp
@@ -87,6 +88,7 @@ else:
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
 DATA_PATH = os.environ.get('DATA_PATH')
+
 if ESPER_ENV == 'google':
     storage_config = StorageConfig.make_gcs_config(BUCKET)
 else:
@@ -117,7 +119,7 @@ def query_yes_no(question, default="yes"):
 
     while True:
         sys.stdout.write(question + prompt)
-        choice = raw_input().lower()
+        choice = input().lower()
         if default is not None and choice == '':
             return valid[default]
         elif choice in valid:
@@ -179,13 +181,13 @@ def group_by_frame(objs, fn_key, fn_sort, output_dict=False, include_frame=True)
     for obj in objs:
         d[fn_key(obj)].append(obj)
 
-    for l in d.values():
+    for l in list(d.values()):
         l.sort(key=fn_sort)
 
     if output_dict:
         return dict(d)
     else:
-        l = sorted(d.iteritems(), key=itemgetter(0))
+        l = sorted(iter(list(d.items())), key=itemgetter(0))
         if not include_frame:
             l = [f for _, f in l]
         return l
@@ -249,7 +251,7 @@ class Timer:
         self._s = s
         self._run = run
         if run:
-            log.debug('-- START: {}'.format(s))
+            log.debug('-- START: {} --'.format(s))
 
     def __enter__(self):
         self.start = now()
@@ -257,8 +259,9 @@ class Timer:
     def __exit__(self, a, b, c):
         t = int(now() - self.start)
         if self._run:
-            log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self._s, t / 3600, t / 60,
-                                                                  t % 60))
+            log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self._s, int(t / 3600), int(
+                t / 60),
+                                                                  int(t) % 60))
 
 
 CACHE_DIR = '/app/.cache'
@@ -279,7 +282,8 @@ class PyCache:
         return os.path.isfile(self._fname(k, i, method))
 
     def set(self, k, v, method=DEFAULT_CACHE_METHOD):
-        def save_chunk((i, v)):
+        def save_chunk(args):
+            (i, v) = args
             with open(self._fname(k, i, method), 'wb') as f:
                 if method == 'marshal':
                     marshal.dump(v, f)
@@ -348,7 +352,9 @@ class PyCache:
                 gc.disable()
                 if self.has(k, 1, method):
                     loaded = flatten(
-                        par_for(load_chunk, range(NUM_CHUNKS), workers=NUM_CHUNKS, progress=False))
+                        par_for(
+                            load_chunk, list(range(NUM_CHUNKS)), workers=NUM_CHUNKS,
+                            progress=False))
                 else:
                     loaded = load_chunk(0)
                 gc.enable()
@@ -359,16 +365,16 @@ class PyCache:
 pcache = PyCache()
 
 
-class QuerySetMixin:
+class QuerySetMixin(object):
     def explain(self):
         # TODO(wcrichto): doesn't work for queries with strings
         cursor = connections[self.db].cursor()
         cursor.execute('EXPLAIN ANALYZE %s' % str(self.query))
-        print("\n".join(([t for (t, ) in cursor.fetchall()])))
+        print(("\n".join(([t for (t, ) in cursor.fetchall()]))))
 
     def print_sql(self):
         q = str(self.query)
-        print(sqlparse.format(q, reindent=True))
+        print((sqlparse.format(q, reindent=True)))
 
     def exists(self):
         try:
@@ -387,7 +393,19 @@ class QuerySetMixin:
                 str(self.query), '/app/pg/{}.csv'.format(name)))
 
 
-QuerySet.__bases__ += (QuerySetMixin, )
+for key in QuerySetMixin.__dict__:
+    if key[:2] == '__':
+        continue
+
+    setattr(QuerySet, key, QuerySetMixin.__dict__[key])
+
+
+def print_sql(self):
+    q = str(self.query)
+    print((sqlparse.format(q, reindent=True)))
+
+
+setattr(QuerySet, 'print_sql', print_sql)
 
 
 def bulk_create_copy(self, objects, table=None):
@@ -422,7 +440,7 @@ def bulk_create_copy(self, objects, table=None):
 
 class BulkUpdateManagerMixin:
     def batch_create(self, objs, batch_size=1000):
-        for i in tqdm(range(0, len(objs), batch_size)):
+        for i in tqdm(list(range(0, len(objs), batch_size))):
             self.bulk_create(objs[i:(i + batch_size)])
 
     def bulk_create_copy(self, objects):
@@ -506,7 +524,7 @@ def make_montage(video,
     videos = video if isinstance(video, list) else [video for _ in range(len(frames))]
     imgs = par_for(
         lambda t: resize(load_frame(*t), target_width, target_height),
-        zip(videos, frames, bboxes),
+        list(zip(videos, frames, bboxes)),
         progress=progress,
         workers=workers)
     target_height = imgs[0].shape[0]
@@ -531,7 +549,8 @@ def make_montage(video,
         return montage
 
 
-def _get_frame((videos, fps, start, i, kwargs)):
+def _get_frame(args):
+    (videos, fps, start, i, kwargs) = args
     return make_montage(videos, [int(math.ceil(v.fps)) / fps * i + start for v in videos], **kwargs)
 
 
@@ -667,7 +686,7 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
 
     fmt = '.2f' if normalize else 'd'
     thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+    for i, j in itertools.product(list(range(cm.shape[0])), list(range(cm.shape[1]))):
         plt.text(
             j,
             i,

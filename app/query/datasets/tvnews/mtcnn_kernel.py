@@ -26,7 +26,7 @@ class MTCNNKernel(kernel.TensorFlowKernel):
         detection_window_size_ratio = .2
 
         imgs = columns[0]
-        print('Face detect on {} frames'.format(len(imgs)))
+        print(('Face detect on {} frames'.format(len(imgs))))
         start = now()
         detections = align.detect_face.bulk_detect_face(
             imgs, detection_window_size_ratio, self.pnet, self.rnet, self.onet, threshold, factor)

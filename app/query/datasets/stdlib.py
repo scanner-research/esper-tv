@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from django.http import JsonResponse
 from collections import defaultdict
 from django.forms.models import model_to_dict
@@ -23,7 +23,7 @@ def access(obj, path):
 
 
 def fprint(*args):
-    print(*args)
+    print((*args))
     sys.stdout.flush()
 
 

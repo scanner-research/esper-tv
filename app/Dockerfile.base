@@ -9,11 +9,11 @@ ARG cores=1
 ENV APPDIR=/app
 WORKDIR ${APPDIR}
 
-RUN apt-get update && apt-get install -y default-jre postgresql-9.5 libpq-dev
+RUN apt-get update && apt-get install -y default-jre postgresql-9.5 libpq-dev python3-dev python3-pip
 COPY ./scripts ./scripts
 COPY ./requirements.base.txt .
 RUN ./scripts/build-tf.sh
-RUN pip install -r requirements.base.txt
+RUN pip3 install -r requirements.base.txt
 COPY ./.scanner.toml /root/.scanner.toml
 
 ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH

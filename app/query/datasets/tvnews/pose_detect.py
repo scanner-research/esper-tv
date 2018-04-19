@@ -99,7 +99,7 @@ def pose_detect(videos, all_frames, force=False):
                 for (frame, bufs) in zip(sorted(list(set(vid_frames))), pose_bufs)
             }
                     for (video, vid_frames,
-                         pose_bufs) in tqdm(zip(videos, all_filtered_frames, all_pose_bufs))]
+                         pose_bufs) in tqdm(list(zip(videos, all_filtered_frames, all_pose_bufs)))]
 
             log.debug('Saving poses')
             for (video, vid_frames, output) in zip(videos, all_filtered_frames, outputs):

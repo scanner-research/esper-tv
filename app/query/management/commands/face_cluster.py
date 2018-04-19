@@ -41,7 +41,7 @@ class Command(BaseCommand):
 
         # All the past clusters in the db.
         identities = Identity.objects.all()
-        print("len of old identities = ", len(identities))
+        print(("len of old identities = ", len(identities)))
         old_clusters = {}
 
         # FIXME: This seems technically wrong as FaceCluster expects faces of
@@ -64,7 +64,7 @@ class Command(BaseCommand):
                 return
             video = Video.objects.filter(path=path).get()
             faces = Face.objects.filter(video=video).all()
-            print("len of faces for path {}, is {}".format(path, len(faces)))
+            print(("len of faces for path {}, is {}".format(path, len(faces))))
             faces = [f for f in faces if f.bbox.x2 - f.bbox.x1 >= 50]
             imgs = ['./assets/thumbnails/{}_{}.jpg'.format(video.id, f.id)
                     for f in faces]
@@ -83,10 +83,10 @@ class Command(BaseCommand):
                     # face.delete()
                     # os.remove(imgs[old_index])
 
-            print("num of unaligned faces are: ", len(imgs) -
-                    len(indices))
+            print(("num of unaligned faces are: ", len(imgs) -
+                    len(indices)))
 
-            for name, cluster in added_clusters.iteritems():
+            for name, cluster in list(added_clusters.items()):
                 id = Identity()
                 id.name = name
                 id.cohesion = cluster.cohesion_score or 0

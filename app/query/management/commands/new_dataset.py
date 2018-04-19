@@ -14,5 +14,5 @@ class Command(BaseCommand):
             shlex.split('cp -r query/management/commands/dataset_template query/datasets/{}'.format(
                 options['dataset'])))
 
-        print('Dataset {dataset} successfully created at query/datasets/{dataset}'.format(
-            dataset=options['dataset']))
+        print(('Dataset {dataset} successfully created at query/datasets/{dataset}'.format(
+            dataset=options['dataset'])))

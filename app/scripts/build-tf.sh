@@ -10,7 +10,7 @@ if [ "$build_tf" = "on" ]; then
     apt-get update && apt-get install -y bazel
 
     # Install python deps
-    pip install six numpy wheel
+    pip3 install six numpy wheel
 
     git clone -b v${tf_version} https://github.com/tensorflow/tensorflow/
     cd tensorflow
@@ -19,8 +19,8 @@ if [ "$build_tf" = "on" ]; then
     if [ "$device2" = "cpu" ]; then
         # TODO(wcrichto): getting internal errors w/ MKL on GCE
 
-        PYTHON_BIN_PATH=$(which python) \
-                       PYTHON_LIB_PATH=/usr/local/lib/python2.7/site-packages \
+        PYTHON_BIN_PATH=$(which python3) \
+                       PYTHON_LIB_PATH=/usr/local/lib/python3.5/site-packages \
                        TF_NEED_MKL=0 \
                        CC_OPT_FLAGS=-march=core-avx2 \
                        TF_NEED_JEMALLOC=1 \
@@ -45,14 +45,14 @@ if [ "$build_tf" = "on" ]; then
     fi
 
     bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg
-    pip install /tmp/tensorflow_pkg/*
+    pip3 install /tmp/tensorflow_pkg/*
     cd ..
     rm -rf tensorflow
 
 else
     if [ "$device2" = "cpu" ]; then
-        pip install tensorflow==${tf_version};
+        pip3 install tensorflow==${tf_version};
     else
-        pip install tensorflow-gpu==${tf_version};
+        pip3 install tensorflow-gpu==${tf_version};
     fi
 fi

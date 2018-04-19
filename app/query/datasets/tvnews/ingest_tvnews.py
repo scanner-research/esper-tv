@@ -30,7 +30,7 @@ genders = {
     '0':  m.Gender.objects.get_or_create(name='unknown')[0]
 }
 
-print 'Tracks'
+print('Tracks')
 old_tracks = {}
 new_tracks = {}
 with open('tracks.csv') as f:
@@ -41,18 +41,18 @@ with open('tracks.csv') as f:
 with open('db.csv') as f:
     lines = f.readlines()[1:]
 
-print 'Faces'
+print('Faces')
 for i, line in enumerate(lines):
     [path, frame_number, labelset, track, gender, bbox] = line.strip().split('\t')[:6]
     if track == 'NULL':
         new_tracks[i] = Face()
 
-Face.objects.bulk_create(old_tracks.values() + new_tracks.values())
+Face.objects.bulk_create(list(old_tracks.values()) + list(new_tracks.values()))
 
 videos = {v.path: v for v in Video.objects.all()}
-frames = {v.id: {f.number: f for f in Frame.objects.filter(video=v)} for v in videos.values()}
+frames = {v.id: {f.number: f for f in Frame.objects.filter(video=v)} for v in list(videos.values())}
 
-print 'Instances'
+print('Instances')
 instances = {}
 tuples = set()
 missing = set()
@@ -88,10 +88,10 @@ for i, line in enumerate(lines):
 
     instances[i] = FaceInstance(frame=frame, bbox_x1=bbox.x1, bbox_x2=bbox.x2, bbox_y1=bbox.y1, bbox_y2=bbox.y2, bbox_score=bbox.score, labeler=labeler, face=face, gender=genders[gender])
 
-print 'ERROR, MISSING: ', missing
-FaceInstance.objects.bulk_create(instances.values())
+print(('ERROR, MISSING: ', missing))
+FaceInstance.objects.bulk_create(list(instances.values()))
 
-print 'Features'
+print('Features')
 features = []
 for i, line in enumerate(lines):
     if not i in instances: continue
