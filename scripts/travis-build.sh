@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
     PUSH=0
@@ -10,7 +10,7 @@ else
 fi
 
 build_docker() {
-    python configure.py -c config/local.toml --no-build-kube
+    python3 configure.py -c config/local.toml
     docker build -f app/Dockerfile.app -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
 
     if [ $PUSH -eq 0 ]; then
