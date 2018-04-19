@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-pip3 install -r requirements.txt
-
 if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
     PUSH=0
 else
