@@ -9,7 +9,7 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y cron npm nodejs curl unzip jq gdb psmisc zsh libgnutls-dev && \
+    apt-get install -y cron npm nodejs curl unzip jq gdb psmisc zsh libgnutls-dev python-pip && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # Custom install of ffmpeg to include gnutls so we can do remote access to video files
@@ -41,7 +41,7 @@ RUN jupyter nbextension enable qgrid --py --sys-prefix && \
     jupyter nbextension enable hide_input/main && \
     jupyter nbextension enable toc2/main && \
     jupyter nbextension enable code_prettify/autopep8 && \
-    python -c "import matplotlib"
+    python3 -c "import matplotlib"
 
 # Fix npm hanging on OS X
 # https://github.com/npm/npm/issues/7862#issuecomment-220798263
