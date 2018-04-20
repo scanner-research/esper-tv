@@ -8,8 +8,9 @@ bucket = "esper"
 path = "public"
 
 [database]
+# type = "local"
 type = "google"
-name = "esper-public-dev-2"
+name = "esper-dev"
 user = "will"
 password = "foobar"
 

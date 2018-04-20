@@ -14,4 +14,4 @@ cp -r /opt/scanner/nets .
 ./nets/get_caffe_facenet.sh -f
 
 # Create all database tables
-python manage.py migrate
+python3 manage.py migrate
