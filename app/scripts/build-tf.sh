@@ -50,7 +50,7 @@ if [ "$build_tf" = "on" ]; then
     rm -rf tensorflow
 
 else
-    if [ "$device2" = "cpu" ]; then
+    if [ "$device" = "cpu" ]; then
         pip3 install tensorflow==${tf_version};
     else
         pip3 install tensorflow-gpu==${tf_version};

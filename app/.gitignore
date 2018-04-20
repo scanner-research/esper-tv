@@ -13,7 +13,7 @@ assets/thumbnails
 assets/audio
 .ipynb_checkpoints
 rust-scripts/target
-
+rust-scripts/build
 # Specific files
 service-key.json
 npm-debug.log

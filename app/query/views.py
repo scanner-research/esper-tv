@@ -254,7 +254,7 @@ def save_speaker_labels(m, groups):
 
 # Register frames as labeled
 def labeled(request):
-    params = json.loads(request.body)
+    params = json.loads(request.body.decode('utf-8'))
     m = ModelDelegator(params['dataset'])
 
     groups = params['groups']

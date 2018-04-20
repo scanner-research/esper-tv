@@ -68,6 +68,7 @@ services:
       - ./app:/app
       - ${{HOME}}/.esper/bash_history:/root/.bash_history
       - ${{HOME}}/.esper/.cargo:/root/.cargo
+      - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter"]

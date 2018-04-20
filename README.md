@@ -12,7 +12,7 @@ Esper is a framework for exploratory analysis of large video collections. Esper 
 
 
 ## Setup
-First, install [Docker CE](https://docs.docker.com/engine/installation/#supported-platforms), [Python 2.7](https://www.python.org/downloads/), and [pip](https://pip.pypa.io/en/stable/installing/). Ensure that you have Docker version >= 17.12, which you can check by running:
+First, install [Docker CE](https://docs.docker.com/engine/installation/#supported-platforms), [Python 3.5](https://www.python.org/downloads/), and [pip](https://pip.pypa.io/en/stable/installing/). Ensure that you have Docker version >= 17.12, which you can check by running:
 ```
 $ docker --version
 Docker version 17.12.0-ce, build c97c6d6
@@ -25,8 +25,8 @@ Next, you will need to configure your Esper installation. If you are using Googl
 ```
 $ git clone https://github.com/scanner-research/esper
 $ cd esper
-$ pip install -r requirements.txt
-$ python configure.py --config config/local.toml --dataset default
+$ pip3 install -r requirements.txt
+$ python3 configure.py --config config/local.toml --dataset default
 $ docker-compose pull
 $ docker-compose up -d
 $ docker-compose exec app ./scripts/setup.sh

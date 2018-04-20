@@ -14,6 +14,6 @@ COPY ./scripts ./scripts
 COPY ./requirements.base.txt .
 RUN ./scripts/build-tf.sh
 RUN pip3 install -r requirements.base.txt
-COPY ./.scanner.toml /root/.scanner.toml
+COPY ./.scanner.toml /root/.scanner/config.toml
 
 ENV PYTHONPATH=${APPDIR}:${APPDIR}/deps/face_recognizer:${APPDIR}/deps/openface:${APPDIR}/deps/rude-carnie:${APPDIR}/deps/facenet/src:$PYTHONPATH
