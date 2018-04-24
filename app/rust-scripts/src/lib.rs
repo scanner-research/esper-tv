@@ -19,11 +19,15 @@ use indicatif::ProgressBar;
 
 struct Document {
     text_index: SuffixTable<'static, 'static>,
-    time_index: BTreeMap<u32, (Duration, Duration)>
+    time_index: BTreeMap<u32, (f64, f64)>
 }
 
 struct Corpus {
     docs: HashMap<String, Document>
+}
+
+fn duration_to_float(d: Duration) -> f64 {
+    f64::from(d.as_secs() as u32) + f64::from(d.subsec_nanos()) / 1.0e-9
 }
 
 impl Corpus {
@@ -37,7 +41,9 @@ impl Corpus {
                     let mut cursor = 0;
                     for caption in captions {
                         text += &caption.text;
-                        time_index.insert(cursor as u32, (caption.start_time, caption.end_time));
+                        time_index.insert(
+                            cursor as u32,
+                            (duration_to_float(caption.start_time), duration_to_float(caption.end_time)));
                         cursor += caption.text.len();
                     }
                     let text_index = SuffixTable::new(text);
@@ -52,7 +58,7 @@ impl Corpus {
         Corpus { docs }
     }
 
-    pub fn find<T: Into<String>>(&self, s: T) -> HashMap<String, Vec<(Duration, Duration)>> {
+    pub fn find<T: Into<String>>(&self, s: T) -> HashMap<String, Vec<(f64, f64)>> {
         let s: String = s.into();
         self.docs.iter().map(|(path, doc)| {
             let pos = doc.text_index.positions(&s);
@@ -98,18 +104,11 @@ impl Drop for BlockTimer {
     }
 }
 
-fn duration_to_float(d: Duration) -> f64 {
-    f64::from(d.as_secs() as u32) + f64::from(d.subsec_nanos()) / 1.0e-9
-}
-
 #[py::modinit(_rustscripts)]
 fn init_mod(py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m, "find")]
     fn find(s: String) -> PyResult<HashMap<String, Vec<(f64, f64)>>> {
-        Ok(CORPUS.find(s).into_iter().map(|(k, v)| {
-            let v = v.into_iter().map(|(a, b)| (duration_to_float(a), duration_to_float(b))).collect();
-            (k, v)
-        }).collect())
+        Ok(CORPUS.find(s))
     }
 
     Ok(())
