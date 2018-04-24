@@ -5,3 +5,4 @@ nvidia-docker-compose.yml
 service-key.json
 db/data
 .scanner.toml
+**/__pycache__

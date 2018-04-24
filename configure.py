@@ -66,7 +66,7 @@ services:
     depends_on: [db, frameserver]
     volumes:
       - ./app:/app
-      - ${{HOME}}/.esper/bash_history:/root/.bash_history
+      - ${{HOME}}/.esper/.bash_history:/root/.bash_history
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ./service-key.json:/app/service-key.json
