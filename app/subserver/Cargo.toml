@@ -1,0 +1,17 @@
+[package]
+name = "subserver"
+version = "0.1.0"
+authors = ["Will Crichton <wcrichto@cs.stanford.edu>"]
+
+[dependencies]
+glob = "0.2"
+rayon = "1.0"
+srtparse = "0.1.1"
+lazy_static = "1.0"
+suffix = "1.0"
+indicatif = "0.9.0"
+rocket = "0.3.8"
+rocket_codegen = "0.3.8"
+rocket_contrib = "0.3.8"
+serde = "1.0"
+serde_derive = "1.0"

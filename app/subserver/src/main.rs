@@ -1,21 +1,27 @@
-#![feature(proc_macro, specialization)]
+#![feature(proc_macro, specialization, plugin)]
+#![plugin(rocket_codegen)]
 
+extern crate serde;
+#[macro_use] extern crate serde_derive;
 #[macro_use] extern crate lazy_static;
 extern crate glob;
 extern crate rayon;
 extern crate srtparse;
-extern crate pyo3;
 extern crate suffix;
 extern crate indicatif;
+extern crate rocket;
+extern crate rocket_contrib;
 
 use std::time::Instant;
 use glob::glob;
 use rayon::prelude::*;
-use pyo3::prelude::*;
 use std::time::Duration;
 use suffix::SuffixTable;
 use std::collections::{HashMap, BTreeMap};
 use indicatif::ProgressBar;
+use rocket_contrib::Json;
+use rocket::config::{Config, Environment};
+use std::sync::Mutex;
 
 struct Document {
     text_index: SuffixTable<'static, 'static>,
@@ -32,7 +38,7 @@ fn duration_to_float(d: Duration) -> f64 {
 
 impl Corpus {
     pub fn new(paths: Vec<String>) -> Corpus {
-        let pb = ProgressBar::new(paths.len() as u64);
+        let pb = Mutex::new(ProgressBar::new(paths.len() as u64));
         let docs: HashMap<_, _> = paths.par_iter().map(|path| {
             let doc = match srtparse::read_from_file(&path) {
                 Ok(captions) => {
@@ -52,7 +58,7 @@ impl Corpus {
                 },
                 Err(_) => None
             };
-            pb.inc(1);
+            pb.lock().unwrap().inc(1);
             (path.clone(), doc)
         }).filter(|(_, doc)| doc.is_some()).map(|(path, doc)| (path, doc.expect("Unreachable"))).collect();
         Corpus { docs }
@@ -61,7 +67,9 @@ impl Corpus {
     pub fn find<T: Into<String>>(&self, s: T) -> HashMap<String, Vec<(f64, f64)>> {
         let s: String = s.into();
         self.docs.iter().map(|(path, doc)| {
-            let pos = doc.text_index.positions(&s);
+            let mut pos = Vec::new();
+            pos.extend_from_slice(doc.text_index.positions(&s));
+            pos.sort();
             (path.clone(), pos.into_iter().map(|i| {
                 let (_, val) = doc.time_index.range(..(i+1)).next_back().expect("Missing time key");
                 val.clone()
@@ -104,12 +112,19 @@ impl Drop for BlockTimer {
     }
 }
 
-#[py::modinit(_rustscripts)]
-fn init_mod(py: Python, m: &PyModule) -> PyResult<()> {
-    #[pyfn(m, "find")]
-    fn find(s: String) -> PyResult<HashMap<String, Vec<(f64, f64)>>> {
-        Ok(CORPUS.find(s))
-    }
+#[derive(Serialize, Deserialize)]
+struct FindInput {
+    phrase: String
+}
 
-    Ok(())
+#[post("/find", format="application/json", data="<input>")]
+fn find(input: Json<FindInput>) -> Json<HashMap<String, Vec<(f64, f64)>>> {
+    Json(CORPUS.find(input.phrase.clone()))
+}
+
+fn main() {
+    let config = Config::build(Environment::Development)
+        .port(8111)
+        .unwrap();
+    rocket::custom(config, true).mount("/", routes![find]).launch();
 }

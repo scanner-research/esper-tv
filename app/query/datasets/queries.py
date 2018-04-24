@@ -33,15 +33,15 @@ def query(name):
 
 @query("All faces")
 def all_faces():
-    return qs_to_result(Face.objects.filter(labeler__name='mtcnn'), frame_major=True, stride=1000)
+    return qs_to_result(Face.objects.all(), stride=1000)
 
 
 @query("All videos")
 def all_videos():
-    return qs_to_result(Frame.objects.filter(number=0))
+    return qs_to_result(Video.objects.all())
 
 
-@query("Frames with a man left of a woman")
+#@query("Frames with a man left of a woman")
 def man_left_of_woman():
     frames = []
     frames_qs = Frame.objects.annotate(
@@ -76,7 +76,7 @@ def man_left_of_woman():
     } for (frame, faces) in frames], 'Frame')
 
 
-@query("Frames with two poses with two hands above head")
+#@query("Frames with two poses with two hands above head")
 def two_poses_with_two_hands_above_head():
     def hands_above_head(kp):
         return kp[Pose.LWrist][1] < kp[Pose.Nose][1] and kp[Pose.RWrist][1] < kp[Pose.Nose][1]

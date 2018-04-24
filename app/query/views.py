@@ -100,7 +100,7 @@ def search2(request):
 
 # Get distinct values in schema
 def schema(request):
-    params = json.loads(request.body)
+    params = json.loads(request.body.decode('utf-8'))
     m = ModelDelegator(params['dataset'])
 
     cls = getattr(m, params['cls_name'])

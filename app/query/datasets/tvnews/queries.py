@@ -71,10 +71,10 @@ def segments_about_immigration():
 
 @query("Fox News videos")
 def fox_news_videos():
-    return qs_to_result(Frame.objects.filter(number=0, video__channel='FOXNEWS'))
+    return qs_to_result(Video.objects.filter(channel__name='FOXNEWS'))
 
 
-@query("Talking heads face tracks")
+#@query("Talking heads face tracks")
 def talking_heads_tracks():
     return qs_to_result(
         PersonTrack.objects.filter(
@@ -92,22 +92,22 @@ def talking_heads_tracks():
             .values('tracks')))
 
 
-@query("Faces on Poppy Harlow")
+#@query("Faces on Poppy Harlow")
 def faces_on_poppy_harlow():
     return qs_to_result(
         Face.objects.filter(person__frame__video__show='CNN Newsroom With Poppy Harlow'), stride=24)
 
 
-@query("Female faces on Poppy Harlow")
+#@query("Female faces on Poppy Harlow")
 def female_faces_on_poppy_harlow():
     return qs_to_result(
         Face.objects.filter(
-            person__frame__video__show='CNN Newsroom With Poppy Harlow',
-            facegender__gender__name='female'),
+            person__frame__video__show__name='CNN Newsroom With Poppy Harlow',
+            facegender__gender__name='F'),
         stride=24)
 
 
-@query("Talking heads on Poppy Harlow")
+#@query("Talking heads on Poppy Harlow")
 def talking_heads_on_poppy_harlow():
     return qs_to_result(
         Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
@@ -117,7 +117,7 @@ def talking_heads_on_poppy_harlow():
         stride=24)
 
 
-@query("Two female faces on Poppy Harlow")
+#@query("Two female faces on Poppy Harlow")
 def two_female_faces_on_poppy_harlow():
     r = []
     try:
@@ -142,7 +142,7 @@ def two_female_faces_on_poppy_harlow():
     return simple_result(r, 'Frame')
 
 
-@query("Faces like Poppy Harlow")
+#@query("Faces like Poppy Harlow")
 def faces_like_poppy_harlow():
     id = 4457280
     FaceFeatures.compute_distances(id)
@@ -150,7 +150,7 @@ def faces_like_poppy_harlow():
         Face.objects.filter(facefeatures__distto__isnull=False).order_by('facefeatures__distto'))
 
 
-@query("Faces unlike Poppy Harlow")
+#@query("Faces unlike Poppy Harlow")
 def faces_unlike_poppy_harlow():
     id = 4457280
     FaceFeatures.compute_distances(id)
@@ -158,7 +158,7 @@ def faces_unlike_poppy_harlow():
         Face.objects.filter(facefeatures__distto__isnull=False).order_by('-facefeatures__distto'))
 
 
-@query("MTCNN missed face bboxes vs. handlabeled")
+#@query("MTCNN missed face bboxes vs. handlabeled")
 def mtcnn_vs_handlabeled():
     labeler_names = [l['labeler__name'] for l in Face.objects.values('labeler__name').distinct()]
 
@@ -217,7 +217,7 @@ def mtcnn_vs_handlabeled():
     return simple_result(result, 'Frame')
 
 
-@query("MTCNN missed face bboxes vs. OpenPose")
+#@query("MTCNN missed face bboxes vs. OpenPose")
 def mtcnn_vs_openpose():
     labeler_names = ['mtcnn', 'openpose']
 
@@ -277,7 +277,7 @@ def mtcnn_vs_openpose():
     return simple_result(result, 'Frame')
 
 
-@query("People sitting")
+#@query("People sitting")
 def people_sitting():
     def is_sitting(kp):
         def ang(v):
@@ -318,7 +318,7 @@ def people_sitting():
     } for (frame, poses) in frames], 'Frame')
 
 
-@query("Obama pictures")
+#@query("Obama pictures")
 def obama_pictures():
     def close(x, y):
         return abs(x - y) < 0.02
@@ -364,19 +364,6 @@ def obama_pictures():
     } for (t, f) in out_tracks], 'FaceTrack')
 
 
-@query("Segments about immigration")
-def segments_about_immigration():
-    tracks = TopicTrack.objects.filter(topic__name='immigration').select_related('video')
-    return simple_result([{
-        'video':
-        track.video.id,
-        'min_frame':
-        Frame.objects.get(
-            number=(track.max_frame + track.min_frame) / 2 / 30 * 30, video=track.video).id,
-        'objects': []
-    } for track in tracks], 'TopicTrack')
-
-
 def panels():
     mtcnn = Labeler.objects.get(name='mtcnn')
     face_qs = Face.objects.annotate(height=BoundingBox.height_expr()).filter(
@@ -413,7 +400,7 @@ def panels_():
     } for (frame, faces) in panels()], 'Frame')
 
 
-@query("Animated Rachel Maddow")
+#@query("Animated Rachel Maddow")
 def animated_rachel_maddow():
     def pose_dist(p1, p2):
         kp1 = p1.pose_keypoints()
@@ -506,3 +493,21 @@ def nonhandlabeled_random_audio():
             reduce(lambda a, b: a | b, [Q(**c) for c in conds])),
         group=True,
         limit=None)
+
+
+@query("Caption search")
+def caption_search():
+    import random
+    results = caption_search('DONALD TRUMP')
+    videos = {v.id: v for v in Video.objects.all()}
+
+    def convert_time(k, t):
+        return int((t - 5) * videos[k].fps)
+
+    flattened = [(k, t1, t2) for k, l in results.items() for t1, t2 in l]
+    random.shuffle(flattened)
+    return simple_result([{
+        'video': k,
+        'min_frame': convert_time(k, t1),
+        'max_frame': convert_time(k, t2)
+    } for k, t1, t2 in flattened[:100]], '_')
