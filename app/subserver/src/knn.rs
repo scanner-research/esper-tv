@@ -16,6 +16,11 @@ pub struct Features {
     ids: Vec<u64>
 }
 
+pub enum Target {
+    Index(usize),
+    Exemplar(FeatureVec)
+}
+
 impl Features {
     pub fn new() -> Features {
         let _timer = BlockTimer::new("Feature read");
@@ -59,12 +64,20 @@ impl Features {
         dists
     }
 
-    pub fn knn(&self, target: &FeatureVec, k: usize) -> Vec<u64> {
+    pub fn knn(&self, target: &Target, k: usize) -> Vec<u64> {
+        let target = match target {
+            Target::Exemplar(v) => v,
+            Target::Index(i) => &self.features[*i]
+        };
         let dists = self.dists(target);
         dists.into_iter().take(k).map(|(i, _)| &self.ids[i]).cloned().collect()
     }
 
-    pub fn tnn(&self, target: &FeatureVec, t: f32) -> Vec<u64> {
+    pub fn tnn(&self, target: &Target, t: f32) -> Vec<u64> {
+        let target = match target {
+            Target::Exemplar(v) => v,
+            Target::Index(i) => &self.features[*i]
+        };
         let dists = self.dists(target);
         dists.into_iter().filter(|(_, s)| *s < t).map(|(i, _)| &self.ids[i]).cloned().collect()
     }

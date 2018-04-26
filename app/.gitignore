@@ -17,6 +17,7 @@ rust-scripts/build
 # Specific files
 service-key.json
 npm-debug.log
+supervisord.conf
 
 # File kinds
 db.bk.*

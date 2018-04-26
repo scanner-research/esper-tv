@@ -34,6 +34,10 @@ command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 """))
 }
 
+extra_processes = {
+    'subserver': 'bash -c "cd subserver && source /root/.cargo/env && cargo run --release"'
+}
+
 config = DotMap(
     yaml.load("""
 version: '2.3'
@@ -99,6 +103,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
+    parser.add_argument('--extra-processes', nargs='*', default=[], choices=['subserver'])
     parser.add_argument('--extra-services', nargs='*', default=[], choices=['spark', 'gentle'])
     parser.add_argument(
         '--build', nargs='*', default=['base', 'local'], choices=['base', 'local', 'kube', 'tf'])
@@ -133,6 +138,20 @@ def main():
     for svc in args.extra_services:
         config.services[svc] = extra_services[svc]
         config.services.app.depends_on.append(svc)
+
+    # Create supervisord.conf with any additoinal processes
+    with open('app/.deps/supervisord.conf', 'r') as f:
+        supervisor_conf = f.read()
+    for process in args.extra_processes:
+        supervisor_conf += """
+[program:{}]
+command={}
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
+    with open('app/supervisord.conf', 'w') as f:
+        f.write(supervisor_conf)
 
     if base_config.database.type == 'google':
         assert 'google' in base_config

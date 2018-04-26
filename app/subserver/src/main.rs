@@ -22,7 +22,7 @@ use ndarray::Array;
 
 use block_timer::BlockTimer;
 use corpus::Corpus;
-use knn::Features;
+use knn::{Features, Target};
 
 mod knn;
 mod corpus;
@@ -58,16 +58,21 @@ fn sub_search(input: Json<SubSearchInput>) -> Json<HashMap<String, Vec<(f64, f64
 
 #[derive(Serialize, Deserialize)]
 struct FaceSearchInput {
-    features: Vec<f32>
+    features: Vec<f32>,
+    index: isize
 }
 
 #[post("/facesearch", format="application/json", data="<input>")]
 fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
-    Json(FEATURES.knn(&Array::from_vec(input.features.clone()), 5))
+    let input = if input.index == -1 {
+        Target::Exemplar(Array::from_vec(input.features.clone()))
+    } else {
+        Target::Index(input.index as usize)
+    };
+    Json(FEATURES.knn(&input, 5))
 }
 
 fn main() {
-    FEATURES.knn(&Array::from_vec(vec![0.0f32; 128]), 5);
     let config = Config::build(Environment::Development)
         .port(8111)
         .unwrap();

@@ -299,7 +299,7 @@ class PyCache:
 
         with Timer('Saving to cache: {}'.format(k)):
             gc.disable()  # https://stackoverflow.com/a/36699998/356915
-            if isinstance(v, list) and len(v) >= NUM_CHUNKS:
+            if (isinstance(v, list) or isinstance(v, tuple)) and len(v) >= NUM_CHUNKS:
                 n = len(v)
                 chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
                 par_for(
@@ -344,7 +344,7 @@ class PyCache:
                             for i in range(0, len(byte_str), size)
                         ]
                     elif method == 'pickle':
-                        return pickle.load(f)
+                        return pickle.load(f, encoding='latin1')
                     else:
                         raise Exception("Invalid cache method {}".format(method))
 
@@ -740,3 +740,23 @@ def pushd(new_dir):
 def imshow(img):
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     plt.axis('off')
+
+
+def caption_search(phrase):
+    videos = {v.item_name(): v.id for v in Video.objects.all()}
+    r = requests.post('http://localhost:8111/subsearch', json={'phrase': phrase})
+
+    def item_name(path):
+        return '.'.join(os.path.basename(path).split('.')[:-2])
+
+    return {videos[item_name(k)]: v for k, v in r.json().items()}
+
+
+def face_knn(features=None, index=None):
+    r = requests.post(
+        'http://localhost:8111/facesearch',
+        json={
+            'features': features.tolist() if features is not None else [],
+            'index': index if index is not None else -1
+        })
+    return r.json()

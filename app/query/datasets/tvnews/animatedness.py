@@ -10,7 +10,7 @@ POSE_STRIDE = 3
 
 
 def shot_frame_to_detect(shot):
-    return (shot['min_frame'] + shot['max_frame']) / 2
+    return (shot['min_frame'] + shot['max_frame']) // 2
 
 
 # Remove faces with negative coords and small height
