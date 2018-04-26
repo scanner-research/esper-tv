@@ -240,7 +240,7 @@ def urls_to_embedding(urls):
     try:
         for i, url in enumerate(urls):
             img_path = os.path.join(tmp_dir, '{}.jpg'.format(i))
-            urllib.request.urlretrieve(url, img_path)
+            request.urlretrieve(url, img_path)
         return embed_directory(tmp_dir)
     finally:
         if os.path.exists(tmp_dir):
