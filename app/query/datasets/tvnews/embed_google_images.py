@@ -160,12 +160,23 @@ class FaceNetEmbed(object):
             return embs[0]
 
 
-_face_detector = MTCNN()
-_face_embeddor = FaceNetEmbed()
+_face_detector = None
+_face_embeddor = None
+def _get_models():
+    global _face_detector, _face_embeddor
+    if _face_detector is None:
+        print('Loading face detection model')
+        _face_detector = MTCNN()
+    if _face_embeddor is None:
+        print('Loading face embedding model')
+        _face_embeddor = FaceNetEmbed()
+    return _face_detector, _face_embeddor
 
 
 def embed_images(raw_images):
-    detected_faces = _face_detector.face_detect(raw_images)
+    face_detector, face_embeddor = _get_models()
+
+    detected_faces = face_detector.face_detect(raw_images)
     cropped_images = []
     for img, detections in zip(raw_images, detected_faces):
         if len(detections) == 0:
@@ -187,7 +198,7 @@ def embed_images(raw_images):
     for img in cropped_images:
         if img.size == 0:
             continue
-        emb = _face_embeddor.embed(img)
+        emb = face_embeddor.embed(img)
         embs.append(emb)
 
     if len(embs) == 0:
