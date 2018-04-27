@@ -29,7 +29,7 @@ mod corpus;
 mod block_timer;
 
 lazy_static! {
-    static ref CORPUS: Corpus  = {
+    static ref CORPUS: Corpus<corpus::LinearSearch>  = {
         let paths: Vec<_> = glob("/app/subs/*").expect("Glob failed")
             .filter_map(|s| match s {
                 Ok(p) => {
@@ -59,22 +59,30 @@ fn sub_search(input: Json<SubSearchInput>) -> Json<HashMap<String, Vec<(f64, f64
 #[derive(Serialize, Deserialize)]
 struct FaceSearchInput {
     features: Vec<f32>,
-    index: isize
+    id: isize,
+    k: isize,
+    threshold: f32
 }
 
 #[post("/facesearch", format="application/json", data="<input>")]
 fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
-    let input = if input.index == -1 {
+    let target = if input.id == -1 {
         Target::Exemplar(Array::from_vec(input.features.clone()))
     } else {
-        Target::Index(input.index as usize)
+        Target::Id(input.id as u64)
     };
-    Json(FEATURES.knn(&input, 5))
+
+    Json(if input.k == -1 {
+        FEATURES.tnn(&target, input.threshold)
+    } else {
+        FEATURES.knn(&target, input.k as usize)
+    })
 }
 
 fn main() {
     let config = Config::build(Environment::Development)
         .port(8111)
+        .workers(1)
         .unwrap();
     rocket::custom(config, true).mount("/", routes![sub_search, face_search]).launch();
 }

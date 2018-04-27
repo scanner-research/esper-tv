@@ -41,6 +41,9 @@ class BoxView extends React.Component {
       mouseX: e.clientX,
       mouseY: e.clientY
     });
+
+    console.log(this.props.box.id);
+
     if (this.props.onClick) {
       this.props.onClick(this.props.box);
     }

@@ -12,6 +12,7 @@ import traceback
 import datetime
 
 from query.datasets.stdlib import *
+import query.datasets.tvnews.embed_google_images as embed_google_images
 
 
 def search(params):

@@ -17,7 +17,7 @@ pub struct Features {
 }
 
 pub enum Target {
-    Index(usize),
+    Id(u64),
     Exemplar(FeatureVec)
 }
 
@@ -59,7 +59,8 @@ impl Features {
     }
 
     fn dists(&self, target: &FeatureVec) -> Vec<(usize, f32)> {
-        let mut dists: Vec<_> = self.features.par_iter().map(|f| target.dot(f)).enumerate().collect();
+        let mut dists: Vec<_> = self.features.par_iter().map(|f| (target - f).mapv(|i| i.powi(2)).scalar_sum())
+            .enumerate().collect();
         dists.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
         dists
     }
@@ -67,7 +68,7 @@ impl Features {
     pub fn knn(&self, target: &Target, k: usize) -> Vec<u64> {
         let target = match target {
             Target::Exemplar(v) => v,
-            Target::Index(i) => &self.features[*i]
+            Target::Id(i) => &self.features[self.ids.binary_search(&i).unwrap()]
         };
         let dists = self.dists(target);
         dists.into_iter().take(k).map(|(i, _)| &self.ids[i]).cloned().collect()
@@ -76,7 +77,7 @@ impl Features {
     pub fn tnn(&self, target: &Target, t: f32) -> Vec<u64> {
         let target = match target {
             Target::Exemplar(v) => v,
-            Target::Index(i) => &self.features[*i]
+            Target::Id(i) => &self.features[self.ids.binary_search(&i).unwrap()]
         };
         let dists = self.dists(target);
         dists.into_iter().filter(|(_, s)| *s < t).map(|(i, _)| &self.ids[i]).cloned().collect()

@@ -67,10 +67,7 @@ if not log.handlers:
 
 # Only run if we're in an IPython notebook
 if get_ipython() is not None:
-    # Render all DataFrames via qgrid
-    import qgrid
-    qgrid.set_grid_option('minVisibleRows', 1)
-    qgrid.enable()
+    import beakerx
 
     # Matplotlib/seaborn config
     import matplotlib
@@ -600,7 +597,7 @@ class Break(Exception):
 
 
 SPARK_DATA_PREFIX = '/app/spark-data'
-SPARK_MEMORY = '80g'  #'80g'  #'256g'
+SPARK_MEMORY = '40g'  #'80g'  #'256g'
 
 
 class SparkWrapper:
@@ -752,11 +749,13 @@ def caption_search(phrase):
     return {videos[item_name(k)]: v for k, v in r.json().items()}
 
 
-def face_knn(features=None, index=None):
+def face_knn(features=None, id=None, k=None, threshold=None):
     r = requests.post(
         'http://localhost:8111/facesearch',
         json={
             'features': features.tolist() if features is not None else [],
-            'index': index if index is not None else -1
+            'id': id if id is not None else -1,
+            'k': k if k is not None else -1,
+            'threshold': threshold if threshold is not None else -1.0
         })
     return r.json()
