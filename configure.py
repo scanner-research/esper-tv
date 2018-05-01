@@ -35,7 +35,8 @@ command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 }
 
 extra_processes = {
-    'subserver': 'bash -c "cd subserver && source /root/.cargo/env && cargo run --release"'
+    'subserver': 'bash -c "cd subserver && source /root/.cargo/env && cargo run --release"',
+    'npm': 'npm run watch'
 }
 
 config = DotMap(
@@ -103,8 +104,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--dataset', default='default')
-    parser.add_argument('--extra-processes', nargs='*', default=[], choices=['subserver'])
-    parser.add_argument('--extra-services', nargs='*', default=[], choices=['spark', 'gentle'])
+    parser.add_argument('--extra-processes', nargs='*', default=[], choices=extra_processes.keys())
+    parser.add_argument('--extra-services', nargs='*', default=[], choices=extra_services.keys())
     parser.add_argument(
         '--build', nargs='*', default=['base', 'local'], choices=['base', 'local', 'kube', 'tf'])
     parser.add_argument('--kube-device', default='cpu')
@@ -144,7 +145,7 @@ def main():
         supervisor_conf = f.read()
     for process in args.extra_processes:
         supervisor_conf += """
-[program:{}]
+\n[program:{}]
 command={}
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0

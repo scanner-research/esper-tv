@@ -739,14 +739,19 @@ def imshow(img):
     plt.axis('off')
 
 
-def caption_search(phrase):
+def caption_search(phrases):
     videos = {v.item_name(): v.id for v in Video.objects.all()}
-    r = requests.post('http://localhost:8111/subsearch', json={'phrase': phrase})
+    r = requests.post('http://localhost:8111/subsearch', json={'phrases': phrases})
 
     def item_name(path):
         return '.'.join(os.path.basename(path).split('.')[:-2])
 
-    return {videos[item_name(k)]: v for k, v in r.json().items()}
+    return [{videos[item_name(k)]: v for k, v in d.items()} for d in r.json()]
+
+
+def caption_count(phrases):
+    r = requests.post('http://localhost:8111/subcount', json={'phrases': phrases})
+    return r.json()
 
 
 def face_knn(features=None, id=None, k=None, threshold=None):

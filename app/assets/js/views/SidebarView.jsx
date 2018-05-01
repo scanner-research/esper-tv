@@ -1,6 +1,48 @@
 import React from 'react';
+import {observable, autorun, toJS} from 'mobx';
 import {observer} from 'mobx-react';
 import * as Rb from 'react-bootstrap';
+import _ from 'lodash';
+
+let LABEL_MODES = Object.freeze({
+  DEFAULT: 0,
+  SINGLE_IDENTITY: 1
+});
+
+let labelModeToString = (i) => {
+  if (i == LABEL_MODES.DEFAULT) {
+    return "default";
+  } else if (i == LABEL_MODES.SINGLE_IDENTITY) {
+    return "single identity";
+  } else {
+    throw "Invalid label mode " + i;
+  }
+};
+
+let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.stringify({
+  results_per_page: 50,
+  annotation_opacity: 1.0,
+  show_pose: true,
+  show_face: true,
+  show_hands: true,
+  show_lr: false,
+  crop_bboxes: false,
+  playback_speed: 1.0,
+  show_middle_frame: true,
+  show_gender_as_border: true,
+  show_inline_metadata: false,
+  thumbnail_size: 1,
+  timeline_view: true,
+  timeline_range: 20,
+  track_color_identity: false,
+  label_mode: LABEL_MODES.DEFAULT
+}));
+
+window.DISPLAY_OPTIONS = observable.map(displayOptions);
+
+autorun(() => {
+  localStorage.displayOptions = JSON.stringify(toJS(window.DISPLAY_OPTIONS));
+});
 
 @observer
 class OptionsView extends React.Component {
@@ -54,7 +96,8 @@ class OptionsView extends React.Component {
       opts: {
         min: 1,
         max: 300,
-        step: 1
+        step: 1,
+        disable_autoupdate: true
       },
     },
     {
@@ -109,6 +152,15 @@ class OptionsView extends React.Component {
       key: 'track_color_identity',
       type: 'radio',
       filter: (g) => g.type == 'contiguous'
+    },
+    {
+      name: 'Label mode',
+      key: 'label_mode',
+      type: 'option',
+      opts: {
+        keys: _.values(LABEL_MODES),
+        values: _.values(LABEL_MODES).map((i) => labelModeToString(i))
+      }
     }
   ]
 
@@ -125,10 +177,26 @@ class OptionsView extends React.Component {
                   <span>
                     <input type="range" min={field.opts.min} max={field.opts.max}
                            step={field.opts.step} value={DISPLAY_OPTIONS.get(field.key)}
-                           onChange={(e) => {DISPLAY_OPTIONS.set(field.key, e.target.value)}} />
-                    <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
-                                    value={DISPLAY_OPTIONS.get(field.key)}
-                                    onChange={(e) => {DISPLAY_OPTIONS.set(field.key, e.target.value)}} />
+                           onChange={(e) => {
+                               if (!field.opts.disable_autoupdate) {
+                                 DISPLAY_OPTIONS.set(field.key, e.target.value)
+                               }
+                           }}/>
+                    {/*
+                        Using the field value as a key on its container allows the field to be editable by the user
+                        while still permitting programmatic modification of the value (e.g. typing into a numeric
+                        field vs. moving a slider). See:
+                        https://stackoverflow.com/questions/30727837/react-change-input-defaultvalue-by-passing-props--
+                     */}
+                    <span key={DISPLAY_OPTIONS.get(field.key)}>
+                      <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
+                                      defaultValue={DISPLAY_OPTIONS.get(field.key)}
+                                      onKeyPress={(e) => {
+                                          if (e.key === 'Enter') {
+                                            DISPLAY_OPTIONS.set(field.key, e.target.value);
+                                          }
+                                      }} />
+                    </span>
                   </span>),
                 radio: () => (
                   <Rb.ButtonToolbar>
@@ -137,7 +205,13 @@ class OptionsView extends React.Component {
                       <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
                       <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
                     </Rb.ToggleButtonGroup>
-                  </Rb.ButtonToolbar>)
+                  </Rb.ButtonToolbar>),
+                option: () => (
+                  <Rb.FormControl componentClass="select">
+                    {_.zip(field.opts.keys, field.opts.values).map(([key, value]) =>
+                      <option value={value} key={key}>{value}</option>)}
+                  </Rb.FormControl>
+                )
              }[field.type]()}
            </Rb.FormGroup>
            : <div key={i} />

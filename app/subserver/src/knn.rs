@@ -28,7 +28,7 @@ impl Features {
         let feature_length = 128;
         let num_bytes = feature_length * mem::size_of::<f32>();
 
-        let features: Vec<_> = (0..8).collect::<Vec<_>>().par_iter().flat_map(|i| {
+        let features: Vec<_> = (0..1).collect::<Vec<_>>().par_iter().flat_map(|i| {
             let path = format!("/app/.cache/all_embs_flat_{}.bin", i);
             let mut file = File::open(path).expect("cannot open");
             let mut bytebuf = Vec::new();

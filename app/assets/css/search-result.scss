@@ -4,7 +4,12 @@
     .page-count {
         position: relative;
         left: 12px;
-        top: 7px;
+    }
+
+    input {
+        display: inline-block;
+        width: 40px;
+        margin-left: 13px;
     }
 }
 

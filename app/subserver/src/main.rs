@@ -13,6 +13,7 @@ extern crate rocket;
 extern crate rocket_contrib;
 extern crate ndarray;
 extern crate byteorder;
+#[macro_use] extern crate nom;
 
 use rocket_contrib::Json;
 use rocket::config::{Config, Environment};
@@ -23,13 +24,15 @@ use ndarray::Array;
 use block_timer::BlockTimer;
 use corpus::Corpus;
 use knn::{Features, Target};
+use progress::ProgressIterator;
 
 mod knn;
 mod corpus;
 mod block_timer;
+mod progress;
 
 lazy_static! {
-    static ref CORPUS: Corpus<corpus::LinearSearch>  = {
+    static ref CORPUS: Corpus<corpus::IndexedTable>  = {
         let paths: Vec<_> = glob("/app/subs/*").expect("Glob failed")
             .filter_map(|s| match s {
                 Ok(p) => {
@@ -47,12 +50,18 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 struct SubSearchInput {
-    phrase: String
+    phrases: Vec<String>
 }
 
 #[post("/subsearch", format="application/json", data="<input>")]
-fn sub_search(input: Json<SubSearchInput>) -> Json<HashMap<String, Vec<(f64, f64)>>> {
-    Json(CORPUS.find(input.phrase.clone()))
+fn sub_search(input: Json<SubSearchInput>) -> Json<Vec<HashMap<String, Vec<(f64, f64)>>>> {
+    Json(input.phrases.iter().cloned().map(|phrase| CORPUS.find(phrase)).collect())
+}
+
+
+#[post("/subcount", format="application/json", data="<input>")]
+fn sub_count(input: Json<SubSearchInput>) -> Json<Vec<u64>> {
+    Json(input.phrases.iter().progress().cloned().map(|phrase| CORPUS.count(phrase)).collect())
 }
 
 
@@ -84,5 +93,5 @@ fn main() {
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, face_search]).launch();
+    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search]).launch();
 }

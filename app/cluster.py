@@ -35,7 +35,7 @@ WORKER_CPU = int(4 * WORKER_GPU if USE_GPU else 64)
 WORKER_MEM = int(WORKER_CPU * 4.0)
 WORKER_DISK = 500
 WORKERS_PER_NODE = 6
-DEPS = []  #['openpose']
+DEPS = ['rudecarnie']
 
 assert (not USE_GPU or WORKERS_PER_NODE == 1)
 assert (not USE_PREEMPTIBLE or (USE_PREEMPTIBLE and USE_AUTOSCALING))
@@ -188,8 +188,9 @@ def get_object(info, name):
 
 
 def create(args):
+    # TODO(wcrichto): memoize all operations under this if guard
     if not cluster_running() or args.force:
-        print 'Creating cluster...'
+        print('Creating cluster...')
         scopes = [
             "https://www.googleapis.com/auth/compute",
             "https://www.googleapis.com/auth/devstorage.read_write",
@@ -297,7 +298,7 @@ def create(args):
 
         serve(args)
 
-    print 'Cluster created. Setting up kubernetes...'
+    print('Cluster created. Setting up kubernetes...')
     get_credentials(args)
 
     deploy = get_object(get_kube_info('deployments'), 'scanner-worker')
@@ -311,7 +312,7 @@ def create(args):
         run('kubectl delete deploy --all')
 
     secrets = get_kube_info('secrets')
-    print 'Making secrets...'
+    print('Making secrets...')
     if get_object(secrets, 'service-key') is None:
         run('kubectl create secret generic service-key --from-file={}'.format(SERVICE_KEY))
 
@@ -320,7 +321,7 @@ def create(args):
             format(os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY']))
 
     deployments = get_kube_info('deployments')
-    print 'Creating deployments...'
+    print('Creating deployments...')
     if get_object(deployments, 'scanner-master') is None:
         create_object(make_deployment('master', 1))
 
@@ -331,7 +332,7 @@ def create(args):
     if get_object(deployments, 'scanner-worker') is None:
         create_object(make_deployment('worker', num_workers))
 
-    print 'Done!'
+    print('Done!')
 
 
 def get_pod(deployment, namespace='default'):
@@ -382,7 +383,7 @@ def serve_process():
         rs = get_by_owner('rs', 'scanner-master')
         pod_name = get_by_owner('pod', rs)
         if "\n" not in pod_name and pod_name != '':
-            print 'Forwarding ' + pod_name
+            print('Forwarding ' + pod_name)
             proxy_process = sp.Popen(
                 shlex.split('kubectl proxy --address=0.0.0.0 --disable-filter=true'))
             break

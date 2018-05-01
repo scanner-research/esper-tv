@@ -33,6 +33,7 @@ RUN jupyter nbextension install --sys-prefix --py vega && \
     jupyter nbextension enable hide_input/main && \
     jupyter nbextension enable toc2/main && \
     jupyter nbextension enable code_prettify/autopep8 && \
+    jupyter nbextension enable execute_time/ExecuteTime && \
     beakerx install && \
     python3 -c "import matplotlib"
 

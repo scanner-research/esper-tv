@@ -1,31 +1,10 @@
 import React from 'react';
 import * as Rb from 'react-bootstrap';
 import {observer} from 'mobx-react';
-import {observable, autorun, toJS} from 'mobx';
 import SidebarView from './SidebarView.jsx';
 import ClipView from './ClipView.jsx';
 import TimelineView from './TimelineView.jsx';
 import axios from 'axios';
-
-let displayOptions = JSON.parse(localStorage.getItem("displayOptions") || JSON.stringify({
-  results_per_page: 50,
-  annotation_opacity: 1.0,
-  show_pose: true,
-  show_face: true,
-  show_hands: true,
-  show_lr: false,
-  crop_bboxes: false,
-  playback_speed: 1.0,
-  show_middle_frame: true,
-  show_gender_as_border: true,
-  show_inline_metadata: false,
-  thumbnail_size: 1,
-  timeline_view: true,
-  timeline_range: 20,
-  track_color_identity: false
-}));
-
-window.DISPLAY_OPTIONS = observable.map(displayOptions);
 
 // Hack used to prevent typing into non-React elements (e.g. a select2 box) from triggering keyboard
 // events on React elements (e.g. the clip viewer). This happens because React uses a synthetic event
@@ -33,10 +12,6 @@ window.DISPLAY_OPTIONS = observable.map(displayOptions);
 // triggers. We use this global variable for any time when there should definitely be no keypress
 // events happening EXCEPT on the element the user is currently typing into.
 window.IGNORE_KEYPRESS = false;
-
-autorun(() => {
-  localStorage.displayOptions = JSON.stringify(toJS(window.DISPLAY_OPTIONS));
-});
 
 // Displays results with basic pagination
 @observer
@@ -90,7 +65,7 @@ class GroupsView extends React.Component {
       }
 
       axios
-        .post('/api/labeled', {dataset: DATASET, groups: labeled})
+        .post('/api/labeled', {dataset: DATASET, groups: labeled, label_mode: DISPLAY_OPTIONS.label_mode})
         .then(((response) => {
           console.log('Done!');
           this.setState({
@@ -183,7 +158,14 @@ class GroupsView extends React.Component {
           <Rb.ButtonGroup>
             <Rb.Button onClick={this._prevPage}>&larr;</Rb.Button>
             <Rb.Button onClick={this._nextPage}>&rarr;</Rb.Button>
-            <span className='page-count'>{this.state.page + 1}/{this._numPages() + 1}</span>
+            <span key={this.state.page}>
+              <Rb.FormControl type="text" defaultValue={this.state.page + 1} onKeyPress={(e) => {
+                  if (e.key === 'Enter') { this.setState({
+                    page: Math.min(Math.max(parseInt(e.target.value)-1, 0), this._numPages())
+                  }); }
+              }} />
+            </span>
+            <span className='page-count'>/ {this._numPages() + 1}</span>
           </Rb.ButtonGroup>
         </div>
       </div>

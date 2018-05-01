@@ -6,12 +6,14 @@ use indicatif::ProgressBar;
 use std::sync::Mutex;
 use srtparse;
 
-pub trait Indexed: Send {
+pub trait Indexed: Send + Sync {
     fn new(s: String) -> Self;
     fn positions(&self, query: &str) -> Vec<u32>;
 }
 
-impl Indexed for SuffixTable<'static, 'static> {
+pub type IndexedTable = SuffixTable<'static, 'static>;
+
+impl Indexed for IndexedTable {
     fn new(s: String) -> Self {
         SuffixTable::new(s)
     }
@@ -39,6 +41,45 @@ impl Indexed for LinearSearch {
     }
 }
 
+fn tokenize(s: &str) -> Vec<String> {
+    s.split(' ').map(|s| s.to_string()).collect()
+}
+
+pub struct Tokenized {
+    tokens: Vec<String>
+}
+
+
+impl Indexed for Tokenized {
+    fn new(s: String) -> Self {
+        Tokenized {
+            tokens: tokenize(&s)
+        }
+    }
+
+    fn positions(&self, query: &str) -> Vec<u32> {
+        let querytok = tokenize(query);
+        let n = querytok.len();
+        let mut matches = Vec::new();
+        for i in 0..(self.tokens.len() - n) {
+            let mut does_match = true;
+            for j in 0..n {
+                if self.tokens[i] != querytok[j] {
+                    does_match = false;
+                    break;
+                }
+            }
+
+            if does_match {
+                matches.push(i as u32);
+            }
+        }
+
+        matches
+    }
+}
+
+
 struct Document<TextIndex> {
     text_index: TextIndex,
     time_index: BTreeMap<u32, (f64, f64)>
@@ -52,7 +93,7 @@ fn duration_to_float(d: Duration) -> f64 {
     f64::from(d.as_secs() as u32) + f64::from(d.subsec_nanos()) / 1.0e-9
 }
 
-impl<TextIndex: Indexed> Corpus<TextIndex> {
+impl<TextIndex: Indexed+Send> Corpus<TextIndex> {
     pub fn new(paths: Vec<String>) -> Corpus<TextIndex> {
         let pb = Mutex::new(ProgressBar::new(paths.len() as u64));
         let docs: HashMap<_, _> = paths.par_iter().map(|path| {
@@ -82,7 +123,7 @@ impl<TextIndex: Indexed> Corpus<TextIndex> {
 
     pub fn find<T: Into<String>>(&self, s: T) -> HashMap<String, Vec<(f64, f64)>> {
         let s: String = s.into();
-        self.docs.iter().map(|(path, doc)| {
+        self.docs.par_iter().map(|(path, doc)| {
             let mut pos = doc.text_index.positions(&s);
             pos.sort();
             (path.clone(), pos.into_iter().map(|i| {
@@ -90,5 +131,13 @@ impl<TextIndex: Indexed> Corpus<TextIndex> {
                 val.clone()
             }).collect::<Vec<_>>())
         }).filter(|(_, v)| v.len() > 0).collect()
+    }
+
+    pub fn count<T: Into<String>>(&self, s: T) -> u64 {
+        let s: String = s.into();
+        let n: usize = self.docs.par_iter().map(|(_, doc)| {
+            doc.text_index.positions(&s).len()
+        }).sum();
+        n as u64
     }
 }
