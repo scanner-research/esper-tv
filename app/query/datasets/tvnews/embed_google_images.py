@@ -20,6 +20,11 @@ TMP_DOWNLOAD_DIR = '/tmp/google_img_download'
 if not os.path.exists(TMP_DOWNLOAD_DIR):
     os.makedirs(TMP_DOWNLOAD_DIR)
 
+IMG_CACHE_DIR = '/app/data/google_images'
+if not os.path.exists(IMG_CACHE_DIR):
+    os.makedirs(IMG_CACHE_DIR)
+    
+
 MTCNN_MODEL_DIR = '/app/deps/facenet/src/align'
 FACENET_MODEL_DIR = '/app/deps/facenet/models/20170512-110547'
 
@@ -233,16 +238,21 @@ def embed_directory(name_path):
     return embed_images(raw_images)
 
 
-def name_to_embedding(name, n=25):
+def name_to_embedding(name, n=25, cache=True):
     """Go directly from a name to face embedding"""
-    tmp_dir = tempfile.mkdtemp('img_download')
-    try:
-        google_imgs_dir = fetch_images(name, outdir=tmp_dir, n=n,
-                                       query_extras='', force=True)
+    if cache:
+        google_imgs_dir = fetch_images(name, outdir=IMG_CACHE_DIR, n=n,
+                                       query_extras='', force=False)
         return embed_directory(google_imgs_dir)
-    finally:
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
+    else:
+        tmp_dir = tempfile.mkdtemp('img_download')
+        try:
+            google_imgs_dir = fetch_images(name, outdir=tmp_dir, n=n,
+                                           query_extras='', force=True)
+            return embed_directory(google_imgs_dir)
+        finally:
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
 
 
 def urls_to_embedding(urls):
