@@ -161,6 +161,28 @@ export default class ClipView extends React.Component {
     let clip = this.props.clip;
     let video = this._videoMeta();
 
+    // Set playback rate of the video
+    if (this._video) {
+      this._video.playbackRate = DISPLAY_OPTIONS.get('playback_speed');
+    }
+
+    // Figure out how big the thumbnail should be
+    let small_height = this.props.expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
+    let small_width = video.width * small_height / video.height;
+    let vidStyle = this.state.showVideo ? {
+      zIndex: 2,
+      width: small_width,
+      height: small_height
+    } : {};
+
+    // Determine which video frame to display
+    let display_frame =
+      DISPLAY_OPTIONS.get('show_middle_frame') && clip.max_frame
+      ? Math.round((clip.max_frame + clip.min_frame) / 2)
+      : clip.min_frame;
+    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
+
+    // Collect inline metadata to display
     let meta = [];
 
     if (this.props.expand) {
@@ -185,24 +207,6 @@ export default class ClipView extends React.Component {
 
     let meta_per_row = this.props.expand ? 4 : 2;
     let td_style = {width: `${100 / meta_per_row}%`};
-
-    if (this._video) {
-      this._video.playbackRate = DISPLAY_OPTIONS.get('playback_speed');
-    }
-
-    let small_height = this.props.expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
-    let small_width = video.width * small_height / video.height;
-    let vidStyle = this.state.showVideo ? {
-      zIndex: 2,
-      width: small_width,
-      height: small_height
-    } : {};
-
-    let display_frame =
-      DISPLAY_OPTIONS.get('show_middle_frame') && clip.max_frame
-      ? Math.round((clip.max_frame + clip.min_frame) / 2)
-      : clip.min_frame;
-    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}&height=${small_height}`;
 
     return (
       <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}
