@@ -45,6 +45,10 @@ class GroupsView extends React.Component {
   }
 
   _onKeyPress = (e) => {
+    if (IGNORE_KEYPRESS) {
+      return;
+    }
+
     let chr = String.fromCharCode(e.which);
     if (chr == 'a') {
       if (this.state.selected_start == -1) {
