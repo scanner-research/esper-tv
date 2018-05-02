@@ -1,7 +1,9 @@
 # Data/build/debug directories
 scanner_db
 node_modules
+data
 deps
+google_images
 nets
 .cache
 spark-data

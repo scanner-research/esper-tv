@@ -84,5 +84,5 @@ def search(params):
                 'genders': genders
             }
         })
-    except Exception as e:
+    except Exception:
         return make_error(traceback.format_exc())

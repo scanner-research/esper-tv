@@ -36,7 +36,7 @@ command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 
 extra_processes = {
     'subserver': 'bash -c "cd subserver && source /root/.cargo/env && cargo run --release"',
-    'npm': 'npm run watch'
+    'npm': 'npm run watch --color'
 }
 
 config = DotMap(
@@ -67,7 +67,6 @@ services:
       args:
         https_proxy: "${{https_proxy}}"
         cores: {cores}
-    privileged: true
     depends_on: [db, frameserver]
     volumes:
       - ./app:/app
@@ -77,7 +76,8 @@ services:
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
     environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter"]
-""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=cores, workers=cores)))
+    tty: true # https://github.com/docker/compose/issues/2231#issuecomment-165137408
+""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=cores, workers=cores * 2)))
 
 db_local = DotMap(
     yaml.load("""

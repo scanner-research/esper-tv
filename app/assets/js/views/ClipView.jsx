@@ -161,12 +161,6 @@ export default class ClipView extends React.Component {
     let clip = this.props.clip;
     let video = this._videoMeta();
 
-    let display_frame =
-      DISPLAY_OPTIONS.get('show_middle_frame') && clip.max_frame
-      ? Math.round((clip.max_frame + clip.min_frame) / 2)
-      : clip.min_frame;
-    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
-
     let meta = [];
 
     if (this.props.expand) {
@@ -203,6 +197,12 @@ export default class ClipView extends React.Component {
       width: small_width,
       height: small_height
     } : {};
+
+    let display_frame =
+      DISPLAY_OPTIONS.get('show_middle_frame') && clip.max_frame
+      ? Math.round((clip.max_frame + clip.min_frame) / 2)
+      : clip.min_frame;
+    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}&height=${small_height}`;
 
     return (
       <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}

@@ -6,7 +6,7 @@ import _ from 'lodash';
 
 let LABEL_MODES = Object.freeze({
   DEFAULT: 0,
-  SINGLE_IDENTITY: 1
+  SINGLE_IDENTITY: 1,
 });
 
 let labelModeToString = (i) => {
@@ -14,6 +14,8 @@ let labelModeToString = (i) => {
     return "default";
   } else if (i == LABEL_MODES.SINGLE_IDENTITY) {
     return "single identity";
+  } else if (i == LABEL_MODES.SINGLE_IDENTITY_BULK) {
+    return "single identity (bulk)";
   } else {
     throw "Invalid label mode " + i;
   }
@@ -47,6 +49,15 @@ autorun(() => {
 @observer
 class OptionsView extends React.Component {
   fields = [
+    {
+      name: 'Label mode',
+      key: 'label_mode',
+      type: 'option',
+      opts: {
+        keys: _.values(LABEL_MODES),
+        values: _.values(LABEL_MODES).map((i) => labelModeToString(i))
+      }
+    },
     {
       name: 'Results per page',
       key: 'results_per_page',
@@ -153,15 +164,6 @@ class OptionsView extends React.Component {
       type: 'radio',
       filter: (g) => g.type == 'contiguous'
     },
-    {
-      name: 'Label mode',
-      key: 'label_mode',
-      type: 'option',
-      opts: {
-        keys: _.values(LABEL_MODES),
-        values: _.values(LABEL_MODES).map((i) => labelModeToString(i))
-      }
-    }
   ]
 
   render() {
@@ -207,9 +209,11 @@ class OptionsView extends React.Component {
                     </Rb.ToggleButtonGroup>
                   </Rb.ButtonToolbar>),
                 option: () => (
-                  <Rb.FormControl componentClass="select">
+                  <Rb.FormControl componentClass="select" defaultValue={DISPLAY_OPTIONS.get(field.key)} onChange={(e) => {
+                      DISPLAY_OPTIONS.set(field.key, e.target.value);
+                    }}>
                     {_.zip(field.opts.keys, field.opts.values).map(([key, value]) =>
-                      <option value={value} key={key}>{value}</option>)}
+                      <option value={key} key={key}>{value}</option>)}
                   </Rb.FormControl>
                 )
              }[field.type]()}

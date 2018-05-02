@@ -16,6 +16,8 @@ http {
         access_log /dev/stdout;
         error_log /dev/stdout debug;
 
+        client_max_body_size 100M;
+
         location /static {
             alias /app/assets;
         }

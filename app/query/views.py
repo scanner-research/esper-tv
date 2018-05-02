@@ -15,8 +15,10 @@ import math
 import importlib
 import pysrt
 import requests
-
+import enum
 from storehouse import StorageConfig, StorageBackend
+import traceback
+from pprint import pprint
 
 from . import search
 import query.datasets.queries as queries
@@ -34,7 +36,7 @@ storage = StorageBackend.make_from_config(storage_config)
 
 # Prints and flushes (necessary for gunicorn logs)
 def _print(*args):
-    print((*args))
+    pprint((*args))
     sys.stdout.flush()
 
 
@@ -252,16 +254,51 @@ def save_speaker_labels(m, groups):
     m.Segment.objects.bulk_create(segments)
 
 
+def save_single_identity_labels(m, groups):
+    identity_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-identity')
+
+    last_obj = groups[-1]['elements'][0]['objects'][0]
+    if not 'identity_id' in last_obj:
+        raise Exception("Missing identity on last object")
+
+    identity = m.Thing.objects.get(id=last_obj['identity_id'])
+
+    face_ids = [o['id'] for g in groups for e in g['elements'] for o in e['objects']]
+    identities = [
+        m.FaceIdentity(face_id=face_id, identity=identity, labeler=identity_labeler)
+        for face_id in face_ids if face_id != -1
+    ]
+
+    m.FaceIdentity.objects.filter(face_id__in=face_ids, labeler=identity_labeler).delete()
+    m.FaceIdentity.objects.bulk_create(identities)
+
+
+class LabelMode(enum.IntEnum):
+    DEFAULT = 0
+    SINGLE_IDENTITY = 1
+
+
 # Register frames as labeled
 def labeled(request):
-    params = json.loads(request.body.decode('utf-8'))
-    m = ModelDelegator(params['dataset'])
+    try:
+        params = json.loads(request.body.decode('utf-8'))
+        m = ModelDelegator(params['dataset'])
 
-    groups = params['groups']
-    ty = groups[0]['type']
-    if ty == 'flat':
-        save_frame_labels(m, groups)
-    else:
-        save_speaker_labels(m, groups)
+        label_mode = int(params['label_mode'])
+        groups = params['groups']
+        ty = groups[0]['type']
+        if label_mode == LabelMode.DEFAULT:
+            if ty == 'flat':
+                save_frame_labels(m, groups)
+            else:
+                save_speaker_labels(m, groups)
 
-    return JsonResponse({'success': True})
+        elif label_mode == LabelMode.SINGLE_IDENTITY:
+            save_single_identity_labels(m, groups)
+
+        else:
+            raise Exception('Invalid label mode: {}'.format(label_mode))
+
+        return JsonResponse({'success': True})
+    except Exception:
+        return JsonResponse({'success': False, 'error': traceback.format_exc()})

@@ -64,16 +64,26 @@ class GroupsView extends React.Component {
         green.add(i);
       }
 
+      // TODO(wcrichto): make saving state + errors more apparent to user (without alert boxes)
       axios
-        .post('/api/labeled', {dataset: DATASET, groups: labeled, label_mode: DISPLAY_OPTIONS.label_mode})
+        .post('/api/labeled', {dataset: DATASET, groups: labeled, label_mode: DISPLAY_OPTIONS.get('label_mode')})
         .then(((response) => {
-          console.log('Done!');
-          this.setState({
-            positive_ex: green,
-            selected_start: -1,
-            selected_end: -1
-          });
-        }).bind(this));
+          if (!response.data.success) {
+            console.error(response.data.error);
+            alert(response.data.error);
+          } else {
+            console.log('Done!');
+            this.setState({
+              positive_ex: green,
+              selected_start: -1,
+              selected_end: -1
+            });
+          }
+        }).bind(this))
+        .catch((error) => {
+          console.error(error);
+          alert(error);
+        });
     }
   }
 

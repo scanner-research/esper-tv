@@ -1,9 +1,0 @@
-service: frameserver
-runtime: custom
-env: flex
-health_check:
-  enable_health_check: False
-resources:
-  cpu: 4
-  memory_gb: 4
-  disk_size_gb: 30
