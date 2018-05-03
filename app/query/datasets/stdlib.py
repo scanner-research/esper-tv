@@ -181,9 +181,9 @@ def qs_to_result(result,
             if custom_order_by_id is None:
                 frames = set()
                 with Timer('a'):
-                    result.values(frame_path + '__video', frame_path + '__number',
-                                  frame_path + '__id').print_sql()
-                    sys.stdout.flush()
+#                    result.values(frame_path + '__video', frame_path + '__number',
+#                                  frame_path + '__id').print_sql()
+#                    sys.stdout.flush()
 
                     for inst in list(
                             result.values(
@@ -203,9 +203,9 @@ def qs_to_result(result,
                 for i, id_ in enumerate(custom_order_by_id):
                     id_to_position[id_] = i
                 with Timer('a'):
-                    result.values(frame_path + '__video', frame_path + '__number',
-                                  frame_path + '__id').print_sql()
-                    sys.stdout.flush()
+#                    result.values(frame_path + '__video', frame_path + '__number',
+#                                  frame_path + '__id').print_sql()
+#                    sys.stdout.flush()
 
                     for inst in list(
                             result.values(
@@ -297,7 +297,7 @@ def qs_to_result(result,
 
     return {'result': groups, 'count': count, 'type': ty_name}
 
-class _UnlabeledFaces(object):
+class _UnlabeledFace(object):
 
     @property
     def objects(self):
@@ -305,5 +305,5 @@ class _UnlabeledFaces(object):
                           FaceIdentity.objects.all().distinct('face__id').values('face__id'))
         return Face.objects.exclude(id__in=labeled_ids)
 
-UnlabeledFaces = _UnlabeledFaces()
+UnlabeledFace = _UnlabeledFace()
 
