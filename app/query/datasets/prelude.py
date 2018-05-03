@@ -765,3 +765,8 @@ def face_knn(features=None, id=None, k=None, min_threshold=None, max_threshold=N
             'max_threshold': max_threshold if max_threshold is not None else 1000.0,
         })
     return r.json()
+
+
+def face_features(self, ids):
+    r = requests.post('http://localhost:8111/facefeatures', json={'ids': ids})
+    return [np.array(a) for a in r.json()]

@@ -11,13 +11,15 @@ use block_timer::BlockTimer;
 
 pub type FeatureVec = Array<f32, Ix1>;
 
+pub type Id = u64;
+
 pub struct Features {
     features: Vec<FeatureVec>,
-    ids: Vec<u64>
+    ids: Vec<Id>
 }
 
 pub enum Target {
-    Id(u64),
+    Id(Id),
     Exemplar(FeatureVec)
 }
 
@@ -80,6 +82,10 @@ impl Features {
             Target::Id(i) => &self.features[self.ids.binary_search(&i).unwrap()]
         };
         let dists = self.dists(target);
-        dists.into_iter().filter(|(_, s)| *s >= min_t && *s <= max_t).map(|(i, _)| &self.ids[i]).cloned().collect()
+        dists.into_iter().filter(|(_, s)| min_t <= *s && *s <= max_t).map(|(i, _)| &self.ids[i]).cloned().collect()
+    }
+
+    pub fn features_for_id(&self, ids: &Vec<Id>) -> Vec<&FeatureVec> {
+        ids.iter().map(|id| &self.features[self.ids.binary_search(&id).unwrap()]).collect()
     }
 }

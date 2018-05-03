@@ -232,7 +232,9 @@ class GroupView extends React.Component {
         {DISPLAY_OPTIONS.get('timeline_view') && group.type == 'contiguous'
          ? <TimelineView group={group} expand={this.state.expand}/>
          : <div className={group.type}>
-           <div className='group-label'>{group.label}</div>
+           {group.label && group.label !== ''
+            ? <div className='group-label'>{group.label}</div>
+            : <span />}
            <div className='group-elements'>
              {group.elements.map((clip, i) =>
                <ClipView key={i} clip={clip} showMeta={true}

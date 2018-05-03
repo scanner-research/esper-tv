@@ -90,10 +90,22 @@ fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
     })
 }
 
+
+#[derive(Serialize, Deserialize)]
+struct FaceFeaturesInput {
+    ids: Vec<knn::Id>,
+}
+
+
+#[post("/facefeatures", format="application/json", data="<input>")]
+fn face_features(input: Json<FaceFeaturesInput>) -> Json<Vec<Vec<f32>>> {
+    Json(FEATURES.features_for_id(&input.ids).into_iter().map(|v| v.to_vec()).collect())
+}
+
 fn main() {
     let config = Config::build(Environment::Development)
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search]).launch();
+    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search, face_features]).launch();
 }

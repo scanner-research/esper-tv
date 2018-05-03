@@ -511,3 +511,61 @@ def caption_search():
         'min_frame': convert_time(k, t1),
         'max_frame': convert_time(k, t2)
     } for k, t1, t2 in flattened[:100]], '_')
+
+
+@query('Face search')
+def face_search():
+    emb = embed_google_images.name_to_embedding('Wolf Blitzer')
+    face_ids = face_knn(features=emb, max_threshold=0.4)[::10]
+    return qs_to_result(
+        Face.objects.filter(id__in=face_ids), custom_order_by_id=face_ids, limit=len(face_ids))
+
+
+@query('Groups of faces by distance threshold')
+def groups_of_faces_by_distance_threshold():
+    def frange(x, y, jump):
+        while x < y:
+            yield x
+            x += jump
+
+    def group_multiple_results(agg_results):
+        groups = []
+        count = 0
+        ty_name = None
+        for label, result in agg_results:
+            ty_name = result['type']
+            count += result['count']
+            elements = [x['elements'][0] for x in result['result']]
+            groups.append({'type': 'flat', 'label': label, 'elements': elements})
+
+        return {'result': groups, 'count': count, 'type': ty_name}
+
+    emb = embed_google_images.name_to_embedding('Wolf Blitzer')
+
+    increment = 0.1
+    min_thresh = 0.0
+    max_thresh = 1.0
+    max_results_per_group = 50
+    exclude_labeled = True
+
+    if exclude_labeled:
+        face_qs = UnlabeledFace.objects
+    else:
+        face_qs = Face.objects
+
+    results_by_bucket = {}
+    for t in frange(min_thresh, max_thresh, increment):
+        face_ids = face_knn(features=emb, min_threshold=t, max_threshold=t + increment)
+        if len(face_ids) != 0:
+            faces = face_qs.filter(
+                id__in=face_ids[:max_results_per_group]).distinct('person__frame__video')
+            results = qs_to_result(faces, limit=max_results_per_group)
+            results_by_bucket[(t, t + increment)] = results
+
+    if len(results_by_bucket) == 0:
+        raise Exception('No results to show')
+
+    agg_results = [('threshold=({}, {})'.format(k[0], k[1]), results_by_bucket[k])
+                   for k in sorted(results_by_bucket.keys())]
+
+    return group_multiple_results(agg_results)
