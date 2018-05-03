@@ -1,4 +1,4 @@
-
+from __future__ import print_function
 from django.http import JsonResponse
 from collections import defaultdict
 from django.forms.models import model_to_dict
@@ -23,7 +23,7 @@ def access(obj, path):
 
 
 def fprint(*args):
-    print((*args))
+    print(*args)
     sys.stdout.flush()
 
 
@@ -118,10 +118,10 @@ def qs_to_result(result,
                  group=False,
                  shuffle=False,
                  deterministic_order=False,
+                 custom_order_by_id=None,
                  frame_major=True,
                  show_count=False,
                  limit=100):
-
     count = result.count() if show_count else 0
 
     if shuffle:
@@ -131,6 +131,9 @@ def qs_to_result(result,
     cls = result.model
     bases = cls.__bases__
     if bases[0] is base_models.Frame:
+        if custom_order_by_id is not None:
+            raise NotImplementedError()
+
         if not shuffle and deterministic_order:
             result = result.order_by('video', 'number')
 
@@ -165,31 +168,64 @@ def qs_to_result(result,
             fn = pose_to_dict
 
         if frame_major:
-            frames = set()
             frame_ids = set()
-            with Timer('a'):
-                result.values(frame_path + '__video', frame_path + '__number',
-                              frame_path + '__id').print_sql()
+            def get_all_results():
+                with Timer('b'):
+                    all_results = collect(
+                        list(result.filter(**{
+                            frame_path + '__in': list(frame_ids)
+                        })), lambda t: access(t, frame_path + '__id'))
                 sys.stdout.flush()
+                return all_results
 
-                for inst in list(
-                        result.values(
-                            frame_path + '__video', frame_path + '__number',
-                            frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:limit]):
-                    frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
-                                inst[frame_path + '__id']))
-                    frame_ids.add(inst[frame_path + '__id'])
+            if custom_order_by_id is None:
+                frames = set()
+                with Timer('a'):
+                    result.values(frame_path + '__video', frame_path + '__number',
+                                  frame_path + '__id').print_sql()
+                    sys.stdout.flush()
+
+                    for inst in list(
+                            result.values(
+                                frame_path + '__video', frame_path + '__number',
+                                frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:limit]):
+                        frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
+                                    inst[frame_path + '__id']))
+                        frame_ids.add(inst[frame_path + '__id'])
+                sys.stdout.flush()
+                all_results = get_all_results()
+                frames = list(frames)
+                frames.sort(key=itemgetter(0, 1))
+
+            else:
+                frames = {}
+                id_to_position = defaultdict(lambda: float('inf'))
+                for i, id_ in enumerate(custom_order_by_id):
+                    id_to_position[id_] = i
+                with Timer('a'):
+                    result.values(frame_path + '__video', frame_path + '__number',
+                                  frame_path + '__id').print_sql()
+                    sys.stdout.flush()
+
+                    for inst in list(
+                            result.values(
+                                'id',
+                                frame_path + '__video', frame_path + '__number',
+                                frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)):
+                        frame_key = (
+                            inst[frame_path + '__video'],
+                            inst[frame_path + '__number'],
+                            inst[frame_path + '__id'])
+                        frames[frame_key] = min(
+                            id_to_position[inst['id']],
+                            frames[frame_key] if frame_key in frames else float('inf'))
+                        frame_ids.add(inst[frame_path + '__id'])
+                sys.stdout.flush()
+                all_results = get_all_results()
+                frames = sorted([x for x in frames.items()], key=lambda x: x[1])
+                frames = [x[0] for x in frames[:limit]]
+
             sys.stdout.flush()
-
-            with Timer('b'):
-                all_results = collect(
-                    list(result.filter(**{
-                        frame_path + '__in': list(frame_ids)
-                    })), lambda t: access(t, frame_path + '__id'))
-            sys.stdout.flush()
-
-            frames = list(frames)
-            frames.sort(key=itemgetter(0, 1))
             for (video, frame_num, frame_id) in frames:
                 materialized_result.append({
                     'video': video,
@@ -207,6 +243,9 @@ def qs_to_result(result,
                 materialized_result.append(r)
 
     elif bases[0] is base_models.Track:
+        if custom_order_by_id is not None:
+            raise NotImplementedError()
+
         if not shuffle and deterministic_order:
             result = result.order_by('video', 'min_frame')
 
@@ -233,6 +272,9 @@ def qs_to_result(result,
         materialized_result.sort(key=itemgetter('video', 'min_frame'))
 
     elif bases[0] is base_models.Video:
+        if custom_order_by_id is not None:
+            raise NotImplementedError()
+
         if not shuffle and deterministic_order:
             result = result.order_by('id')
 
@@ -254,3 +296,14 @@ def qs_to_result(result,
         groups = [{'type': 'flat', 'label': '', 'elements': [r]} for r in materialized_result]
 
     return {'result': groups, 'count': count, 'type': ty_name}
+
+class _UnlabeledFaces(object):
+
+    @property
+    def objects(self):
+        labeled_ids = set(x['face__id'] for x in
+                          FaceIdentity.objects.all().distinct('face__id').values('face__id'))
+        return Face.objects.exclude(id__in=labeled_ids)
+
+UnlabeledFaces = _UnlabeledFaces()
+

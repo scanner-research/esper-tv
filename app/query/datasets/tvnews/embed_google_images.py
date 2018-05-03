@@ -178,7 +178,7 @@ def _get_models():
     return _face_detector, _face_embeddor
 
 
-def embed_images(raw_images):
+def embed_images(raw_images, one_face_per_img):
     face_detector, face_embeddor = _get_models()
 
     detected_faces = face_detector.face_detect(raw_images)
@@ -189,14 +189,15 @@ def embed_images(raw_images):
             continue
         if len(detections) > 1:
             print('Multiple faces detected in image')
-            continue
-        box = detections[0]
-        print('Face:', box)
-        x1 = int(math.floor(box.x1))
-        x2 = int(math.ceil(box.x2))
-        y1 = int(math.floor(box.y1))
-        y2 = int(math.ceil(box.y2))
-        cropped_images.append(img[y1:y2, x1:x2, :])
+            if one_face_per_img:
+                continue
+        for box in detections:
+            print('Face:', box)
+            x1 = int(math.floor(box.x1))
+            x2 = int(math.ceil(box.x2))
+            y1 = int(math.floor(box.y1))
+            y2 = int(math.ceil(box.y2))
+            cropped_images.append(img[y1:y2, x1:x2, :])
 
     # detect faces
     embs = []
@@ -215,7 +216,7 @@ def embed_images(raw_images):
     return emb_mean
 
 
-def embed_directory(name_path):
+def embed_directory(name_path, one_face_per_img=True):
     """Compute a mean embedding of all of the images in the directory"""
     if not os.path.isdir(name_path):
         return RuntimeError('Directory not found')
@@ -235,21 +236,21 @@ def embed_directory(name_path):
         raw_images.append(im)
         image_paths.append(img_path)
 
-    return embed_images(raw_images)
+    return embed_images(raw_images, one_face_per_img)
 
 
-def name_to_embedding(name, n=25, cache=True):
+def name_to_embedding(name, n=25, cache=True, one_face_per_img=True):
     """Go directly from a name to face embedding"""
     if cache:
         google_imgs_dir = fetch_images(name, outdir=IMG_CACHE_DIR, n=n,
                                        query_extras='', force=False)
-        return embed_directory(google_imgs_dir)
+        return embed_directory(google_imgs_dir, one_face_per_img)
     else:
         tmp_dir = tempfile.mkdtemp('img_download')
         try:
             google_imgs_dir = fetch_images(name, outdir=tmp_dir, n=n,
                                            query_extras='', force=True)
-            return embed_directory(google_imgs_dir)
+            return embed_directory(google_imgs_dir, one_face_per_img)
         finally:
             if os.path.exists(tmp_dir):
                 shutil.rmtree(tmp_dir)
