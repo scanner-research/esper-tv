@@ -4,18 +4,17 @@
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate lazy_static;
+extern crate serde_json;
 extern crate glob;
 extern crate rayon;
 extern crate srtparse;
 extern crate suffix;
 extern crate indicatif;
-extern crate rocket;
-extern crate rocket_contrib;
+#[macro_use] extern crate rocket;
 extern crate ndarray;
 extern crate byteorder;
 #[macro_use] extern crate nom;
 
-use rocket_contrib::Json;
 use rocket::config::{Config, Environment};
 use glob::glob;
 use std::collections::HashMap;
@@ -25,11 +24,13 @@ use block_timer::BlockTimer;
 use corpus::Corpus;
 use knn::{Features, Target};
 use progress::ProgressIterator;
+use json::Json;
 
 mod knn;
 mod corpus;
 mod block_timer;
 mod progress;
+mod json;
 
 lazy_static! {
     static ref CORPUS: Corpus<corpus::IndexedTable>  = {
