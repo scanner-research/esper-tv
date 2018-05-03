@@ -71,7 +71,8 @@ struct FaceSearchInput {
     features: Vec<f32>,
     id: isize,
     k: isize,
-    threshold: f32
+    min_threshold: f32,
+    max_threshold: f32
 }
 
 #[post("/facesearch", format="application/json", data="<input>")]
@@ -83,7 +84,7 @@ fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
     };
 
     Json(if input.k == -1 {
-        FEATURES.tnn(&target, input.threshold)
+        FEATURES.tnn(&target, input.min_threshold, input.max_threshold)
     } else {
         FEATURES.knn(&target, input.k as usize)
     })

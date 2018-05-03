@@ -754,13 +754,14 @@ def caption_count(phrases):
     return r.json()
 
 
-def face_knn(features=None, id=None, k=None, threshold=None):
+def face_knn(features=None, id=None, k=None, min_threshold=None, max_threshold=None):
     r = requests.post(
         'http://localhost:8111/facesearch',
         json={
             'features': features.tolist() if features is not None else [],
             'id': id if id is not None else -1,
             'k': k if k is not None else -1,
-            'threshold': threshold if threshold is not None else -1.0
+            'min_threshold': min_threshold if min_threshold is not None else -1.0,
+            'max_threshold': max_threshold if max_threshold is not None else 1000.0,
         })
     return r.json()

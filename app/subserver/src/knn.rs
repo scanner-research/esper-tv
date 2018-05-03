@@ -74,12 +74,12 @@ impl Features {
         dists.into_iter().take(k).map(|(i, _)| &self.ids[i]).cloned().collect()
     }
 
-    pub fn tnn(&self, target: &Target, t: f32) -> Vec<u64> {
+    pub fn tnn(&self, target: &Target, min_t: f32, max_t: f32) -> Vec<u64> {
         let target = match target {
             Target::Exemplar(v) => v,
             Target::Id(i) => &self.features[self.ids.binary_search(&i).unwrap()]
         };
         let dists = self.dists(target);
-        dists.into_iter().filter(|(_, s)| *s < t).map(|(i, _)| &self.ids[i]).cloned().collect()
+        dists.into_iter().filter(|(_, s)| *s >= min_t && *s <= max_t).map(|(i, _)| &self.ids[i]).cloned().collect()
     }
 }
