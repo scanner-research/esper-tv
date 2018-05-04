@@ -297,6 +297,21 @@ def qs_to_result(result,
 
     return {'result': groups, 'count': count, 'type': ty_name}
 
+
+def group_results(agg_results):
+    """List of tuples of the form (label, result)"""
+    groups = []
+    count = 0
+    ty_name = None
+    for label, result in agg_results:
+        ty_name = result['type']
+        count += result['count']
+        elements = [x['elements'][0] for x in result['result']]
+        groups.append({'type': 'flat', 'label': label, 'elements': elements})
+
+    return {'result': groups, 'count': count, 'type': ty_name}
+
+
 class _UnlabeledFace(object):
 
     @property

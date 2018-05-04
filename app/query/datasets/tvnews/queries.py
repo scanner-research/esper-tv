@@ -528,30 +528,15 @@ def groups_of_faces_by_distance_threshold():
             yield x
             x += jump
 
-    def group_multiple_results(agg_results):
-        groups = []
-        count = 0
-        ty_name = None
-        for label, result in agg_results:
-            ty_name = result['type']
-            count += result['count']
-            elements = [x['elements'][0] for x in result['result']]
-            groups.append({'type': 'flat', 'label': label, 'elements': elements})
-
-        return {'result': groups, 'count': count, 'type': ty_name}
-
     emb = embed_google_images.name_to_embedding('Wolf Blitzer')
 
     increment = 0.1
     min_thresh = 0.0
     max_thresh = 1.0
     max_results_per_group = 50
-    exclude_labeled = True
+    exclude_labeled = False
 
-    if exclude_labeled:
-        face_qs = UnlabeledFace.objects
-    else:
-        face_qs = Face.objects
+    face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
 
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
@@ -560,12 +545,50 @@ def groups_of_faces_by_distance_threshold():
             faces = face_qs.filter(
                 id__in=face_ids[:max_results_per_group]).distinct('person__frame__video')
             results = qs_to_result(faces, limit=max_results_per_group)
-            results_by_bucket[(t, t + increment)] = results
+            results_by_bucket[(t, t + increment, len(face_ids))] = results
 
     if len(results_by_bucket) == 0:
         raise Exception('No results to show')
 
-    agg_results = [('threshold=({}, {})'.format(k[0], k[1]), results_by_bucket[k])
+    agg_results = [('near threshold={:0.2f}, count={}'.format(k[0], k[2]), results_by_bucket[k])
                    for k in sorted(results_by_bucket.keys())]
 
-    return group_multiple_results(agg_results)
+    return group_results(agg_results)
+
+
+@query('Face search with exclusions')
+def face_search_with_exclusion():
+    def exclude_faces(face_ids, exclude_ids, exclude_thresh):
+        excluded_face_ids = set()
+        for exclude_id in exclude_ids:
+            excluded_face_ids.update(face_knn(id=exclude_id, max_threshold=exclude_thresh))
+        face_ids = set(face_ids)
+        return face_ids - excluded_face_ids, face_ids & excluded_face_ids
+        
+    # Some params
+    exclude_labeled = False
+    show_excluded = False
+    
+    face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
+    
+    name = 'Wolf Blitzer'
+    
+    emb = embed_google_images.name_to_embedding(name)
+    face_ids = face_knn(features=emb, max_threshold=0.6)
+    
+    kept_ids, excluded_ids = exclude_faces(
+        face_ids,
+        [1634585, 531076, 3273872, 2586010, 921211, 3176879, 3344886, 3660089, 249499, 2236580], 
+        0.4)
+
+    if show_excluded:
+        # Show the furthest faces that we kept and the faces that were excluded
+        kept_results = qs_to_result(face_qs.filter(id__in=kept_ids, shot__in_commercial=False), 
+                                    custom_order_by_id=face_ids[::-1])
+        excluded_results = qs_to_result(face_qs.filter(id__in=excluded_ids, shot__in_commercial=False))
+
+        return group_results([('excluded', excluded_results), (name, kept_results)])
+    else:
+        # Show all of the faces that were kept
+        return qs_to_result(face_qs.filter(id__in=kept_ids, shot__in_commercial=False), 
+                            custom_order_by_id=face_ids,limit=len(face_ids))
