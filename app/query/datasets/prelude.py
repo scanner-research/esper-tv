@@ -35,6 +35,7 @@ import cv2
 import itertools
 import shutil
 import tempfile
+import random
 from contextlib import contextmanager
 
 # Import all models for current dataset
@@ -754,15 +755,19 @@ def caption_count(phrases):
     return r.json()
 
 
-def face_knn(features=None, id=None, k=None, min_threshold=None, max_threshold=None):
+def face_knn(features=None, ids=None, k=None, 
+             min_threshold=-1.0, max_threshold=1000.0, 
+             not_ids=[], not_id_penalty=0.2):
     r = requests.post(
         'http://localhost:8111/facesearch',
         json={
             'features': features.tolist() if features is not None else [],
-            'id': id if id is not None else -1,
+            'ids': ids if ids is not None else [],
             'k': k if k is not None else -1,
-            'min_threshold': min_threshold if min_threshold is not None else -1.0,
-            'max_threshold': max_threshold if max_threshold is not None else 1000.0,
+            'min_threshold': min_threshold,
+            'max_threshold': max_threshold,
+            'non_targets': not_ids,
+            'non_target_penalty': not_id_penalty
         })
     return r.json()
 
@@ -770,3 +775,9 @@ def face_knn(features=None, id=None, k=None, min_threshold=None, max_threshold=N
 def face_features(self, ids):
     r = requests.post('http://localhost:8111/facefeatures', json={'ids': ids})
     return [np.array(a) for a in r.json()]
+
+
+def frange(x, y, jump):
+    while x < y:
+        yield x
+        x += jump

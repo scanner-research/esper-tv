@@ -69,24 +69,27 @@ fn sub_count(input: Json<SubSearchInput>) -> Json<Vec<u64>> {
 #[derive(Serialize, Deserialize)]
 struct FaceSearchInput {
     features: Vec<f32>,
-    id: isize,
+    ids: Vec<u64>,
     k: isize,
     min_threshold: f32,
-    max_threshold: f32
+    max_threshold: f32,
+    non_targets: Vec<u64>,
+    non_target_penalty: f32
 }
 
 #[post("/facesearch", format="application/json", data="<input>")]
 fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
-    let target = if input.id == -1 {
+    let target = if input.ids.is_empty() {
         Target::Exemplar(Array::from_vec(input.features.clone()))
     } else {
-        Target::Id(input.id as u64)
+        Target::Ids(input.ids.iter().map(|i| *i as knn::Id).collect())
     };
-
+    let non_targets: Vec<knn::Id> = input.non_targets.iter().map(|i| *i as knn::Id).collect();
+    
     Json(if input.k == -1 {
-        FEATURES.tnn(&target, input.min_threshold, input.max_threshold)
+        FEATURES.tnn(&target, input.min_threshold, input.max_threshold, &non_targets, input.non_target_penalty)
     } else {
-        FEATURES.knn(&target, input.k as usize)
+        FEATURES.knn(&target, input.k as usize, &non_targets, input.non_target_penalty)
     })
 }
 

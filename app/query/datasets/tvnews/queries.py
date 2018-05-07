@@ -461,7 +461,6 @@ def audio_labels():
 
 @query("Non-handlabeled random audio")
 def nonhandlabeled_random_audio():
-    import random
     videos = Video.objects.annotate(
         c=Subquery(
             Speaker.objects.filter(video=OuterRef('pk')).values('video').annotate(
@@ -497,7 +496,6 @@ def nonhandlabeled_random_audio():
 
 @query("Caption search")
 def caption_search():
-    import random
     results = caption_search('DONALD TRUMP')
     videos = {v.id: v for v in Video.objects.all()}
 
@@ -523,14 +521,9 @@ def face_search():
 
 @query('Groups of faces by distance threshold')
 def groups_of_faces_by_distance_threshold():
-    def frange(x, y, jump):
-        while x < y:
-            yield x
-            x += jump
-
     emb = embed_google_images.name_to_embedding('Wolf Blitzer')
 
-    increment = 0.1
+    increment = 0.05
     min_thresh = 0.0
     max_thresh = 1.0
     max_results_per_group = 50
@@ -543,14 +536,51 @@ def groups_of_faces_by_distance_threshold():
         face_ids = face_knn(features=emb, min_threshold=t, max_threshold=t + increment)
         if len(face_ids) != 0:
             faces = face_qs.filter(
-                id__in=face_ids[:max_results_per_group]).distinct('person__frame__video')
-            results = qs_to_result(faces, limit=max_results_per_group)
+                id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
+            ).distinct('person__frame__video')
+            results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
             results_by_bucket[(t, t + increment, len(face_ids))] = results
 
     if len(results_by_bucket) == 0:
         raise Exception('No results to show')
 
-    agg_results = [('near threshold={:0.2f}, count={}'.format(k[0], k[2]), results_by_bucket[k])
+    agg_results = [('in range=({:0.2f}, {:0.2f}), count={}'.format(k[0], k[1], k[2]), results_by_bucket[k])
+                   for k in sorted(results_by_bucket.keys())]
+
+    return group_results(agg_results)
+
+
+@query('Face search by id')
+def face_search_by_id():
+#     target_face_ids = [975965, 5254043, 844004, 105093, 3801699, 4440669, 265071] # Wolf Blitzer 
+#     not_target_face_ids =  [1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608, 4831099, 2172821, 1981350, 1095709, 4427683, 1762835] # not Wolf
+    
+    target_face_ids = [2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617, 1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072] # Melania Trump
+    not_target_face_ids = [] # not Melania
+
+    increment = 0.05
+    min_thresh = 0.0
+    max_thresh = 1.0
+    max_results_per_group = 50
+    exclude_labeled = False
+
+    face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
+
+    results_by_bucket = {}
+    for t in frange(min_thresh, max_thresh, increment):
+        face_ids = face_knn(ids=target_face_ids, min_threshold=t, max_threshold=t + increment,
+                            not_ids=not_target_face_ids)
+        if len(face_ids) != 0:
+            faces = face_qs.filter(
+                id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
+            ).distinct('person__frame__video')
+            results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
+            results_by_bucket[(t, t + increment, len(face_ids))] = results
+
+    if len(results_by_bucket) == 0:
+        raise Exception('No results to show')
+
+    agg_results = [('in range=({:0.2f}, {:0.2f}), count={}'.format(k[0], k[1], k[2]), results_by_bucket[k])
                    for k in sorted(results_by_bucket.keys())]
 
     return group_results(agg_results)

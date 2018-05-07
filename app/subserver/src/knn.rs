@@ -19,7 +19,7 @@ pub struct Features {
 }
 
 pub enum Target {
-    Id(Id),
+    Ids(Vec<Id>),
     Exemplar(FeatureVec)
 }
 
@@ -60,28 +60,47 @@ impl Features {
         Features {features, ids}
     }
 
-    fn dists(&self, target: &FeatureVec) -> Vec<(usize, f32)> {
-        let mut dists: Vec<_> = self.features.par_iter().map(|f| (target - f).mapv(|i| i.powi(2)).scalar_sum())
-            .enumerate().collect();
+    fn dists(&self, targets: &Vec<&FeatureVec>, non_targets: &Vec<&FeatureVec>, non_target_penalty: f32) -> Vec<(usize, f32)> {
+        let mut dists: Vec<_> = self.features.par_iter().map(
+            // Take the min distance to any target
+            |f| targets.iter().map(
+                |t| (*t - f).mapv(|i| i.powi(2)).scalar_sum().sqrt()
+            ).fold(1./0., f32::min) 
+            - 
+            // Subtract the min distance to any non-target
+            if non_targets.is_empty() { 
+                0. 
+            } else { 
+                non_target_penalty * non_targets.iter().map(
+                    |g| (*g - f).mapv(|i| i.powi(2)).scalar_sum().sqrt()
+                ).fold(1./0., f32::min)
+            }
+        ).enumerate().collect();
         dists.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
         dists
     }
 
-    pub fn knn(&self, target: &Target, k: usize) -> Vec<u64> {
-        let target = match target {
-            Target::Exemplar(v) => v,
-            Target::Id(i) => &self.features[self.ids.binary_search(&i).unwrap()]
+    pub fn knn(&self, target: &Target, k: usize, non_targets: &Vec<Id>, non_target_penalty: f32) -> Vec<u64> {
+        let targets = match target {
+            Target::Exemplar(v) => vec![v],
+            Target::Ids(ids) => ids.iter().map(
+                |i| &self.features[self.ids.binary_search(&i).unwrap()]
+            ).collect()
         };
-        let dists = self.dists(target);
+        let non_targets: Vec<&FeatureVec> = non_targets.iter().map(|i| &self.features[self.ids.binary_search(&i).unwrap()]).collect();
+        let dists = self.dists(&targets, &non_targets, non_target_penalty);
         dists.into_iter().take(k).map(|(i, _)| &self.ids[i]).cloned().collect()
     }
 
-    pub fn tnn(&self, target: &Target, min_t: f32, max_t: f32) -> Vec<u64> {
-        let target = match target {
-            Target::Exemplar(v) => v,
-            Target::Id(i) => &self.features[self.ids.binary_search(&i).unwrap()]
+    pub fn tnn(&self, target: &Target, min_t: f32, max_t: f32, non_targets: &Vec<Id>, non_target_penalty: f32) -> Vec<u64> {
+       let targets = match target {
+            Target::Exemplar(v) => vec![v],
+            Target::Ids(ids) => ids.iter().map(
+                |i| &self.features[self.ids.binary_search(&i).unwrap()]
+            ).collect()
         };
-        let dists = self.dists(target);
+        let non_targets: Vec<&FeatureVec> = non_targets.iter().map(|i| &self.features[self.ids.binary_search(&i).unwrap()]).collect();
+        let dists = self.dists(&targets, &non_targets, non_target_penalty);
         dists.into_iter().filter(|(_, s)| min_t <= *s && *s <= max_t).map(|(i, _)| &self.ids[i]).cloned().collect()
     }
 
