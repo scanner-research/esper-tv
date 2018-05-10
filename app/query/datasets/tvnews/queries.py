@@ -514,7 +514,7 @@ def caption_search():
 @query('Face search')
 def face_search():
     emb = embed_google_images.name_to_embedding('Wolf Blitzer')
-    face_ids = face_knn(features=emb, max_threshold=0.4)[::10]
+    face_ids = [x for x, _ in face_knn(features=emb, max_threshold=0.4)][::10]
     return qs_to_result(
         Face.objects.filter(id__in=face_ids), custom_order_by_id=face_ids, limit=len(face_ids))
 
@@ -530,10 +530,12 @@ def groups_of_faces_by_distance_threshold():
     exclude_labeled = False
 
     face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
+    
+    face_sims = face_knn(features=emb, min_threshold=min_thresh, max_threshold=max_thresh)
 
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
-        face_ids = face_knn(features=emb, min_threshold=t, max_threshold=t + increment)
+        face_ids = [x for x, _ in filter(lambda z: z[1] >= t and z[1] < t + increment, face_sims)]
         if len(face_ids) != 0:
             faces = face_qs.filter(
                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
@@ -552,11 +554,32 @@ def groups_of_faces_by_distance_threshold():
 
 @query('Face search by id')
 def face_search_by_id():
-#     target_face_ids = [975965, 5254043, 844004, 105093, 3801699, 4440669, 265071] # Wolf Blitzer 
-#     not_target_face_ids =  [1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608, 4831099, 2172821, 1981350, 1095709, 4427683, 1762835] # not Wolf
+     # Wolf Blitzer
+#     target_face_ids = [975965, 5254043, 844004, 105093, 3801699, 4440669, 265071]
+#     not_target_face_ids =  [
+#         1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608,
+#         4831099, 2172821, 1981350, 1095709, 4427683, 1762835]
     
-    target_face_ids = [2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617, 1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072] # Melania Trump
-    not_target_face_ids = [] # not Melania
+    # Melania Trump
+#     target_face_ids = [
+#         2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617,
+#         1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072]
+#     not_target_face_ids = []
+    
+    # Bernie Sanders
+    target_face_ids = [
+        644710, 4686364, 2678025, 62032, 13248, 4846879, 4804861, 561270, 2651257, 
+        2083010, 2117202, 1848221, 2495606, 4465870, 3801638, 865102, 3861979, 4146727, 
+        3358820, 2087225, 1032403, 1137346, 2220864, 5384396, 3885087, 5107580, 2856632,
+        335131, 4371949, 533850, 5384760, 3335516]
+    not_target_face_ids = [
+        2656438, 1410140, 4568590, 2646929, 1521533, 1212395, 178315, 1755096, 3476158,
+        3310952, 1168204, 3062342, 1010748, 1275607, 2190958, 2779945, 415610, 1744917, 
+        5210138, 3288162, 5137166, 4169061, 3774070, 2595170, 382055, 2365443, 712023, 
+        5214225, 178251, 1039121, 5336597, 525714, 4522167, 3613622, 5161408, 2091095, 
+        741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225, 
+        178251]
+    
 
     increment = 0.05
     min_thresh = 0.0
@@ -566,10 +589,12 @@ def face_search_by_id():
 
     face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
 
+    face_sims = face_knn(ids=target_face_ids, min_threshold=min_thresh, max_threshold=max_thresh,
+                         not_ids=not_target_face_ids)
+    
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
-        face_ids = face_knn(ids=target_face_ids, min_threshold=t, max_threshold=t + increment,
-                            not_ids=not_target_face_ids)
+        face_ids = [x for x, _ in filter(lambda z: z[1] >= t and z[1] < t + increment, face_sims)]
         if len(face_ids) != 0:
             faces = face_qs.filter(
                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
@@ -591,7 +616,7 @@ def face_search_with_exclusion():
     def exclude_faces(face_ids, exclude_ids, exclude_thresh):
         excluded_face_ids = set()
         for exclude_id in exclude_ids:
-            excluded_face_ids.update(face_knn(id=exclude_id, max_threshold=exclude_thresh))
+            excluded_face_ids.update([x for x, _ in face_knn(id=exclude_id, max_threshold=exclude_thresh)])
         face_ids = set(face_ids)
         return face_ids - excluded_face_ids, face_ids & excluded_face_ids
         
@@ -604,7 +629,7 @@ def face_search_with_exclusion():
     name = 'Wolf Blitzer'
     
     emb = embed_google_images.name_to_embedding(name)
-    face_ids = face_knn(features=emb, max_threshold=0.6)
+    face_ids = [x for x, _ in face_knn(features=emb, max_threshold=0.6)]
     
     kept_ids, excluded_ids = exclude_faces(
         face_ids,

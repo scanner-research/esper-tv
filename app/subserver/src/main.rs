@@ -14,6 +14,8 @@ extern crate indicatif;
 extern crate ndarray;
 extern crate byteorder;
 #[macro_use] extern crate nom;
+extern crate rand;
+extern crate rustlearn;
 
 use rocket::config::{Config, Environment};
 use glob::glob;
@@ -78,7 +80,7 @@ struct FaceSearchInput {
 }
 
 #[post("/facesearch", format="application/json", data="<input>")]
-fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
+fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<(u64,f32)>> {
     let target = if input.ids.is_empty() {
         Target::Exemplar(Array::from_vec(input.features.clone()))
     } else {
@@ -93,12 +95,24 @@ fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<u64>> {
     })
 }
 
+#[derive(Serialize, Deserialize)]
+struct FaceSearchSVMInput {
+    pos_ids: Vec<u64>,
+    neg_ids: Vec<u64>,
+    neg_samples: usize
+}
+
+#[post("/facesearch_svm", format="application/json", data="<input>")]
+fn face_search_svm(input: Json<FaceSearchSVMInput>) -> Json<Vec<u64>> {
+    let pos_ids = input.pos_ids.iter().map(|i| *i as knn::Id).collect();
+    let neg_ids = input.neg_ids.iter().map(|i| *i as knn::Id).collect();
+    Json(FEATURES.svm(&pos_ids, &neg_ids, input.neg_samples))
+}
 
 #[derive(Serialize, Deserialize)]
 struct FaceFeaturesInput {
     ids: Vec<knn::Id>,
 }
-
 
 #[post("/facefeatures", format="application/json", data="<input>")]
 fn face_features(input: Json<FaceFeaturesInput>) -> Json<Vec<Vec<f32>>> {
@@ -110,5 +124,5 @@ fn main() {
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search, face_features]).launch();
+    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search, face_search_svm, face_features]).launch();
 }
