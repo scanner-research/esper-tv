@@ -1,10 +1,7 @@
 ARG device=cpu
 FROM scannerresearch/esper-base:${device}
-ARG https_proxy
 ARG cores=1
 ENV DJANGO_CONFIGURATION Docker
-ENV https_proxy=$https_proxy
-ENV http_proxy=$https_proxy
 ENV TERM=xterm
 
 # Misc apt dependencies
@@ -49,9 +46,6 @@ RUN cat /tmp/common.sh >> /root/.bashrc
 ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-
-# Download Spacy english text model
-# RUN python3 -m spacy download en
 
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \

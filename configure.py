@@ -65,7 +65,6 @@ services:
       context: ./app
       dockerfile: Dockerfile.app
       args:
-        https_proxy: "${{https_proxy}}"
         cores: {cores}
     depends_on: [db, frameserver]
     volumes:
@@ -109,6 +108,7 @@ def main():
     parser.add_argument(
         '--build', nargs='*', default=['base', 'local'], choices=['base', 'local', 'kube', 'tf'])
     parser.add_argument('--kube-device', default='cpu')
+    parser.add_argument('--enable-proxy', action='store_true')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -128,6 +128,9 @@ def main():
             device = 'cpu'
     else:
         device = 'cpu'
+
+    if args.enable_proxy:
+        config.services.app.build.args.https_proxy = "${{https_proxy}}"
 
     config.services.app.build.args.device = device
     if device == 'gpu':
