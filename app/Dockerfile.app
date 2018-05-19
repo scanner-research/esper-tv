@@ -49,5 +49,5 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
-    python3 scripts/set-jupyter-password.py && \
+    ./scripts/jupyter-setup.sh && \
     supervisord -c supervisord.conf

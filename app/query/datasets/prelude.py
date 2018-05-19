@@ -1,7 +1,6 @@
 from scannerpy import ProtobufGenerator, Config, Database, Job, DeviceType, ColumnType, ScannerException
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import ModelDelegator, Track, BoundingBox
-from query.datasets.stdlib import *
 from django.db import connections, connection
 from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func
@@ -12,6 +11,7 @@ from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
 from pyspark.sql import SparkSession, Row
 from functools import reduce
+from typing import Dict
 
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
@@ -37,6 +37,7 @@ import shutil
 import tempfile
 import random
 from contextlib import contextmanager
+from collections import defaultdict
 
 # Import all models for current dataset
 m = ModelDelegator(os.environ.get('DATASET'))
@@ -79,6 +80,22 @@ if get_ipython() is not None:
     sns.set_style('white')
 
     from tqdm import tqdm_notebook as tqdm
+
+    import ipywidgets as widgets
+    from traitlets import Unicode
+    class EsperWidget(widgets.DOMWidget):
+        _view_name = Unicode('EsperView').tag(sync=True)
+        _view_module = Unicode('esper').tag(sync=True)
+        _view_module_version = Unicode('0.1.0').tag(sync=True)
+
+    def esper_widget(*args, **kwargs):
+        # from IPython.core.display import Javascript, HTML, display
+        # display(HTML("""
+        # <script type="text/javascript" src="//{hostname}/static/bundles/common.js"></script>
+        # <script type="text/javascript" src="//{hostname}/static/bundles/jupyter.js"></script>
+        # """.format(hostname=os.environ.get('HOSTNAME'))))
+        return EsperWidget(*args, **kwargs)
+
 else:
     from tqdm import tqdm
 
@@ -218,7 +235,7 @@ def par_filter(f, l, **kwargs):
     return [x for x, b in zip(l, par_for(f, l, **kwargs)) if b]
 
 
-def make_scanner_db(kube=False):
+def make_scanner_db(kube=False, multiworker=False):
     if kube:
         ip = sp.check_output(
             '''
@@ -241,7 +258,15 @@ def make_scanner_db(kube=False):
         return Database(master=master, start_cluster=False)
 
     else:
-        return Database()
+        workers = ['localhost:{}'.format(5002 + i)
+                   for i in range(mp.cpu_count() // 8)] if multiworker else None
+        import scannerpy.libscanner as bindings
+        import scanner.metadata_pb2 as metadata_types
+        params = metadata_types.MachineParameters()
+        params.ParseFromString(bindings.default_machine_params())
+        params.num_load_workers = 2
+        params.num_save_workers = 2
+        return Database(machine_params=params.SerializeToString(), workers=workers)
 
 
 class Timer:
@@ -263,7 +288,7 @@ class Timer:
 
 
 CACHE_DIR = '/app/.cache'
-DEFAULT_CACHE_METHOD = 'marshal'
+DEFAULT_CACHE_METHOD = 'pickle'
 NUM_CHUNKS = 8
 
 
@@ -389,6 +414,14 @@ class QuerySetMixin(object):
         with connection.cursor() as cursor:
             cursor.execute("COPY ({}) TO '{}' CSV DELIMITER ',' HEADER".format(
                 str(self.query), '/app/pg/{}.csv'.format(name)))
+
+def qs_child_count(qs, fkey_path):
+    return Subquery(
+        qs.filter(**{fkey_path:OuterRef('pk')}) \
+        .values(fkey_path) \
+        .annotate(c=Count('*')) \
+        .values('c'),
+        models.IntegerField())
 
 
 for key in QuerySetMixin.__dict__:
@@ -755,8 +788,8 @@ def caption_count(phrases):
     return r.json()
 
 
-def face_knn(features=None, ids=None, k=None, 
-             min_threshold=-1.0, max_threshold=1000.0, 
+def face_knn(features=None, ids=None, k=None,
+             min_threshold=-1.0, max_threshold=1000.0,
              not_ids=[], not_id_penalty=0.2):
     r = requests.post(
         'http://localhost:8111/facesearch',
@@ -792,3 +825,13 @@ def frange(x, y, jump):
     while x < y:
         yield x
         x += jump
+
+def esper_widget(result):
+    from query.datasets.stdlib import result_with_metadata, esper_js_globals
+    import esper_jupyter
+    return esper_jupyter.EsperWidget(
+        result=result_with_metadata(result),
+        jsglobals=esper_js_globals(),
+        settings={
+            'select_mode': 1  # individual
+        })

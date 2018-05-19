@@ -1,6 +1,9 @@
 import React from 'react';
 import {observer} from 'mobx-react';
 import {FrameView} from './FrameView.jsx';
+import Spinner from './Spinner.jsx';
+import manager from 'utils/KeyboardManager.jsx';
+import {SettingsContext} from './contexts.jsx';
 
 @observer
 export default class ClipView extends React.Component {
@@ -34,7 +37,7 @@ export default class ClipView extends React.Component {
   }
 
   _onKeyPress = (e) => {
-    if (IGNORE_KEYPRESS) {
+    if (manager.locked()) {
       return;
     }
 
@@ -124,10 +127,12 @@ export default class ClipView extends React.Component {
         this._video.addEventListener('ended', this.props.onVideoStop);
       }
 
-      if (this._lastDisplayTime != this.props.displayTime) {
-        this._video.currentTime = this.props.displayTime;
-        this._lastDisplayTime = this.props.displayTime;
-      }
+      /*
+       *       if (this._lastDisplayTime != this.props.displayTime) {
+       *         this._video.currentTime = this.props.displayTime;
+       *         this._lastDisplayTime = this.props.displayTime;
+       *       }
+       * */
 
       if (this.props.onTimeUpdate) {
         if (this._timeUpdateInterval) {
@@ -147,7 +152,7 @@ export default class ClipView extends React.Component {
   }
 
   _videoMeta = () => {
-    return window.search_result.videos[this.props.clip.video];
+    return this.props.searchResult.videos[this.props.clip.video];
   }
 
   componentWillUnmount() {
@@ -158,106 +163,109 @@ export default class ClipView extends React.Component {
   }
 
   render() {
-    let clip = this.props.clip;
-    let video = this._videoMeta();
-
-    // Set playback rate of the video
-    if (this._video) {
-      this._video.playbackRate = DISPLAY_OPTIONS.get('playback_speed');
-    }
-
-    // Figure out how big the thumbnail should be
-    let small_height = this.props.expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
-    let small_width = video.width * small_height / video.height;
-    let vidStyle = this.state.showVideo ? {
-      zIndex: 2,
-      width: small_width,
-      height: small_height
-    } : {};
-
-    // Determine which video frame to display
-    let display_frame =
-      DISPLAY_OPTIONS.get('show_middle_frame') && clip.max_frame
-      ? Math.round((clip.max_frame + clip.min_frame) / 2)
-      : clip.min_frame;
-    let path = `/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
-
-    // Collect inline metadata to display
-    let meta = [];
-
-    if (this.props.expand) {
-      meta.push(['Video', `${video.path.split(/[\\/]/).pop()} (${video.id})`]);
-      meta.push(['Frame', `${display_frame}`]);
-    }
-
-    if (clip.max_frame !== undefined) {
-      let duration = (clip.max_frame - clip.min_frame) / video.fps;
-      meta.push(['Duration', `${duration.toFixed(1)}s`]);
-    }
-
-    if (clip.objects !== undefined) {
-      meta.push(['# objects', `${clip.objects.length}`]);
-    }
-
-    if (clip.metadata !== undefined) {
-      clip.metadata.forEach((entry) => {
-        meta.push([entry[0], entry[1]]);
-      });
-    }
-
-    let meta_per_row = this.props.expand ? 4 : 2;
-    let td_style = {width: `${100 / meta_per_row}%`};
-
     return (
-      <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}
-           onMouseEnter={this._onMouseEnter}
-           onMouseLeave={this._onMouseLeave}>
-        <div className='media-container'>
-          {this.state.loadingVideo || this.state.showVideo
-           ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
-             <source src={`/system_media/${video.path}`} />
-             {video.has_captions
-              ? <track kind="subtitles"
-                       src={`/api/subtitles?dataset=${DATASET}&video=${video.id}`}
-                       srclang="en" />
-              : <span />}
-           </video>
-           : <div />}
-          {this.state.loadingVideo
-           ? <div className='loading-video'><img className='spinner' /></div>
-           : <div />}
-          <FrameView
-            bboxes={clip.objects || []}
-            small_width={small_width}
-            small_height={small_height}
-            full_width={video.width}
-            full_height={video.height}
-            onClick={this.props.onBoxClick}
-            expand={this.props.expand}
-            onChangeGender={() => {}}
-            onChangeLabel={() => {}}
-            onTrack={() => {}}
-            onSetTrack={() => {}}
-            onDeleteTrack={() => {}}
-            onSelect={() => {}}
-            path={path} />
-        </div>
-        {(this.props.expand || DISPLAY_OPTIONS.get('show_inline_metadata')) && this.props.showMeta
-         ?
-         <table className='search-result-meta' style={{width: small_width}}>
-           <tbody>
-             {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>
-               <tr key={i}>
-                 {_.range(meta_per_row).map((j) => {
-                    let entry = meta[i*meta_per_row + j];
-                    if (entry === undefined) { return <td key={j} />; }
-                    return (<td key={j} style={td_style}><strong>{entry[0]}</strong>: {entry[1]}</td>);
-                 })}
-               </tr>)}
-           </tbody>
-         </table>
-         : <div />}
-      </div>
+      <SettingsContext.Consumer>{displayOptions => {
+          let clip = this.props.clip;
+          let video = this._videoMeta();
+
+          // Set playback rate of the video
+          if (this._video) {
+            this._video.playbackRate = displayOptions.get('playback_speed');
+          }
+
+          // Figure out how big the thumbnail should be
+          let small_height = this.props.expand ? video.height : 100 * displayOptions.get('thumbnail_size');
+          let small_width = video.width * small_height / video.height;
+          let vidStyle = this.state.showVideo ? {
+            zIndex: 2,
+            width: small_width,
+            height: small_height
+          } : {};
+
+          // Determine which video frame to display
+          let display_frame =
+            displayOptions.get('show_middle_frame') && clip.max_frame
+            ? Math.round((clip.max_frame + clip.min_frame) / 2)
+            : clip.min_frame;
+          let path = `${window.location.protocol}//${window.location.hostname}/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
+
+          // Collect inline metadata to display
+          let meta = [];
+
+          if (this.props.expand) {
+            meta.push(['Video', `${video.path.split(/[\\/]/).pop()} (${video.id})`]);
+            meta.push(['Frame', `${display_frame}`]);
+          }
+
+          if (clip.max_frame !== undefined) {
+            let duration = (clip.max_frame - clip.min_frame) / video.fps;
+            meta.push(['Duration', `${duration.toFixed(1)}s`]);
+          }
+
+          if (clip.objects !== undefined) {
+            meta.push(['# objects', `${clip.objects.length}`]);
+          }
+
+          if (clip.metadata !== undefined) {
+            clip.metadata.forEach((entry) => {
+              meta.push([entry[0], entry[1]]);
+            });
+          }
+
+          let meta_per_row = this.props.expand ? 4 : 2;
+          let td_style = {width: `${100 / meta_per_row}%`};
+
+          return <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}
+                      onMouseEnter={this._onMouseEnter}
+                      onMouseLeave={this._onMouseLeave}>
+            <div className='media-container'>
+              {this.state.loadingVideo || this.state.showVideo
+               ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
+                 <source src={`/system_media/${video.path}`} />
+                 {video.srt_extension != ''
+                  ? <track kind="subtitles"
+                           src={`/api/subtitles?dataset=${DATASET}&video=${video.id}`}
+                           srcLang="en" />
+                  : <span />}
+               </video>
+               : <div />}
+              {this.state.loadingVideo
+               ? <div className='loading-video'><Spinner /></div>
+               : <div />}
+              <FrameView
+                bboxes={clip.objects || []}
+                small_width={small_width}
+                small_height={small_height}
+                full_width={video.width}
+                full_height={video.height}
+                onClick={this.props.onBoxClick}
+                expand={this.props.expand}
+                onChangeGender={() => {}}
+                onChangeLabel={() => {}}
+                onTrack={() => {}}
+                onSetTrack={() => {}}
+                onDeleteTrack={() => {}}
+                onSelect={() => {}}
+                path={path}
+                searchResult={this.props.searchResult} />
+            </div>
+            {(this.props.expand || displayOptions.get('show_inline_metadata')) && this.props.showMeta
+             ?
+             <table className='search-result-meta' style={{width: small_width}}>
+               <tbody>
+                 {_.range(Math.ceil(meta.length/meta_per_row)).map((i) =>
+                   <tr key={i}>
+                     {_.range(meta_per_row).map((j) => {
+                        let entry = meta[i*meta_per_row + j];
+                        if (entry === undefined) { return <td key={j} />; }
+                        return (<td key={j} style={td_style}><strong>{entry[0]}</strong>: {entry[1]}</td>);
+                     })}
+                   </tr>)}
+               </tbody>
+             </table>
+             : <div />}
+          </div>
+      }}</SettingsContext.Consumer>
     );
   }
 }

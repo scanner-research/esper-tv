@@ -32,7 +32,7 @@ def screen_speak_scatter(screen_df, screen_nh_df, speak_df, speak_nh_df, col, ti
         screen_df.plot('index', 'F%', ax=ax, color=FEMALE_COLOR, kind='scatter', marker='s')
 
         if len(plots) == 1:
-            pairs = zip(screen_df['M%'].tolist(), screen_df['F%'].tolist())
+            pairs = list(zip(screen_df['M%'].tolist(), screen_df['F%'].tolist()))
             c = matplotlib.collections.LineCollection(
                 [((i, a), (i, b)) for (i, (a, b)) in enumerate(pairs)],
                 colors=[MALE_COLOR if a > b else FEMALE_COLOR for (a, b) in pairs])

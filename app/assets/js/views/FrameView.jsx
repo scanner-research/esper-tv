@@ -1,8 +1,9 @@
 import React from 'react';
 import {observer} from 'mobx-react';
-import {observable, autorun} from 'mobx';
 import Select2 from 'react-select2-wrapper';
-import $ from 'jquery';
+import {GlobalContext, SettingsContext} from './contexts';
+import Spinner from './Spinner.jsx';
+import keyboardManager from 'utils/KeyboardManager.jsx';
 
 export let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
@@ -34,6 +35,13 @@ class BoxView extends React.Component {
   // See "Bind functions early" https://mobx.js.org/best/react-performance.html
   // for why we use this syntax for member functions.
   _onMouseDown = (e) => {
+    console.log(this.props.box.id);
+
+    if (this.props.onClick) {
+      this.props.onClick(this.props.box);
+    }
+    e.stopPropagation();
+
     this.setState({
       clicked: true,
       clickX: e.clientX,
@@ -41,13 +49,6 @@ class BoxView extends React.Component {
       mouseX: e.clientX,
       mouseY: e.clientY
     });
-
-    console.log(this.props.box.id);
-
-    if (this.props.onClick) {
-      this.props.onClick(this.props.box);
-    }
-    e.stopPropagation();
 
     // Since we rely on global clicks and not just React's synthetic click events to make the drawing work,
     // we need to stop propagation of the native DOM event as well. See FrameView._onMouseDownGlobal for related bug.
@@ -64,15 +65,17 @@ class BoxView extends React.Component {
   }
 
   _onMouseUp = (e) => {
-    let box = this.props.box;
-    let {width, height} = this.props;
-    let offsetX = this.state.mouseX - this.state.clickX;
-    let offsetY = this.state.mouseY - this.state.clickY;
-    box.bbox_x1 += offsetX / width;
-    box.bbox_x2 += offsetX / width;
-    box.bbox_y1 += offsetY / height;
-    box.bbox_y2 += offsetY / height;
-    this.setState({clicked: false});
+    if (this.state.clicked) {
+      let box = this.props.box;
+      let {width, height} = this.props;
+      let offsetX = this.state.mouseX - this.state.clickX;
+      let offsetY = this.state.mouseY - this.state.clickY;
+      box.bbox_x1 += offsetX / width;
+      box.bbox_x2 += offsetX / width;
+      box.bbox_y1 += offsetY / height;
+      box.bbox_y2 += offsetY / height;
+      this.setState({clicked: false});
+    }
   }
 
   _onMouseOver = (e) => {
@@ -85,25 +88,31 @@ class BoxView extends React.Component {
 
   _onKeyPress = (e) => {
     let chr = String.fromCharCode(e.which);
-    if (IGNORE_KEYPRESS) {
+    if (keyboardManager.locked()) {
       return;
     }
 
     let box = this.props.box;
     let {width, height} = this.props;
     if (chr == 'g') {
-      let keys = _.sortBy(_.map(_.keys(window.search_result.genders), (x) => parseInt(x)));
+      let keys = _.sortBy(_.map(_.keys(this.props.searchResult.genders), (x) => parseInt(x)));
       box.gender_id = keys[(_.indexOf(keys, box.gender_id) + 1) % keys.length];
+      // TODO(wcrichto): mobx should catch this update, but doesn't?
+      this.forceUpdate();
       e.preventDefault();
     } else if (chr == 'b') {
       box.background = !box.background;
-      console.log(box.background);
+      this.forceUpdate();
       e.preventDefault();
     } else if (chr == 'd') {
       this.props.onDelete(this.props.i);
     } else if(chr == 't') {
       this.setState({showSelect: !this.state.showSelect});
-      IGNORE_KEYPRESS = this.state.showSelect;
+      if (this.state.showSelect) {
+        keyboardManager.lock();
+      } else {
+        keyboardManager.unlock();
+      }
       //this.props.onTrack(this.props.i);
     } else if(chr == 'q') {
       this.props.onSetTrack(this.props.i);
@@ -113,9 +122,7 @@ class BoxView extends React.Component {
   }
 
   _onSelect = (e) => {
-    // NOTE: there's technically a bug where if the user opens two identity boxes simultaneously, after
-    // closing the first, keypresses will not be ignored while typing into the second.
-    IGNORE_KEYPRESS = false;
+    keyboardManager.unlock();
 
     this.props.box.identity_id = e.target.value;
     this.setState({showSelect: false});
@@ -138,87 +145,91 @@ class BoxView extends React.Component {
   }
 
   render() {
-    let box = this.props.box;
-    let offsetX = 0;
-    let offsetY = 0;
-    if (this.state.clicked) {
-      offsetX = this.state.mouseX - this.state.clickX;
-      offsetY = this.state.mouseY - this.state.clickY;
-    }
+    return (
+      <SettingsContext.Consumer>{displayOptions => {
+          let box = this.props.box;
+          let offsetX = 0;
+          let offsetY = 0;
+          if (this.state.clicked) {
+            offsetX = this.state.mouseX - this.state.clickX;
+            offsetY = this.state.mouseY - this.state.clickY;
+          }
 
-    let things = GLOBALS.things[GLOBALS.selected];
+          let color =
+            displayOptions.get('show_gender_as_border') && box.gender_id
+            ? this.props.searchResult.gender_colors[this.props.searchResult.genders[box.gender_id].name]
+            : this.props.searchResult.labeler_colors[box.labeler_id];
 
-    let color =
-      DISPLAY_OPTIONS.get('show_gender_as_border') && box.gender_id
-      ? window.search_result.gender_colors[window.search_result.genders[box.gender_id].name]
-      : window.search_result.labeler_colors[box.labeler_id];
-
-    let style = {
-      left: box.bbox_x1 * this.props.width + offsetX,
-      top: box.bbox_y1 * this.props.height + offsetY,
-      width: (box.bbox_x2-box.bbox_x1) * this.props.width,
-      height: (box.bbox_y2-box.bbox_y1) * this.props.height,
-      borderColor: color,
-      borderStyle: box.background ? 'dashed' : 'solid',
-      opacity: DISPLAY_OPTIONS.get('annotation_opacity')
-    };
+          let style = {
+            left: box.bbox_x1 * this.props.width + offsetX,
+            top: box.bbox_y1 * this.props.height + offsetY,
+            width: (box.bbox_x2-box.bbox_x1) * this.props.width,
+            height: (box.bbox_y2-box.bbox_y1) * this.props.height,
+            borderColor: color,
+            borderStyle: box.background ? 'dashed' : 'solid',
+            opacity: displayOptions.get('annotation_opacity')
+          };
 
 
-    let selectStyle = {
-      left: style.left + style.width + 5,
-      top: style.top,
-      position: 'absolute',
-      zIndex: 1000
-    };
+          let selectStyle = {
+            left: style.left + style.width + 5,
+            top: style.top,
+            position: 'absolute',
+            zIndex: 1000
+          };
 
-    let labelStyle = {
-      left: style.left,
-      bottom: this.props.height - style.top,
-      backgroundColor: style.borderColor,
-      fontSize: this.props.expand ? '12px' : '8px',
-      padding: this.props.expand ? '3px 6px' : '0px 1px'
-    };
+          let labelStyle = {
+            left: style.left,
+            bottom: this.props.height - style.top,
+            backgroundColor: style.borderColor,
+            fontSize: this.props.expand ? '12px' : '8px',
+            padding: this.props.expand ? '3px 6px' : '0px 1px'
+          };
 
-    let modifyLabel = ((label) => {
-      if (this.props.expand) {
-        return label;
-      } else {
-        let parts = label.split(' ');
-        if (parts.length > 1) {
-          return parts.map((p) => p[0]).join('').toUpperCase();
-        } else {
-          return label;
-        }
-      }
-    }).bind(this);
+          let modifyLabel = ((label) => {
+            if (this.props.expand) {
+              return label;
+            } else {
+              let parts = label.split(' ');
+              if (parts.length > 1) {
+                return parts.map((p) => p[0]).join('').toUpperCase();
+              } else {
+                return label;
+              }
+            }
+          }).bind(this);
 
-    return <div>
-      {box.identity_id
-       ? <div className='bbox-label' style={labelStyle}>
-         {modifyLabel(things[box.identity_id])}
-       </div>
-       : <div />}
-      <div onMouseOver={this._onMouseOver}
-           onMouseOut={this._onMouseOut}
-           onMouseUp={this._onMouseUp}
-           onMouseDown={this._onMouseDown}
-           className='bounding-box'
-           style={style}
-           ref={(n) => {this._div = n}} />
-      {this.state.showSelect
-       ? <div style={selectStyle}>
-         <Select2
-           ref={(n) => {this._select = n;}}
-           data={_.map(things, (v, k) => ({text: v, id: k}))}
-           options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
-           onSelect={this._onSelect}
-           onClose={(e) => {
-               this.setState({showSelect: false});
-               IGNORE_KEYPRESS = false;
-           }} />
-       </div>
-       : <div />}
-    </div>;
+          return <GlobalContext.Consumer>{globals => {
+              let things = globals.things[globals.selected];
+              return (<div>
+                {box.identity_id
+                 ? <div className='bbox-label' style={labelStyle}>
+                   {modifyLabel(things[box.identity_id])}
+                 </div>
+                 : <div />}
+                <div onMouseOver={this._onMouseOver}
+                     onMouseOut={this._onMouseOut}
+                     onMouseUp={this._onMouseUp}
+                     onMouseDown={this._onMouseDown}
+                     className='bounding-box'
+                     style={style}
+                     ref={(n) => {this._div = n}} />
+                {this.state.showSelect
+                 ? <div style={selectStyle}>
+                   <Select2
+                     ref={(n) => {this._select = n;}}
+                     data={_.map(things, (v, k) => ({text: v, id: k}))}
+                     options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
+                     onSelect={this._onSelect}
+                     onClose={(e) => {
+                         this.setState({showSelect: false});
+                         keyboardManager.unlock();
+                     }} />
+                 </div>
+                 : <div />}
+              </div>);
+          }}</GlobalContext.Consumer>;
+      }}</SettingsContext.Consumer>);
   }
 }
 
@@ -242,60 +253,62 @@ let HAND_RIGHT_COLOR = 'rgb(95, 231, 118)';
 @observer
 class PoseView extends React.Component {
   render() {
-    let w = this.props.width;
-    let h = this.props.height;
-    let all_kp = this.props.pose.keypoints;
-    let opacity = DISPLAY_OPTIONS.get('annotation_opacity');
-    let kp_sets = [];
+    return <SettingsContext.Consumer>{displayOptions => {
+        let w = this.props.width;
+        let h = this.props.height;
+        let all_kp = this.props.pose.keypoints;
+        let opacity = displayOptions.get('annotation_opacity');
+        let kp_sets = [];
 
-    // Conditionally draw each part of the keypoints depending on our options
-    if (DISPLAY_OPTIONS.get('show_pose')) {
-      kp_sets.push([all_kp.pose, POSE_PAIRS, POSE_COLOR]);
-    }
-    if (DISPLAY_OPTIONS.get('show_face')) {
-      kp_sets.push([all_kp.face, FACE_PAIRS, FACE_COLOR]);
-    }
-    if (DISPLAY_OPTIONS.get('show_hands')) {
-      kp_sets = kp_sets.concat([
-        [all_kp.hand_left, HAND_PAIRS, HAND_LEFT_COLOR],
-        [all_kp.hand_right, HAND_PAIRS, HAND_RIGHT_COLOR],
-      ])
-    }
+        // Conditionally draw each part of the keypoints depending on our options
+        if (displayOptions.get('show_pose')) {
+          kp_sets.push([all_kp.pose, POSE_PAIRS, POSE_COLOR]);
+        }
+        if (displayOptions.get('show_face')) {
+          kp_sets.push([all_kp.face, FACE_PAIRS, FACE_COLOR]);
+        }
+        if (displayOptions.get('show_hands')) {
+          kp_sets = kp_sets.concat([
+            [all_kp.hand_left, HAND_PAIRS, HAND_LEFT_COLOR],
+            [all_kp.hand_right, HAND_PAIRS, HAND_RIGHT_COLOR],
+          ])
+        }
 
-    let expand = this.props.expand;
-    let strokeWidth = this.props.expand ? 3 : 1;
+        let expand = this.props.expand;
+        let strokeWidth = this.props.expand ? 3 : 1;
 
-    let get_color = (kp_set, pair) => {
-      let color = kp_set[2];
-      // Normally color is just the one in the kp_set, but we special case drawing
-      // the left side of the pose a different color if the option is enabled
-      if (DISPLAY_OPTIONS.get('show_lr') &&
-          kp_set[0].length == all_kp.pose.length &&
-          (_.includes(POSE_LEFT, pair[0]) || _.includes(POSE_LEFT, pair[1]))) {
-        color = POSE_LEFT_COLOR;
-      }
-      return color;
-    };
+        let get_color = (kp_set, pair) => {
+          let color = kp_set[2];
+          // Normally color is just the one in the kp_set, but we special case drawing
+          // the left side of the pose a different color if the option is enabled
+          if (displayOptions.get('show_lr') &&
+              kp_set[0].length == all_kp.pose.length &&
+              (_.includes(POSE_LEFT, pair[0]) || _.includes(POSE_LEFT, pair[1]))) {
+            color = POSE_LEFT_COLOR;
+          }
+          return color;
+        };
 
-    return <svg className='pose'>
-      {kp_sets.map((kp_set, j) =>
-        <g key={j}>
-          {expand
-           ? kp_set[0].map((kp, i) => [kp, i]).filter((kptup) => kptup[0][2] > 0).map((kptup, i) =>
-             <circle key={i} r={2} cx={kptup[0][0] * w} cy={kptup[0][1] * h}
-                     stroke={get_color(kp_set, [kptup[1], kptup[1]])}
-                     strokeOpacity={opacity} strokeWidth={strokeWidth} fill="transparent" />
-           )
-           : <g />}
-          {kp_set[1].filter((pair) => kp_set[0][pair[0]][2] > 0 && kp_set[0][pair[1]][2] > 0).map((pair, i) =>
-            <line key={i} x1={kp_set[0][pair[0]][0] * w} x2={kp_set[0][pair[1]][0] * w}
-                  y1={kp_set[0][pair[0]][1] * h} y2={kp_set[0][pair[1]][1] * h}
-                  strokeWidth={strokeWidth} stroke={get_color(kp_set, pair)}
-                  strokeOpacity={opacity} />
+        return <svg className='pose'>
+          {kp_sets.map((kp_set, j) =>
+            <g key={j}>
+              {expand
+               ? kp_set[0].map((kp, i) => [kp, i]).filter((kptup) => kptup[0][2] > 0).map((kptup, i) =>
+                 <circle key={i} r={2} cx={kptup[0][0] * w} cy={kptup[0][1] * h}
+                         stroke={get_color(kp_set, [kptup[1], kptup[1]])}
+                         strokeOpacity={opacity} strokeWidth={strokeWidth} fill="transparent" />
+               )
+               : <g />}
+              {kp_set[1].filter((pair) => kp_set[0][pair[0]][2] > 0 && kp_set[0][pair[1]][2] > 0).map((pair, i) =>
+                <line key={i} x1={kp_set[0][pair[0]][0] * w} x2={kp_set[0][pair[1]][0] * w}
+                      y1={kp_set[0][pair[0]][1] * h} y2={kp_set[0][pair[1]][1] * h}
+                      strokeWidth={strokeWidth} stroke={get_color(kp_set, pair)}
+                      strokeOpacity={opacity} />
+              )}
+            </g>
           )}
-        </g>
-      )}
-    </svg>;
+        </svg>
+    }}</SettingsContext.Consumer>;
   }
 }
 
@@ -358,7 +371,7 @@ class ProgressiveImage extends React.Component {
       <div>
         {this.state.loaded
          ? <div />
-         : <img className='spinner' />}
+         : <Spinner />}
         <img src={this.props.src} draggable={false} onLoad={this._onLoad} onError={this._onError} style={imgStyle} />
         {crop !== null
          ? <div style={cropStyle} />
@@ -472,8 +485,12 @@ export class FrameView extends React.Component {
   _onMouseUpLocal = (e) => {
     // Create the box when the user releases the mouse.
     if (this.state.startX != -1 && this.state.showDraw) {
-      this.props.bboxes.push(this._makeBox());
+      if (keyboardManager.modifiers.has('shift')) {
+        this.props.bboxes.push(this._makeBox());
+      }
+
       this.setState({startX: -1, clicked: false});
+      this.props.onSelect(this.props.ni);
     }
   }
 
@@ -523,8 +540,8 @@ export class FrameView extends React.Component {
       bbox_y1: (Math.min(this.state.startY, this.state.curY) + 1)/height,
       bbox_x2: (Math.max(this.state.curX, this.state.startX) - 1)/width,
       bbox_y2: (Math.max(this.state.curY, this.state.startY) - 1)/height,
-      labeler_id: _.find(window.search_result.labelers, (l) => l.name == 'handlabeled-face').id,
-      gender_id: _.find(window.search_result.genders, (l) => l.name == 'U').id,
+      labeler_id: _.find(this.props.searchResult.labelers, (l) => l.name == 'handlabeled-face').id,
+      gender_id: _.find(this.props.searchResult.genders, (l) => l.name == 'U').id,
       type: 'bbox',
       id: -1,
       background: false
@@ -552,53 +569,57 @@ export class FrameView extends React.Component {
 
   render() {
     return (
-      <div className='frame'
-           onMouseDown={this._onMouseDownLocal}
-           onMouseUp={this._onMouseUpLocal}
-           onMouseOver={this._onMouseOver}
-           onMouseOut={this._onMouseOut}
-           ref={(n) => { this._div = n; }}>
-        {DISPLAY_OPTIONS.get('crop_bboxes') && this.props.bboxes.length > 0
-         ? <ProgressiveImage
-             src={this.props.path}
-             crop={this.props.bboxes[0]}
-             width={this.props.full_width}
-             height={this.props.full_height}
-             target_width={this.props.small_width}
-             target_height={this.props.small_height}
-             onLoad={() => this.setState({imageLoaded: true})} />
-         : <div>
-           {this.state.imageLoaded
-            ? <div>
-              {this.state.showDraw && this.state.startX != -1
-               ? <BoxView box={this._makeBox()} width={this.props.small_width} height={this.props.small_height} />
-               : <div />}
-              {this.props.bboxes.map((box, i) => {
-                 if (box.type == 'bbox') {
-                   return <BoxView box={box} key={i} i={i} width={this.props.small_width}
-                                   height={this.props.small_height}
-                                   onClick={this.props.onClick}
-                                   onDelete={this._onDelete}
-                                   onTrack={this._onTrack}
-                                   onSetTrack={this._onSetTrack}
-                                   onDeleteTrack={this._onDeleteTrack}
-                                   expand={this.props.expand} />;
-                 } else if (box.type == 'pose') {
-                   return <PoseView pose={box} key={i} width={this.props.small_width}
-                                    height={this.props.small_height} expand={this.props.expand} />;
-                 }})}
-            </div>
-            : <div />}
-           <ProgressiveImage
-             src={this.props.path}
-             width={this.props.full_width}
-             height={this.props.full_height}
-             crop={null}
-             target_width={this.props.small_width}
-             target_height={this.props.small_height}
-             onLoad={() => this.setState({imageLoaded: true})} />
-         </div>}
-      </div>
+      <SettingsContext.Consumer>{displayOptions =>
+        <div className='frame'
+             onMouseDown={this._onMouseDownLocal}
+             onMouseUp={this._onMouseUpLocal}
+             onMouseOver={this._onMouseOver}
+             onMouseOut={this._onMouseOut}
+             ref={(n) => { this._div = n; }}>
+          {displayOptions.get('crop_bboxes') && this.props.bboxes.length > 0
+           ? <ProgressiveImage
+               src={this.props.path}
+               crop={this.props.bboxes[0]}
+               width={this.props.full_width}
+               height={this.props.full_height}
+               target_width={this.props.small_width}
+               target_height={this.props.small_height}
+               onLoad={() => this.setState({imageLoaded: true})} />
+           : <div>
+             {this.state.imageLoaded
+              ? <div>
+                {this.state.showDraw && this.state.startX != -1 && keyboardManager.modifiers.has('shift')
+                 ? <BoxView box={this._makeBox()} width={this.props.small_width} height={this.props.small_height}
+                            searchResult={this.props.searchResult} />
+                 : <div />}
+                {this.props.bboxes.map((box, i) => {
+                   if (box.type == 'bbox') {
+                     return <BoxView box={box} key={i} i={i} width={this.props.small_width}
+                                     height={this.props.small_height}
+                                     onClick={this.props.onClick}
+                                     onDelete={this._onDelete}
+                                     onTrack={this._onTrack}
+                                     onSetTrack={this._onSetTrack}
+                                     onDeleteTrack={this._onDeleteTrack}
+                                     expand={this.props.expand}
+                                     searchResult={this.props.searchResult} />;
+                   } else if (box.type == 'pose') {
+                     return <PoseView pose={box} key={i} width={this.props.small_width}
+                                      height={this.props.small_height} expand={this.props.expand} />;
+                   }})}
+              </div>
+              : <div />}
+             <ProgressiveImage
+               src={this.props.path}
+               width={this.props.full_width}
+               height={this.props.full_height}
+               crop={null}
+               target_width={this.props.small_width}
+               target_height={this.props.small_height}
+               onLoad={() => this.setState({imageLoaded: true})} />
+           </div>}
+        </div>
+      }</SettingsContext.Consumer>
     );
   }
 };
