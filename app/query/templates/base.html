@@ -7,11 +7,11 @@
      var GLOBALS = {{ globals|safe }};
     </script>
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
+    <link href="/static/bundles/bootstrap.css" rel="stylesheet" />
     <link href="/static/bundles/styles.css" rel="stylesheet" />
     <link id="dynamic-favicon" rel="shortcut icon" type="image/png" href="/static/favicon.ico" />
   </head>
-
-  <body>
+  <body class="esper">
     <div class="container" id="app">
       {% block content %}{% endblock %}
     </div>

@@ -3,6 +3,7 @@ import {boundingRect} from './FrameView.jsx';
 import ClipView from './ClipView.jsx';
 import {observer} from 'mobx-react';
 import {toJS} from 'mobx';
+import keyboardManager from 'utils/KeyboardManager.jsx';
 
 @observer
 class MarkerView extends React.Component {
@@ -38,7 +39,7 @@ class TrackView extends React.Component {
   _mouseY = -1
 
   _onKeyPress = (e) => {
-    if (IGNORE_KEYPRESS) {
+    if (keyboardManager.lock()) {
       return;
     }
 
@@ -84,10 +85,10 @@ class TrackView extends React.Component {
     let x1 = time_to_x(start);
     let x2 = time_to_x(end);
 
-    let ident_colors = window.search_result.labeler_colors
+    let ident_colors = this.props.searchResult.labeler_colors
     let color = DISPLAY_OPTIONS.get('track_color_identity')
          ? ident_colors[identity % ident_colors.length]
-         : window.search_result.gender_colors[window.search_result.genders[label].name];
+         : this.props.searchResult.gender_colors[this.props.searchResult.genders[label].name];
 
     return (
       <g ref={(n) => {this._g = n;}}>
@@ -158,7 +159,7 @@ export default class TimelineView extends React.Component {
   }
 
   _video = () => {
-    return window.search_result.videos[this.props.group.elements[0].video];
+    return this.props.searchResult.videos[this.props.group.elements[0].video];
   }
 
   _onVideoPlay = () => {
@@ -184,7 +185,7 @@ export default class TimelineView extends React.Component {
     if (chr == 'g') {
       this._pushState();
       let track = this.props.group.elements[i];
-      let keys = _.sortBy(_.map(_.keys(window.search_result.genders), (x) => parseInt(x)));
+      let keys = _.sortBy(_.map(_.keys(this.props.searchResult.genders), (x) => parseInt(x)));
       track.gender_id = keys[(_.indexOf(keys, track.gender_id) + 1) % keys.length];
     }
 
@@ -201,7 +202,7 @@ export default class TimelineView extends React.Component {
   }
 
   _onKeyPress = (e) => {
-    if (IGNORE_KEYPRESS || !this._videoPlaying) {
+    if (keyboardManager.lock() || !this._videoPlaying) {
       return;
     }
 
@@ -279,7 +280,7 @@ export default class TimelineView extends React.Component {
           video: elements[0].video,
           min_frame: start,
           max_frame: end,
-          gender_id: _.find(window.search_result.genders, (l) => l.name == 'M').id
+          gender_id: _.find(this.props.searchResult.genders, (l) => l.name == 'M').id
         });
         this.props.group.elements = _.sortBy(elements, ['min_frame']);
 
@@ -350,7 +351,8 @@ export default class TimelineView extends React.Component {
       mh: timeboxStyle.height,
       mf: expand ? 16 : 12,
       currentTime: this.state.currentTime,
-      video: video
+      video: video,
+      searchResult: this.props.searchResult
     };
 
     return (<div className='timeline' style={style}>

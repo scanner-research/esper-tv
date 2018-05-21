@@ -6,6 +6,8 @@ import shlex
 from dotmap import DotMap
 import multiprocessing
 import shutil
+import socket
+import os
 
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
@@ -39,6 +41,7 @@ extra_processes = {
     'npm': 'npm run watch --color'
 }
 
+tsize = shutil.get_terminal_size()
 config = DotMap(
     yaml.load("""
 version: '2.3'
@@ -65,7 +68,6 @@ services:
       context: ./app
       dockerfile: Dockerfile.app
       args:
-        https_proxy: "${{https_proxy}}"
         cores: {cores}
     depends_on: [db, frameserver]
     volumes:
@@ -75,9 +77,22 @@ services:
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}:{ipython_port}"]
-    environment: ["IPYTHON_PORT={ipython_port}", "JUPYTER_PASSWORD=esperjupyter", "RUST_BACKTRACE=full"]
+    environment:
+      - IPYTHON_PORT={ipython_port}
+      - JUPYTER_PASSWORD=esperjupyter
+      - COLUMNS={columns}
+      - LINES={lines}
+      - TERM={term}
+      - RUST_BACKTRACE=full
     tty: true # https://github.com/docker/compose/issues/2231#issuecomment-165137408
-""".format(nginx_port=NGINX_PORT, ipython_port=IPYTHON_PORT, cores=cores, workers=cores * 2)))
+""".format(
+        nginx_port=NGINX_PORT,
+        ipython_port=IPYTHON_PORT,
+        cores=cores,
+        workers=cores * 2,
+        columns=tsize.columns,
+        lines=tsize.lines,
+        term=os.environ.get('TERM'))))
 
 db_local = DotMap(
     yaml.load("""
@@ -109,11 +124,14 @@ def main():
     parser.add_argument(
         '--build', nargs='*', default=['base', 'local'], choices=['base', 'local', 'kube', 'tf'])
     parser.add_argument('--kube-device', default='cpu')
+    parser.add_argument('--enable-proxy', action='store_true')
+    parser.add_argument('--hostname')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
     base_config = DotMap(toml.load(args.config))
 
+    # Google Cloud config
     if 'google' in base_config:
         config.services.app.environment.extend([
             'GOOGLE_PROJECT={}'.format(base_config.google.project), 'GOOGLE_ZONE={}'.format(
@@ -121,6 +139,11 @@ def main():
         ])
         config.services.app.ports.append('8001:8001')  # for kubectl proxy
 
+    # Proxy
+    if args.enable_proxy:
+        config.services.app.build.args.https_proxy = "${{https_proxy}}"
+
+    # GPU settings
     if 'compute' in base_config:
         if 'gpu' in base_config.compute:
             device = 'gpu' if base_config.compute.gpu else 'cpu'
@@ -136,11 +159,12 @@ def main():
     config.services.app.environment.append('DEVICE={}'.format(device))
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
+    # Additional Docker services
     for svc in args.extra_services:
         config.services[svc] = extra_services[svc]
         config.services.app.depends_on.append(svc)
 
-    # Create supervisord.conf with any additoinal processes
+    # Additional supervisord proceseses
     with open('app/.deps/supervisord.conf', 'r') as f:
         supervisor_conf = f.read()
     for process in args.extra_processes:
@@ -154,6 +178,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
     with open('app/supervisord.conf', 'w') as f:
         f.write(supervisor_conf)
 
+    # SQL database
     if base_config.database.type == 'google':
         assert 'google' in base_config
         config.services.db = db_google
@@ -172,6 +197,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                 base_config.database.password)
         ])
 
+    # Scanner config
     scanner_config = {'scanner_path': '/opt/scanner'}
     if base_config.storage.type == 'google':
         assert 'google' in base_config
@@ -183,12 +209,31 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
     else:
         scanner_config['storage'] = {'type': 'posix', 'db_path': '/app/scanner_db'}
 
+    # Frameserver
     config.services.frameserver.environment.append('FILESYSTEM={}'.format(base_config.storage.type))
+
+    # Universal environment variables
+    if args.hostname is not None:
+        hostname = args.hostname
+    else:
+        is_google = b'Metadata-Flavor: Google' in sp.check_output(
+            'curl metadata.google.internal -i -s', shell=True)
+        if is_google:
+            hostname = sp.check_output(
+                """
+            gcloud compute instances list --format=json | \
+            jq ".[] | select(.name == \\"$(hostname)\\") | \
+                .networkInterfaces[0].accessConfigs[] | \
+                select(.name == \\"External NAT\\") | .natIP" -r
+            """,
+                shell=True).decode('utf-8').strip()
+        else:
+            hostname = socket.gethostbyname(socket.gethostname())
 
     for service in list(config.services.values()):
         env_vars = [
             'ESPER_ENV={}'.format(base_config.storage.type), 'DATASET={}'.format(args.dataset),
-            'DATA_PATH={}'.format(base_config.storage.path)
+            'DATA_PATH={}'.format(base_config.storage.path), 'HOSTNAME={}'.format(hostname)
         ]
 
         if base_config.storage.type == 'google':
@@ -200,12 +245,14 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
 
         service.environment.extend(env_vars)
 
+    # Write out generated configuration files
     with open('app/.scanner.toml', 'w') as f:
         f.write(toml.dumps(scanner_config))
 
     with open('docker-compose.yml', 'w') as f:
         f.write(yaml.dump(config.toDict()))
 
+    # Build Docker images where necessary
     if 'base' in args.build:
         devices = list(
             set(([device] if 'local' in args.build else []) +
@@ -246,7 +293,8 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             build('worker')
             # build('loader')
 
-    print('Successfully configured Esper.')
+    print('Successfully configured Esper. To start Esper, run:')
+    print('$ docker-compose up -d')
 
 
 if __name__ == '__main__':

@@ -1,23 +1,25 @@
-@import '~bootstrap/dist/css/bootstrap.min.css'; // tilde means "non-relative import"
 @import '~react-select2-wrapper/css/select2.css';
-@import 'search-input';
-@import 'search-result';
 
-body {
+body.esper {
     background: #fefefe;
     font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
 }
 
-.login-error {
-    text-align: center;
-    font-size: 24px;
-    margin-top: 30px;
-}
+.esper {
+    @import 'search-input';
+    @import 'search-result';
 
-.spinner {
-    content: url('/static/images/spinner.gif');
-}
+    .login-error {
+        text-align: center;
+        font-size: 24px;
+        margin-top: 30px;
+    }
 
-.clearfix {
-    clear: both;
+    .spinner {
+        content: url('/static/images/spinner.gif');
+    }
+
+    .clearfix {
+        clear: both;
+    }
 }

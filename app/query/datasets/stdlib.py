@@ -10,34 +10,46 @@ import math
 import numpy as np
 import traceback
 from timeit import default_timer as now
+import os
 import query.base_models as base_models
+from ..base_models import ModelDelegator
+import importlib
+import query.datasets.queries as queries
+from typing import Any, Dict, List, Union
+from django.db.models.query import QuerySet
+from django.db.models import F
+from django.db.models.functions import Cast
+import django.db.models as models
+from query.datasets.prelude import collect, BUCKET
 
-from query.datasets.prelude import *
+
+def load_models(globals: Dict, dataset: Union[str, None] = None) -> None:
+    if dataset is None:
+        dataset = os.environ.get('DATASET')
+    m = ModelDelegator(dataset)
+    m.import_all(globals)
+
+load_models(globals())
 
 
-def access(obj, path):
+def access(obj: Any, path: str) -> Any:
     fields = path.split('__')
     for f in fields:
         obj = getattr(obj, f)
     return obj
 
 
-def fprint(*args):
+def fprint(*args) -> None:
     print(*args)
     sys.stdout.flush()
 
 
-def load_stdlib_models(dataset):
-    m = ModelDelegator(dataset)
-    m.import_all(globals())
-
-
-def at_fps(qs, n=1):
+def at_fps(qs: QuerySet, n: int = 1) -> QuerySet:
     return qs.annotate(_tmp=F('number') % (
         Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
 
 
-def bbox_to_dict(f):
+def bbox_to_dict(f: Any) -> Dict:
     return {
         'id': f.id,
         'type': 'bbox',
@@ -51,7 +63,7 @@ def bbox_to_dict(f):
     }
 
 
-def gender_to_dict(f):
+def gender_to_dict(f: Any) -> Dict:
     d = bbox_to_dict(f.face)
     d['gender_id'] = f.gender.id
 
@@ -62,13 +74,13 @@ def gender_to_dict(f):
     return d
 
 
-def identity_to_dict(f):
+def identity_to_dict(f: Any) -> Dict:
     d = bbox_to_dict(f.face)
     d['identity_id'] = f.identity.id
     return d
 
 
-def pose_to_dict(f):
+def pose_to_dict(f: Any) -> Dict:
     return {
         'id': f.id,
         'labeler': f.labeler.id,
@@ -82,7 +94,7 @@ def pose_to_dict(f):
     }
 
 
-def simple_result(result, ty):
+def simple_result(result: Dict, ty: str) -> Dict:
     return {
         'result': [{
             'type': 'flat',
@@ -113,15 +125,15 @@ def filter_poses(ty, fn, used_kps, poses=None):
     return filtered
 
 
-def qs_to_result(result,
-                 stride=1,
-                 group=False,
-                 shuffle=False,
-                 deterministic_order=False,
-                 custom_order_by_id=None,
-                 frame_major=True,
-                 show_count=False,
-                 limit=100):
+def qs_to_result(result: QuerySet,
+                 stride: int = 1,
+                 group: bool = False,
+                 shuffle: bool = False,
+                 deterministic_order: bool = False,
+                 custom_order_by_id: List[int] = None,
+                 frame_major: bool = True,
+                 show_count: bool = False,
+                 limit: int = 100) -> Dict:
     count = result.count() if show_count else 0
 
     if shuffle:
@@ -169,30 +181,23 @@ def qs_to_result(result,
 
         if frame_major:
             frame_ids = set()
+
             def get_all_results():
-                with Timer('b'):
-                    all_results = collect(
-                        list(result.filter(**{
-                            frame_path + '__in': list(frame_ids)
-                        })), lambda t: access(t, frame_path + '__id'))
-                sys.stdout.flush()
+                all_results = collect(
+                    list(result.filter(**{frame_path + '__in': list(frame_ids)})),
+                    lambda t: access(t, frame_path + '__id'))
                 return all_results
 
             if custom_order_by_id is None:
                 frames = set()
-                with Timer('a'):
-#                    result.values(frame_path + '__video', frame_path + '__number',
-#                                  frame_path + '__id').print_sql()
-#                    sys.stdout.flush()
+                for inst in list(
+                        result.values(
+                            frame_path + '__video', frame_path + '__number',
+                            frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:limit]):
+                    frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
+                                inst[frame_path + '__id']))
+                    frame_ids.add(inst[frame_path + '__id'])
 
-                    for inst in list(
-                            result.values(
-                                frame_path + '__video', frame_path + '__number',
-                                frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)[:limit]):
-                        frames.add((inst[frame_path + '__video'], inst[frame_path + '__number'],
-                                    inst[frame_path + '__id']))
-                        frame_ids.add(inst[frame_path + '__id'])
-                sys.stdout.flush()
                 all_results = get_all_results()
                 frames = list(frames)
                 frames.sort(key=itemgetter(0, 1))
@@ -203,22 +208,18 @@ def qs_to_result(result,
                 for i, id_ in enumerate(custom_order_by_id):
                     id_to_position[id_] = i
                 with Timer('a'):
-#                    result.values(frame_path + '__video', frame_path + '__number',
-#                                  frame_path + '__id').print_sql()
-#                    sys.stdout.flush()
+                    #                    result.values(frame_path + '__video', frame_path + '__number',
+                    #                                  frame_path + '__id').print_sql()
+                    #                    sys.stdout.flush()
 
                     for inst in list(
                             result.values(
-                                'id',
-                                frame_path + '__video', frame_path + '__number',
+                                'id', frame_path + '__video', frame_path + '__number',
                                 frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)):
-                        frame_key = (
-                            inst[frame_path + '__video'],
-                            inst[frame_path + '__number'],
-                            inst[frame_path + '__id'])
-                        frames[frame_key] = min(
-                            id_to_position[inst['id']],
-                            frames[frame_key] if frame_key in frames else float('inf'))
+                        frame_key = (inst[frame_path + '__video'], inst[frame_path + '__number'],
+                                     inst[frame_path + '__id'])
+                        frames[frame_key] = min(id_to_position[inst['id']], frames[frame_key]
+                                                if frame_key in frames else float('inf'))
                         frame_ids.add(inst[frame_path + '__id'])
                 sys.stdout.flush()
                 all_results = get_all_results()
@@ -313,12 +314,98 @@ def group_results(agg_results):
 
 
 class _UnlabeledFace(object):
-
     @property
     def objects(self):
-        labeled_ids = set(x['face__id'] for x in
-                          FaceIdentity.objects.all().distinct('face__id').values('face__id'))
+        labeled_ids = set(
+            x['face__id']
+            for x in FaceIdentity.objects.all().distinct('face__id').values('face__id'))
         return Face.objects.exclude(id__in=labeled_ids)
+
 
 UnlabeledFace = _UnlabeledFace()
 
+
+def esper_js_globals():
+    schemas = []
+    things = {}
+    queries_ = {}
+
+    common_queries = queries.queries['datasets']
+
+    def load_queries(name):
+        mod = importlib.import_module('query.datasets.{}.queries'.format(name))
+        return mod.queries[name]
+
+    def get_fields(cls):
+        fields = cls._meta.get_fields()
+        return [f.name for f in fields if isinstance(f, models.Field)]
+
+    for name, ds in list(ModelDelegator().datasets().items()):
+        schema = []
+
+        # Get queries for dataset
+        if os.path.isfile('query/datasets/{}/queries.py'.format(name)):
+            ds_queries = load_queries(name)
+        else:
+            ds_queries = []
+        queries_[name] = common_queries + ds_queries
+
+        # Get schema for dataset
+        for cls in ds.all_models():
+            schema.append([cls, get_fields(getattr(ds, cls))])
+        schemas.append([name, schema])
+
+        if hasattr(ds, 'Thing'):
+            mod = importlib.import_module('query.datasets.{}.models'.format(name))
+            things[name] = {
+                d['id']: d['name']
+                for d in ds.Thing.objects.filter(
+                    type__name='person').order_by('name').values('id', 'name')
+            }
+        else:
+            things[name] = []
+
+    return {
+        'bucket': BUCKET,
+        'selected': os.environ.get('DATASET'),
+        'schemas': schemas,
+        'queries': queries_,
+        'things': things
+    }
+
+
+def result_with_metadata(result):
+    video_ids = set()
+    frame_ids = set()
+    labeler_ids = set([Labeler.objects.get(name='handlabeled-face').id])
+    gender_ids = set()
+    for group in result['result']:
+        for obj in group['elements']:
+            video_ids.add(obj['video'])
+            frame_ids.add(obj['min_frame'])
+            if 'max_frame' in obj:
+                frame_ids.add(obj['max_frame'])
+
+            if 'objects' in obj:
+                for bbox in obj['objects']:
+                    labeler_ids.add(bbox['labeler_id'])
+                    if 'gender_id' in bbox:
+                        gender_ids.add(bbox['gender_id'])
+
+    def to_dict(qs):
+        return {t['id']: t for t in list(qs.values())}
+
+    videos = to_dict(Video.objects.filter(id__in=video_ids))
+    frames = to_dict(Frame.objects.filter(id__in=frame_ids))
+    labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
+    genders = to_dict(Gender.objects.all())
+
+    return {
+        'count': result['count'],
+        'result': result['result'],
+        'type': result['type'],
+        'videos': videos,
+        'frames': frames,
+        'labelers': labelers,
+        'genders': genders
+    }

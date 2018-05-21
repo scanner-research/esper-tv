@@ -12,16 +12,14 @@ import tempfile
 import subprocess as sp
 import shlex
 import math
-import importlib
 import pysrt
 import requests
 import enum
 from storehouse import StorageConfig, StorageBackend
 import traceback
 from pprint import pprint
-
-from . import search
-import query.datasets.queries as queries
+from query.datasets.stdlib import *
+from query.datasets.prelude import *
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -39,65 +37,45 @@ def _print(*args):
     pprint((*args))
     sys.stdout.flush()
 
-
 # Renders home page
 def index(request):
-    schemas = []
-    things = {}
-    queries_ = {}
-
-    common_queries = queries.queries['datasets']
-
-    def load_queries(name):
-        mod = importlib.import_module('query.datasets.{}.queries'.format(name))
-        return mod.queries[name]
-
-    def get_fields(cls):
-        fields = cls._meta.get_fields()
-        return [f.name for f in fields if isinstance(f, models.Field)]
-
-    for name, ds in list(ModelDelegator().datasets().items()):
-        schema = []
-
-        # Get queries for dataset
-        if os.path.isfile('query/datasets/{}/queries.py'.format(name)):
-            ds_queries = load_queries(name)
-        else:
-            ds_queries = []
-        queries_[name] = common_queries + ds_queries
-
-        # Get schema for dataset
-        for cls in ds.all_models():
-            schema.append([cls, get_fields(getattr(ds, cls))])
-        schemas.append([name, schema])
-
-        if hasattr(ds, 'Thing'):
-            mod = importlib.import_module('query.datasets.{}.models'.format(name))
-            things[name] = {
-                d['id']: d['name']
-                for d in ds.Thing.objects.filter(
-                    type__name='person').order_by('name').values('id', 'name')
-            }
-        else:
-            things[name] = []
-
-    return render(
-        request, 'index.html', {
-            'globals':
-            json.dumps({
-                'bucket': BUCKET,
-                'selected': os.environ.get('DATASET'),
-                'schemas': schemas,
-                'queries': queries_,
-                'things': things
-            })
-        })
+    return render(request, 'index.html', {'globals': json.dumps(esper_js_globals())})
 
 
 # Run search routine
 def search2(request):
     params = json.loads(request.body.decode('utf-8'))
-    return search.search(params)
+
+    def make_error(err):
+        return JsonResponse({'error': err})
+
+    load_models(globals(), params['dataset'])
+
+    try:
+        fprint('Executing')
+        ############### vvv DANGER -- REMOTE CODE EXECUTION vvv ###############
+        _globals = {}
+        _locals = {}
+        for k in globals():
+            _globals[k] = globals()[k]
+        for k in locals():
+            _locals[k] = locals()[k]
+        exec ((params['code']), _globals, _locals)
+        result = _locals['FN']()
+        ############### ^^^ DANGER -- REMOTE CODE EXECUTION ^^^ ###############
+
+        if not isinstance(result, dict):
+            return make_error(
+                'Result must be a dict {{result, count, type}}, received type {}'.format(
+                    type(result)))
+
+        if not isinstance(result['result'], list):
+            return make_error('Result must be a frame list')
+
+        return JsonResponse({'success': result_with_metadata(result)})
+
+    except Exception:
+        return make_error(traceback.format_exc())
 
 
 # Get distinct values in schema
@@ -140,13 +118,15 @@ def srt_to_vtt(s):
 # Get subtitles for video
 def subtitles(request):
     m = ModelDelegator(request.GET.get('dataset'))
-    m.import_all(locals())
+    m.import_all(globals())
 
     video_id = request.GET.get('video')
     video = Video.objects.get(id=video_id)
-    base, _ = os.path.splitext(video.path)
 
-    s = storage.read('{}.cc5.srt'.format(base)).decode('utf-8')
+    srt = video.srt_extension
+    sub_path = '/app/subs/{}.{}.srt'.format(video.item_name(), srt)
+
+    s = open(sub_path, 'rb').read().decode('utf-8')
     vtt = srt_to_vtt(s)
 
     return HttpResponse(vtt, content_type="text/vtt")
@@ -159,8 +139,8 @@ def save_frame_labels(m, groups):
     labeled_tag, _ = m.Tag.objects.get_or_create(name='handlabeled-face:labeled')
     verified_tag, _ = m.Tag.objects.get_or_create(name='tmp-verified')
 
-    all_frames = [(elt['video'], elt['min_frame'], elt['objects'])
-                  for group in groups for elt in group['elements']]
+    all_frames = [(elt['video'], elt['min_frame'], elt['objects']) for group in groups
+                  for elt in group['elements']]
 
     frame_ids = [
         m.Frame.objects.get(video_id=vid, number=frame_num).id

@@ -100,6 +100,7 @@ class Face(base.Attribute, base.BoundingBox):
     shot = base.ForeignKey(Shot, null=True)
     background = models.BooleanField(default=False)
     is_host = models.BooleanField(default=False)
+    blurriness = models.FloatField(null=True)
 
     class Meta:
         unique_together = ('labeler', 'person')
@@ -126,3 +127,7 @@ class FaceFeatures(base.Attribute, base.Features):
 
     class Meta:
         unique_together = ('labeler', 'face')
+
+
+class ScannerJob(base.Model):
+    name = base.CharField()

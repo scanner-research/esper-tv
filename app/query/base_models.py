@@ -313,9 +313,10 @@ class ModelDelegator:
     def datasets(self):
         return datasets
 
-    def import_all(self, globals_):
+    def import_all(self, vars_):
         for model in self._dataset.all_models():
-            globals_[model] = getattr(self, model)
+            if not model in vars_:
+                vars_[model] = getattr(self, model)
 
     def __getattr__(self, k):
         return getattr(self._dataset, k)
