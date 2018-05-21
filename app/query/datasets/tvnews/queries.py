@@ -540,6 +540,8 @@ def groups_of_faces_by_distance_threshold():
             faces = face_qs.filter(
                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
             ).distinct('person__frame__video')
+            if faces.count() == 0:
+                continue
             results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
             results_by_bucket[(t, t + increment, len(face_ids))] = results
 
@@ -592,13 +594,94 @@ def face_search_by_id():
     face_sims = face_knn(ids=target_face_ids, min_threshold=min_thresh, max_threshold=max_thresh,
                          not_ids=not_target_face_ids)
     
+    face_sims_by_bucket = {} 
+    idx = 0
+    max_idx = len(face_sims)
+    for t in frange(min_thresh, max_thresh, increment):
+        start_idx = idx
+        cur_thresh = t + increment
+        while idx < max_idx and face_sims[idx][1] < cur_thresh:
+            idx += 1
+        face_sims_by_bucket[t] = face_sims[start_idx:idx]
+    
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
-        face_ids = [x for x, _ in filter(lambda z: z[1] >= t and z[1] < t + increment, face_sims)]
+        face_ids = [x for x, _ in face_sims_by_bucket[t]]
         if len(face_ids) != 0:
             faces = face_qs.filter(
                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
             ).distinct('person__frame__video')
+            if faces.count() == 0:
+                continue
+            results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
+            results_by_bucket[(t, t + increment, len(face_ids))] = results
+
+    if len(results_by_bucket) == 0:
+        raise Exception('No results to show')
+
+    agg_results = [('in range=({:0.2f}, {:0.2f}), count={}'.format(k[0], k[1], k[2]), results_by_bucket[k])
+                   for k in sorted(results_by_bucket.keys())]
+
+    return group_results(agg_results)
+
+
+@query('Face search using svm by id')
+def face_search_svm_by_id():
+    # Wolf Blitzer
+#     target_face_ids = [975965, 5254043, 844004, 105093, 3801699, 4440669, 265071]
+#     not_target_face_ids =  [
+#         1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608,
+#         4831099, 2172821, 1981350, 1095709, 4427683, 1762835]
+    
+    # Melania Trump
+    target_face_ids = [
+        2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617,
+        1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072]
+    not_target_face_ids = []
+    
+    # Bernie Sanders
+    # target_face_ids = [
+    #     644710, 4686364, 2678025, 62032, 13248, 4846879, 4804861, 561270, 2651257, 
+    #     2083010, 2117202, 1848221, 2495606, 4465870, 3801638, 865102, 3861979, 4146727, 
+    #     3358820, 2087225, 1032403, 1137346, 2220864, 5384396, 3885087, 5107580, 2856632,
+    #     335131, 4371949, 533850, 5384760, 3335516]
+    # not_target_face_ids = [
+    #     2656438, 1410140, 4568590, 2646929, 1521533, 1212395, 178315, 1755096, 3476158,
+    #     3310952, 1168204, 3062342, 1010748, 1275607, 2190958, 2779945, 415610, 1744917, 
+    #     5210138, 3288162, 5137166, 4169061, 3774070, 2595170, 382055, 2365443, 712023, 
+    #     5214225, 178251, 1039121, 5336597, 525714, 4522167, 3613622, 5161408, 2091095, 
+    #     741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225, 
+    #     178251]
+    
+    increment = 0.1
+    min_thresh = -2.0
+    max_thresh = 2.0
+    max_results_per_group = 50
+    exclude_labeled = False
+
+    face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
+
+    face_scores = face_svm(target_face_ids, not_target_face_ids, 1000)
+    
+    face_scores_by_bucket = {} 
+    idx = 0
+    max_idx = len(face_scores)
+    for t in frange(min_thresh, max_thresh, increment):
+        start_idx = idx
+        cur_thresh = t + increment
+        while idx < max_idx and face_scores[idx][1] < cur_thresh:
+            idx += 1
+        face_scores_by_bucket[t] = face_scores[start_idx:idx]
+    
+    results_by_bucket = {}
+    for t in frange(min_thresh, max_thresh, increment):
+        face_ids = [x for x, _ in face_scores_by_bucket[t]]
+        if len(face_ids) != 0:
+            faces = face_qs.filter(
+                id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
+            ).distinct('person__frame__video')
+            if faces.count() == 0:
+                continue
             results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
             results_by_bucket[(t, t + increment, len(face_ids))] = results
 
