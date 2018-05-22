@@ -21,7 +21,7 @@ from django.db.models import F
 from django.db.models.functions import Cast
 import django.db.models as models
 from query.datasets.prelude import collect, BUCKET
-
+from query.base_models import Track
 
 def load_models(globals: Dict, dataset: Union[str, None] = None) -> None:
     if dataset is None:
@@ -134,6 +134,7 @@ def qs_to_result(result: QuerySet,
                  frame_major: bool = True,
                  show_count: bool = False,
                  limit: int = 100) -> Dict:
+
     count = result.count() if show_count else 0
 
     if shuffle:

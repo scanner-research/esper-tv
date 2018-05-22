@@ -12,6 +12,7 @@ from timeit import default_timer as now
 from pyspark.sql import SparkSession, Row
 from functools import reduce
 from typing import Dict
+from pprint import pprint
 
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
@@ -80,21 +81,6 @@ if get_ipython() is not None:
     sns.set_style('white')
 
     from tqdm import tqdm_notebook as tqdm
-
-    import ipywidgets as widgets
-    from traitlets import Unicode
-    class EsperWidget(widgets.DOMWidget):
-        _view_name = Unicode('EsperView').tag(sync=True)
-        _view_module = Unicode('esper').tag(sync=True)
-        _view_module_version = Unicode('0.1.0').tag(sync=True)
-
-    def esper_widget(*args, **kwargs):
-        # from IPython.core.display import Javascript, HTML, display
-        # display(HTML("""
-        # <script type="text/javascript" src="//{hostname}/static/bundles/common.js"></script>
-        # <script type="text/javascript" src="//{hostname}/static/bundles/jupyter.js"></script>
-        # """.format(hostname=os.environ.get('HOSTNAME'))))
-        return EsperWidget(*args, **kwargs)
 
 else:
     from tqdm import tqdm
@@ -826,12 +812,12 @@ def frange(x, y, jump):
         yield x
         x += jump
 
-def esper_widget(result):
+def esper_widget(result, **kwargs):
     from query.datasets.stdlib import result_with_metadata, esper_js_globals
     import esper_jupyter
+    if not 'select_mode' in kwargs:
+        kwargs['select_mode'] = 1
     return esper_jupyter.EsperWidget(
         result=result_with_metadata(result),
         jsglobals=esper_js_globals(),
-        settings={
-            'select_mode': 1  # individual
-        })
+        settings=kwargs)

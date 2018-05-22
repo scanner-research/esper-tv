@@ -28,21 +28,25 @@ class GroupsView extends React.Component {
     document.addEventListener('keypress', this._onKeyPress);
   }
 
-  _getColorClass = (i) => {
+  _isSelected = (i) => {
     let select_mode = this._displayOptions.get('select_mode');
+    return (select_mode == SELECT_MODES.RANGE &&
+            (this.state.selected_start == i ||
+             (this.state.selected_start <= i && i <= this.state.selected_end))) ||
+           (select_mode == SELECT_MODES.INDIVIDUAL && this.state.selected.has(i));
+  }
+
+  _getColorClass = (i) => {
     if (this.state.ignored.has(i)) {
       return 'ignored ';
-    } else if (
-      (select_mode == SELECT_MODES.RANGE &&
-      (this.state.selected_start == i ||
-       (this.state.selected_start <= i && i <= this.state.selected_end))) ||
-      (select_mode == SELECT_MODES.INDIVIDUAL && this.state.selected.has(i))) {
+    } else if (this._isSelected(i)) {
       return 'selected ';
     } else if (this.state.positive_ex.has(i)){
       return 'positive ';
     } else if (this.state.negative_ex.has(i)){
       return 'negative ';
     }
+    return '';
   }
 
   _onKeyPress = (e) => {
@@ -130,12 +134,19 @@ class GroupsView extends React.Component {
         }
       }
     } else if (select_mode == SELECT_MODES.INDIVIDUAL) {
-      this.state.selected.add(e);
-      console.log(this.state.selected);
+      if (this.state.selected.has(e)) {
+        this.state.selected.delete(e);
+      } else {
+        this.state.selected.add(e);
+      }
+
+      // Nested collection update, have to force re-render
       this.forceUpdate();
     }
 
-    this._python.update({selected: Array.from(this.state.selected)});
+    if (this._python) {
+      this._python.update({selected: Array.from(this.state.selected)});
+    }
   }
 
   _onIgnore = (e) => {
@@ -255,7 +266,9 @@ class GroupView extends React.Component {
     let group = this.props.group;
     return (
       <SettingsContext.Consumer>{displayOptions =>
-        <div className={'group ' + (this.props.colorClass || '')} onMouseEnter={this._onMouseEnter} onMouseLeave={this._onMouseLeave}>
+        <div className={'group ' + this.props.colorClass} onMouseEnter={this._onMouseEnter}
+             onMouseLeave={this._onMouseLeave}>
+          {this.props.colorClass != '' ? <div className={'select-overlay ' + this.props.colorClass} /> : <div />}
           {displayOptions.get('timeline_view') && group.type == 'contiguous'
            ? <TimelineView group={group} expand={this.state.expand} searchResult={this.props.searchResult} />
            : <div className={group.type}>
@@ -332,13 +345,13 @@ export default class SearchResultView extends React.Component {
     };
 
     if (_.size(this.props.settings) > 0) {
+      console.log(this.props.settings);
       Object.assign(settings, this.props.settings);
     } else {
       let cached = localStorage.getItem('displayOptions');
       if (cached !== null) {
         Object.assign(settings, JSON.parse(cached));
       }
-
     }
 
     this._settings = observable.map(settings);

@@ -58,7 +58,7 @@ def segments_about_donald_trump():
             things__name='donald trump'))
 
 @query("Segments about North Korea")
-def segments_about_donald_trump():
+def segments_about_north_korea():
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',

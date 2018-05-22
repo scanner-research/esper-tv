@@ -6,6 +6,7 @@ import statsmodels.api as sm
 
 MALE_COLOR = 'tab:blue'
 FEMALE_COLOR = 'tab:red'
+MARKER_SIZE = 50
 
 
 def align(col, all_dfs):
@@ -28,19 +29,20 @@ def screen_speak_scatter(screen_df, screen_nh_df, speak_df, speak_nh_df, col, ti
     ax.axhline(50, color='black', linestyle='--')
 
     if 'screen' in plots:
-        screen_df.plot('index', 'M%', ax=ax, color=MALE_COLOR, kind='scatter', marker='s')
-        screen_df.plot('index', 'F%', ax=ax, color=FEMALE_COLOR, kind='scatter', marker='s')
+        screen_df.plot('index', 'M%', ax=ax, color=MALE_COLOR, kind='scatter', marker='s', s=MARKER_SIZE)
+        screen_df.plot('index', 'F%', ax=ax, color=FEMALE_COLOR, kind='scatter', marker='s', s=MARKER_SIZE)
 
         if len(plots) == 1:
             pairs = list(zip(screen_df['M%'].tolist(), screen_df['F%'].tolist()))
             c = matplotlib.collections.LineCollection(
                 [((i, a), (i, b)) for (i, (a, b)) in enumerate(pairs)],
-                colors=[MALE_COLOR if a > b else FEMALE_COLOR for (a, b) in pairs])
+                colors=[MALE_COLOR if a > b else FEMALE_COLOR for (a, b) in pairs],
+                linewidths=[3 for _ in range(len(pairs))])
             ax.add_collection(c)
 
     if 'screen_nh' in plots:
-        screen_nh_df.plot('index', 'M%', ax=ax, color=MALE_COLOR, kind='scatter', marker='x')
-        screen_nh_df.plot('index', 'F%', ax=ax, color=FEMALE_COLOR, kind='scatter', marker='x')
+        screen_nh_df.plot('index', 'M%', ax=ax, color=MALE_COLOR, kind='scatter', marker='x', s=MARKER_SIZE)
+        screen_nh_df.plot('index', 'F%', ax=ax, color=FEMALE_COLOR, kind='scatter', marker='x', s=MARKER_SIZE)
 
         # print(model.summary())
         # n = len(screen_nh_df.index)
@@ -68,6 +70,7 @@ def screen_speak_scatter(screen_df, screen_nh_df, speak_df, speak_nh_df, col, ti
     ax.set_xlabel('')
     ax.set_xticks(range(len(screen_df[col])))
     ax.set_xticklabels(screen_df[col], rotation=45, horizontalalignment='right')
+    ax.tick_params(labelsize='large')
 
     legends = {
         'screen': ['Screen time - male', 'Screen time - female'],

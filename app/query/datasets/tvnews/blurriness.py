@@ -1,6 +1,7 @@
 from query.datasets.prelude import *
 import socket
 import scannerpy
+import cv2
 
 @scannerpy.register_python_op(name='Blurriness')
 def blurriness(config, frame: scannerpy.FrameType, bboxes: bytes) -> bytes:
@@ -17,7 +18,7 @@ def blurriness(config, frame: scannerpy.FrameType, bboxes: bytes) -> bytes:
             'blurriness': cv2.Laplacian(img, cv2.CV_64F).var()
         })
 
-    return json.dumps(results)
+    return json.dumps(results).encode()
 
 
 db = make_scanner_db(multiworker=True)

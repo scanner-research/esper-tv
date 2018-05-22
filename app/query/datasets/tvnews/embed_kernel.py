@@ -1,5 +1,5 @@
 import scannerpy
-from scannerpy.stdlib import kernel, readers
+from scannerpy.stdlib import tensorflow, readers
 import tensorflow as tf
 import facenet
 import cv2
@@ -10,7 +10,7 @@ import numpy as np
 model_path = '/app/deps/facenet/models/20170512-110547/'
 
 
-class EmbedFaceKernel(kernel.TensorFlowKernel):
+class EmbedFaceKernel(tensorflow.TensorFlowKernel):
     def build_graph(self, sess):
         meta_file, ckpt_file = facenet.get_model_filenames(model_path)
         g = tf.Graph()
