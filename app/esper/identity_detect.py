@@ -1,5 +1,5 @@
-from query.datasets.prelude import *
-from query.datasets.tvnews.embed_kernel import EmbedFaceKernel
+from esper.prelude import *
+from esper.tvnews.embed_kernel import EmbedFaceKernel
 from sklearn.neighbors import NearestNeighbors
 from scannerpy.stdlib import writers
 import cv2

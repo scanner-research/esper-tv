@@ -30,11 +30,14 @@ export let EsperView = widgets.DOMWidgetView.extend({
     };
 
     ReactDOM.render(
-      <PythonContext.Provider value={{fields: fields, update: updateFields}}>
+      <Provider values={[
+        [PythonContext, {fields: fields, update: updateFields}],
+        [BackendSettingsContext, globals],
+        [SearchContext, searchResult]]}>
         <div className='esper' onClick={(e) => { e.stopPropagation(); }}>
-          <SearchResultView searchResult={searchResult} globals={globals} jupyter={Jupyter} settings={settings} />
+          <SearchResultView jupyter={Jupyter} settings={settings} />
         </div>
-      </PythonContext.Provider>,
+      </Provider>,
       this.el);
   },
 });

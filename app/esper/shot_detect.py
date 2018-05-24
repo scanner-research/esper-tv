@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 from scannerpy.stdlib import readers
 from scipy.spatial import distance
 from unionfind import unionfind

@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 from scannerpy.stdlib import pipelines, readers
 
 LABELER, _ = Labeler.objects.get_or_create(name='tinyfaces')

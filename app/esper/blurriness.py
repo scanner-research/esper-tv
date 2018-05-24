@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 import socket
 import scannerpy
 import cv2

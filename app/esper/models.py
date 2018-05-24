@@ -1,21 +1,20 @@
 from django.db import models
-import query.base_models as base
 import math
 import numpy as np
 import tempfile
 
 
-class Show(base.Model):
+class Show(models.Model):
     name = base.CharField()
 
 
-class Channel(base.Model):
+class Channel(models.Model):
     name = base.CharField()
 
 
 class Video(base.Video):
-    channel = base.ForeignKey(Channel)
-    show = base.ForeignKey(Show)
+    channel = models.ForeignKey(Channel)
+    show = models.ForeignKey(Show)
     time = models.DateTimeField()
     commercials_labeled = models.BooleanField(default=False)
     srt_extension = base.CharField()
@@ -27,24 +26,24 @@ class Video(base.Video):
         return '.'.join(self.path.split('/')[-1].split('.')[:-1])
 
 
-class Tag(base.Model):
+class Tag(models.Model):
     name = base.CharField()
 
 
-class VideoTag(base.Model):
-    video = base.ForeignKey(Video)
-    tag = base.ForeignKey(Tag)
+class VideoTag(models.Model):
+    video = models.ForeignKey(Video)
+    tag = models.ForeignKey(Tag)
 
 
 class Frame(base.Frame):
-    tags = base.ManyToManyField(Tag)
+    tags = models.ManyToManyField(Tag)
 
 
 class Labeler(base.Labeler):
     pass
 
 
-class Gender(base.Model):
+class Gender(models.Model):
     name = base.CharField()
 
 
@@ -52,20 +51,20 @@ class Commercial(base.Track):
     pass
 
 
-class ThingType(base.Model):
+class ThingType(models.Model):
     name = base.CharField()
 
 
-class Thing(base.Model):
+class Thing(models.Model):
     name = base.CharField()
-    type = base.ForeignKey(ThingType)
+    type = models.ForeignKey(ThingType)
 
     class Meta:
         unique_together = ('name', 'type')
 
 
 class Segment(base.Track):
-    things = base.ManyToManyField(Thing)
+    things = models.ManyToManyField(Thing)
     polarity = models.FloatField(null=True)
     subjectivity = models.FloatField(null=True)
 
@@ -74,14 +73,14 @@ class Shot(base.Track):
     in_commercial = models.BooleanField(default=False)
 
 
-class Identity(base.Model):
+class Identity(models.Model):
     name = base.CharField(null=True)
-    thing = base.ForeignKey(Thing, null=True)
+    thing = models.ForeignKey(Thing, null=True)
 
 
 class Speaker(base.Track):
-    gender = base.ForeignKey(Gender)
-    identity = base.ForeignKey(Identity, null=True)
+    gender = models.ForeignKey(Gender)
+    identity = models.ForeignKey(Identity, null=True)
 
 
 class Person(base.Noun):
@@ -89,15 +88,15 @@ class Person(base.Noun):
 
 
 class Pose(base.Attribute, base.Pose):
-    person = base.ForeignKey(Person)
+    person = models.ForeignKey(Person)
 
     class Meta:
         unique_together = ('labeler', 'person')
 
 
 class Face(base.Attribute, base.BoundingBox):
-    person = base.ForeignKey(Person)
-    shot = base.ForeignKey(Shot, null=True)
+    person = models.ForeignKey(Person)
+    shot = models.ForeignKey(Shot, null=True)
     background = models.BooleanField(default=False)
     is_host = models.BooleanField(default=False)
     blurriness = models.FloatField(null=True)
@@ -107,27 +106,27 @@ class Face(base.Attribute, base.BoundingBox):
 
 
 class FaceGender(base.Attribute):
-    face = base.ForeignKey(Face)
-    gender = base.ForeignKey(Gender)
+    face = models.ForeignKey(Face)
+    gender = models.ForeignKey(Gender)
 
     class Meta:
         unique_together = ('labeler', 'face')
 
 
 class FaceIdentity(base.Attribute):
-    face = base.ForeignKey(Face)
-    identity = base.ForeignKey(Thing)
+    face = models.ForeignKey(Face)
+    identity = models.ForeignKey(Thing)
 
     class Meta:
         unique_together = ('labeler', 'face')
 
 
 class FaceFeatures(base.Attribute, base.Features):
-    face = base.ForeignKey(Face)
+    face = models.ForeignKey(Face)
 
     class Meta:
         unique_together = ('labeler', 'face')
 
 
-class ScannerJob(base.Model):
+class ScannerJob(models.Model):
     name = base.CharField()

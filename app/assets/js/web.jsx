@@ -13,19 +13,19 @@ import SearchResult from 'models/SearchResult.jsx';
 import SearchInputView from 'views/SearchInputView.jsx';
 import SearchResultView from 'views/SearchResultView.jsx';
 import axios from 'axios';
+import Provider from 'utils/Provider.jsx';
+import {BackendSettingsContext, SearchContext} from 'views/contexts.jsx';
 
 // Make AJAX work with Django's CSRF protection
 // https://stackoverflow.com/questions/39254562/csrf-with-django-reactredux-using-axios
 axios.defaults.xsrfHeaderName = "X-CSRFToken";
-
-window.DATASET = observable(GLOBALS.selected);
 
 @observer
 export default class App extends React.Component {
   state = {
     valid: true,
     clickedBox: null,
-    searchResult: null
+    searchResult: null,
   }
 
   constructor() {
@@ -53,12 +53,16 @@ export default class App extends React.Component {
         <div>
           <h1>Esper</h1>
           <div className='home'>
-            <SearchInputView onSearch={this._onSearch} clickedBox={this.state.clickedBox} />
-            {this.state.searchResult !== null
-             ? (this.state.searchResult.result.length > 0
-              ? <SearchResultView searchResult={this.state.searchResult} globals={GLOBALS} jupyter={null} />
-              : <div>No results matching query.</div>)
-             : <div />}
+            <Provider values={[
+              [BackendSettingsContext, GLOBALS],
+              [SearchContext, this.state.searchResult]]}>
+              <SearchInputView onSearch={this._onSearch} clickedBox={this.state.clickedBox} />
+              {this.state.searchResult !== null
+               ? (this.state.searchResult.result.length > 0
+                ? <SearchResultView jupyter={null} settings={{}} />
+                : <div>No results matching query.</div>)
+               : <div />}
+            </Provider>
           </div>
         </div>
       );

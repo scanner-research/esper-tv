@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
-from .base_models import ModelDelegator
 from timeit import default_timer as now
 import django.db.models as models
 from concurrent.futures import ThreadPoolExecutor
@@ -18,8 +17,8 @@ import enum
 from storehouse import StorageConfig, StorageBackend
 import traceback
 from pprint import pprint
-from query.datasets.stdlib import *
-from query.datasets.prelude import *
+from esper.stdlib import *
+from esper.prelude import *
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -43,13 +42,11 @@ def index(request):
 
 
 # Run search routine
-def search2(request):
+def search(request):
     params = json.loads(request.body.decode('utf-8'))
 
     def make_error(err):
         return JsonResponse({'error': err})
-
-    load_models(globals(), params['dataset'])
 
     try:
         fprint('Executing')

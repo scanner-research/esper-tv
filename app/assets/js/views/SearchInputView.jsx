@@ -44,7 +44,7 @@ class SchemaView extends React.Component {
       } else {
         this.setState({showExamples: false, loadingExamples: true});
         axios
-          .post('/api/schema', {dataset: DATASET, cls_name: cls_name, field: field})
+          .post('/api/schema', {cls_name: cls_name, field: field})
           .then(((response) => {
             if (response.data.hasOwnProperty('error')) {
               this.examples[full_name] = false;
@@ -65,7 +65,7 @@ class SchemaView extends React.Component {
     return (
       <div className='schema'>
         <div className='schema-classes'>
-          {_.find(GLOBALS.schemas, (l) => l[0] == DATASET)[1].map((cls, i) =>
+          {GLOBALS.schemas.map((cls, i) =>
             <Rb.Panel key={i} className='schema-class'>
               <div className='schema-class-name'>{cls[0]}</div>
               <div className='schema-class-fields'>
@@ -111,7 +111,7 @@ export default class SearchInputView extends React.Component {
     e.preventDefault();
     this.setState({searching: true, error: null});
     axios
-      .post('/api/search2', {dataset: DATASET, code: this._editor.editor.getValue()})
+      .post('/api/search', {code: this._editor.editor.getValue()})
       .then((response) => {
         if (response.data.success) {
           this.props.onSearch(response.data.success);
@@ -121,15 +121,11 @@ export default class SearchInputView extends React.Component {
       })
       .catch((error) => {
         console.error(error);
-        this.setState({error: error});
+        this.setState({error: error.toString()});
       })
       .then(() => {
         this.setState({searching: false});
       });
-  }
-
-  _onChangeDataset = (e) => {
-    DATASET.set(e.target.value);
   }
 
   /* Hacks to avoid code getting wiped out when setState causes the form to re-render. */
@@ -142,7 +138,7 @@ export default class SearchInputView extends React.Component {
   }
 
   render() {
-    let exampleQueries = GLOBALS.queries[DATASET];
+    let exampleQueries = GLOBALS.queries;
     if (this.query === null) {
       this.query = exampleQueries[0][1];
     }
@@ -174,14 +170,6 @@ export default class SearchInputView extends React.Component {
         <Rb.Button onClick={() => {this.setState({showExampleQueries: !this.state.showExampleQueries})}} active={this.state.showExampleQueries}>
           {this.state.showExampleQueries ? 'Hide' : 'Show'} example queries
         </Rb.Button>
-        <Rb.FormGroup>
-          <Rb.ControlLabel>Dataset:</Rb.ControlLabel>
-          <Rb.FormControl componentClass="select" onChange={this._onChangeDataset} defaultValue={DATASET}>
-            {GLOBALS.schemas.map((l, i) =>
-              <option key={i} value={l[0]}>{l[0]}</option>
-            )}
-          </Rb.FormControl>
-        </Rb.FormGroup>
         {this.state.searching
          ? <img className='spinner' />
          : <div />}

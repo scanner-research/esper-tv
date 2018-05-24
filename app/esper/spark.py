@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 
 spark = SparkWrapper()
 

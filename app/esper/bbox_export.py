@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 import os
 
 paths = ['FOXNEWSW_20160919_230000_On_the_Record_With_Brit_Hume.mp4', 'FOXNEWS_20120724_210000_The_Five.mp4']

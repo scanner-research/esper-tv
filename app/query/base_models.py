@@ -26,100 +26,7 @@ def CharField(*args, **kwargs):
     return models.CharField(*args, max_length=MAX_STR_LEN, **kwargs)
 
 
-class ForeignKey(object):
-    def __init__(self, model, on_delete=models.CASCADE, **kwargs):
-        self._make_key = lambda name: models.ForeignKey(model, related_query_name=name.lower(), on_delete=on_delete, **kwargs)
-
-
-class ManyToManyField(object):
-    def __init__(self, model, **kwargs):
-        self._make_key = lambda name: models.ManyToManyField(model, related_query_name=name.lower(), **kwargs)
-
-
-class Dataset(object):
-    def __init__(self, name):
-        self.name = name
-        self.models = []
-        if name not in datasets:
-            datasets[name] = self
-
-    def __enter__(self):
-        global current_dataset
-        current_dataset = datasets[self.name]
-
-    def __exit__(self, type, val, traceback):
-        global current_dataset
-        current_dataset = None
-
-    def register_model(self, name, cls):
-        self.models.append(name)
-        setattr(self, name, cls)
-
-    def all_models(self):
-        return self.models
-
-
-class DatasetMeta(ModelBase):
-    def __new__(cls, name, bases, attrs):
-        global current_dataset
-        primary_base = bases[0]
-        mixins = bases[1:]
-
-        # Don't modify base models (i.e. the ones in this file)
-        if current_dataset is None:
-            # Don't create a table for base models
-            class Meta:
-                abstract = True
-
-            attrs['Meta'] = Meta
-            attrs['objects'] = BulkUpdateManager()
-            return super(DatasetMeta, cls).__new__(cls, name, bases, attrs)
-
-        # Model-specific fields
-        if primary_base is Frame:
-            attrs['video'] = ForeignKey(current_dataset.Video)
-
-            class Meta:
-                unique_together = ('video', 'number')
-
-            attrs['Meta'] = Meta
-
-        if primary_base is Noun:
-            attrs['frame'] = ForeignKey(current_dataset.Frame)
-
-        elif primary_base is Attribute:
-            attrs['labeler'] = ForeignKey(current_dataset.Labeler)
-
-        elif primary_base is Track:
-            attrs['video'] = ForeignKey(current_dataset.Video)
-            attrs['labeler'] = ForeignKey(current_dataset.Labeler)
-
-        # Add mixins
-        for mixin in mixins:
-            for k, v in list(mixin.__dict__.items()):
-                if not hasattr(super(mixin), k) and k not in [
-                        '__dict__', '__weakref__', '__module__'
-                ]:
-                    attrs[k] = v
-
-        # Initialize foreign keys with class name
-        for key, val in list(attrs.items()):
-            if isinstance(val, ForeignKey) or isinstance(val, ManyToManyField):
-                attrs[key] = val._make_key(name)
-
-        # Prefix class name with dataset name to avoid clashes across datasets
-        namespaced_name = '{}_{}'.format(current_dataset.name, name)
-
-        # Call out to Django ModelBase to create the class/table
-        new_cls = super(DatasetMeta, cls).__new__(cls, namespaced_name, tuple(bases), attrs)
-
-        # Remember the created class on our Dataset object
-        current_dataset.register_model(name, new_cls)
-
-        return new_cls
-
-
-class Video(models.Model, metaclass=DatasetMeta):
+class Video(models.Model):
     path = CharField(db_index=True)
     num_frames = models.IntegerField()
     fps = models.FloatField()
@@ -128,7 +35,7 @@ class Video(models.Model, metaclass=DatasetMeta):
     has_captions = models.BooleanField(default=False)
 
     def copy(self, path):
-        from query.datasets.prelude import storage
+        from esper.prelude import storage
         with open(path, 'wb') as f:
             f.write(storage.read(self.path))
 
@@ -165,22 +72,36 @@ class Video(models.Model, metaclass=DatasetMeta):
     def frame_time(self, frame):
         return frame / self.fps
 
+    class Meta:
+        abstract = True
 
-class Frame(models.Model, metaclass=DatasetMeta):
+
+class Frame(models.Model):
     number = models.IntegerField(db_index=True)
+    video = models.ForeignKey(Video)
 
+    class Meta:
+        abstract = True
 
-class Labeler(models.Model, metaclass=DatasetMeta):
+class Labeler(models.Model):
     name = CharField()
 
+    class Meta:
+        abstract = True
 
-class Noun(models.Model, metaclass=DatasetMeta):
-    pass
+
+class Noun(models.Model):
+    frame = models.ForeignKey(Frame)
+
+    class Meta:
+        abstract = True
 
 
-class Track(models.Model, metaclass=DatasetMeta):
+class Track(models.Model):
     min_frame = models.IntegerField()
     max_frame = models.IntegerField()
+    video = models.ForeignKey(Video)
+    labeler = models.ForeignKey(Labeler)
 
     @staticmethod
     def duration_expr():
@@ -191,16 +112,18 @@ class Track(models.Model, metaclass=DatasetMeta):
     def duration(self):
         return (self.max_frame - self.min_frame) / int(self.video.fps)
 
-
-class Attribute(models.Model, metaclass=DatasetMeta):
-    pass
-
-
-class Model(models.Model, metaclass=DatasetMeta):
-    pass
+    class Meta:
+        abstract = True
 
 
-class BoundingBox(object):
+class Attribute(models.Model):
+    labeler = models.ForeignKey(Labeler)
+
+    class Meta:
+        abstract = True
+
+
+class BoundingBox(models.Model):
     bbox_x1 = models.FloatField()
     bbox_x2 = models.FloatField()
     bbox_y1 = models.FloatField()
@@ -217,12 +140,15 @@ class BoundingBox(object):
     def bbox_to_numpy(self):
         return np.array([self.bbox_x1, self.bbox_x2, self.bbox_y1, self.bbox_y2, self.bbox_score])
 
+    class Meta:
+        abstract = True
+
 
 feat_nn = None
 feat_ids = None
 
 
-class Features(object):
+class Features(models.Model):
     features = models.BinaryField()
     distto = models.FloatField(null=True)
 
@@ -259,8 +185,11 @@ class Features(object):
             feat.distto = dist
             feat.save()
 
+    class Meta:
+        abstract = True
 
-class Pose(object):
+
+class Pose(models.Model):
     keypoints = models.BinaryField()
 
     def _format_keypoints(self):
@@ -304,19 +233,5 @@ class Pose(object):
         base = kp[self.POSE_KEYPOINTS + self.FACE_KEYPOINTS:, :]
         return [base[:self.HAND_KEYPOINTS, :], base[self.HAND_KEYPOINTS:, :]]
 
-
-class ModelDelegator:
-    def __init__(self, name=None):
-        if name is not None:
-            self._dataset = datasets[name]
-
-    def datasets(self):
-        return datasets
-
-    def import_all(self, vars_):
-        for model in self._dataset.all_models():
-            if not model in vars_:
-                vars_[model] = getattr(self, model)
-
-    def __getattr__(self, k):
-        return getattr(self._dataset, k)
+    class Meta:
+        abstract = True

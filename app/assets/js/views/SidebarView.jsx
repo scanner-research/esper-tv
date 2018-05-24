@@ -2,7 +2,8 @@ import React from 'react';
 import {observer} from 'mobx-react';
 import * as Rb from 'react-bootstrap';
 import _ from 'lodash';
-import {SettingsContext} from './contexts.jsx';
+import {FrontendSettingsContext, SearchContext} from './contexts.jsx';
+import Consumer from 'utils/Consumer.jsx';
 
 export let LABEL_MODES = Object.freeze({
   DEFAULT: 0,
@@ -166,22 +167,22 @@ class OptionsView extends React.Component {
   ]
 
   render() {
-    return <SettingsContext.Consumer>{displayOptions =>
+    return <Consumer contexts={[FrontendSettingsContext, SearchContext]}>{(frontendSettings, searchResult) =>
       <div className='options'>
         <h2>Options</h2>
         <form>
           {this.fields.map((field, i) => {
-             return (!field.filter || field.filter(this.props.searchResult.result[0]))
+             return (!field.filter || field.filter(searchResult.result[0]))
                  ?  <Rb.FormGroup key={i}>
                    <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
                    {{
                       range: () => (
                         <span>
                           <input type="range" min={field.opts.min} max={field.opts.max}
-                                 step={field.opts.step} value={displayOptions.get(field.key)}
+                                 step={field.opts.step} value={frontendSettings.get(field.key)}
                                  onChange={(e) => {
                                      if (!field.opts.disable_autoupdate) {
-                                       displayOptions.set(field.key, e.target.value)
+                                       frontendSettings.set(field.key, e.target.value)
                                      }
                                  }}/>
                           {/*
@@ -190,27 +191,27 @@ class OptionsView extends React.Component {
                               field vs. moving a slider). See:
                               https://stackoverflow.com/questions/30727837/react-change-input-defaultvalue-by-passing-props--
                             */}
-                          <span key={displayOptions.get(field.key)}>
+                          <span key={frontendSettings.get(field.key)}>
                             <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
-                                            defaultValue={displayOptions.get(field.key)}
+                                            defaultValue={frontendSettings.get(field.key)}
                                             onKeyPress={(e) => {
                                                 if (e.key === 'Enter') {
-                                                  displayOptions.set(field.key, e.target.value);
+                                                  frontendSettings.set(field.key, e.target.value);
                                                 }
                                             }} />
                           </span>
                         </span>),
                       radio: () => (
                         <Rb.ButtonToolbar>
-                          <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={displayOptions.get(field.key)}
-                                                onChange={(e) => {displayOptions.set(field.key, e)}}>
+                          <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={frontendSettings.get(field.key)}
+                                                onChange={(e) => {frontendSettings.set(field.key, e)}}>
                             <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
                             <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
                           </Rb.ToggleButtonGroup>
                         </Rb.ButtonToolbar>),
                       option: () => (
-                        <Rb.FormControl componentClass="select" defaultValue={displayOptions.get(field.key)} onChange={(e) => {
-                            displayOptions.set(field.key, e.target.value);
+                        <Rb.FormControl componentClass="select" defaultValue={frontendSettings.get(field.key)} onChange={(e) => {
+                            frontendSettings.set(field.key, e.target.value);
                         }}>
                           {_.zip(field.opts.keys, field.opts.values).map(([key, value]) =>
                             <option value={key} key={key}>{value}</option>)}
@@ -222,14 +223,13 @@ class OptionsView extends React.Component {
           })}
         </form>
       </div>
-    }</SettingsContext.Consumer>
+    }</Consumer>
   }
 }
 
 @observer
 class MetadataView extends React.Component {
   render() {
-    (this.props.searchResult.result); // ensure that we re-render when search result changes
     let keys = [
       ['Viewing',  [
         ['f', 'expand thumbnail'],
@@ -253,41 +253,44 @@ class MetadataView extends React.Component {
         ['z', 'undo last action']
       ]]
     ];
-    return <div className='metadata'>
-      <h2>Metadata</h2>
-      <div className='meta-block'>
-        <div className='meta-key'>Type</div>
-        <div className='meta-val'>{this.props.searchResult.type}</div>
-      </div>
-      <div className='meta-block colors'>
-        <div className='meta-key'>Labelers</div>
-        <div className='meta-val'>
-          {_.values(this.props.searchResult.labelers).map((labeler, i) =>
-            <div key={i}>
-              {labeler.name}: &nbsp;
-              <div style={{backgroundColor: this.props.searchResult.labeler_colors[labeler.id],
-                           width: '10px', height: '10px', display: 'inline-box'}} />
+
+    return <SearchContext.Consumer>{ searchResult =>
+      <div className='metadata'>
+        <h2>Metadata</h2>
+        <div className='meta-block'>
+          <div className='meta-key'>Type</div>
+          <div className='meta-val'>{searchResult.type}</div>
+        </div>
+        <div className='meta-block colors'>
+          <div className='meta-key'>Labelers</div>
+          <div className='meta-val'>
+            {_.values(searchResult.labelers).map((labeler, i) =>
+              <div key={i}>
+                {labeler.name}: &nbsp;
+                <div style={{backgroundColor: searchResult.labeler_colors[labeler.id],
+                             width: '10px', height: '10px', display: 'inline-box'}} />
+              </div>
+            )}
+            <div className='clearfix' />
+          </div>
+        </div>
+        <div className='meta-block'>
+          <div className='meta-key'>Count</div>
+          <div className='meta-val'>{searchResult.count}</div>
+        </div>
+        <h3>Help</h3>
+        <div className='help'>
+          On hover over a clip:
+          {keys.map(([name, sec_keys], i) =>
+            <div key={i} className='help-section'>
+              <strong>{name}</strong>
+              {sec_keys.map((entry, j) =>
+                <div key={j}><code>{entry[0]}</code> - {entry[1]}</div>)}
             </div>
           )}
-          <div className='clearfix' />
         </div>
       </div>
-      <div className='meta-block'>
-        <div className='meta-key'>Count</div>
-        <div className='meta-val'>{this.props.searchResult.count}</div>
-      </div>
-      <h3>Help</h3>
-      <div className='help'>
-        On hover over a clip:
-        {keys.map(([name, sec_keys], i) =>
-          <div key={i} className='help-section'>
-            <strong>{name}</strong>
-          {sec_keys.map((entry, j) =>
-            <div key={j}><code>{entry[0]}</code> - {entry[1]}</div>)}
-          </div>
-        )}
-      </div>
-    </div>;
+    }</SearchContext.Consumer>;
   }
 }
 

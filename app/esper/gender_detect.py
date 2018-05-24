@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 import struct
 
 LABELER, _ = Labeler.objects.get_or_create(name='rude-carnie')

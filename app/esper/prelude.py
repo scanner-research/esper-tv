@@ -1,6 +1,6 @@
 from scannerpy import ProtobufGenerator, Config, Database, Job, DeviceType, ColumnType, ScannerException
 from storehouse import StorageConfig, StorageBackend
-from query.base_models import ModelDelegator, Track, BoundingBox
+from query.base_models import Track, BoundingBox
 from django.db import connections, connection
 from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func
@@ -39,10 +39,6 @@ import tempfile
 import random
 from contextlib import contextmanager
 from collections import defaultdict
-
-# Import all models for current dataset
-m = ModelDelegator(os.environ.get('DATASET'))
-m.import_all(globals())
 
 # Access to Scanner protobufs
 cfg = Config()
@@ -817,7 +813,7 @@ def frange(x, y, jump):
         x += jump
 
 def esper_widget(result, **kwargs):
-    from query.datasets.stdlib import result_with_metadata, esper_js_globals
+    from esper.stdlib import result_with_metadata, esper_js_globals
     import esper_jupyter
     if not 'select_mode' in kwargs:
         kwargs['select_mode'] = 1

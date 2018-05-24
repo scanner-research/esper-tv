@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 from scannerpy import ColumnType
 from scannerpy.stdlib import writers
 

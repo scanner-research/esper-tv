@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 from scipy.stats import linregress

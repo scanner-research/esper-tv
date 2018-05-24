@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 
 LABELER, _ = Labeler.objects.get_or_create(name='featuretrack')
 

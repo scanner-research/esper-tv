@@ -3,7 +3,8 @@ import {observer} from 'mobx-react';
 import {FrameView} from './FrameView.jsx';
 import Spinner from './Spinner.jsx';
 import manager from 'utils/KeyboardManager.jsx';
-import {SettingsContext} from './contexts.jsx';
+import {FrontendSettingsContext, SearchContext} from './contexts.jsx';
+import Consumer from 'utils/Consumer.jsx';
 
 @observer
 export default class ClipView extends React.Component {
@@ -152,7 +153,7 @@ export default class ClipView extends React.Component {
   }
 
   _videoMeta = () => {
-    return this.props.searchResult.videos[this.props.clip.video];
+    return this._searchResult.videos[this.props.clip.video];
   }
 
   componentWillUnmount() {
@@ -164,17 +165,18 @@ export default class ClipView extends React.Component {
 
   render() {
     return (
-      <SettingsContext.Consumer>{displayOptions => {
+      <Consumer contexts={[FrontendSettingsContext, SearchContext]}>{(frontendSettings, searchResult) => {
+        this._searchResult = searchResult;
           let clip = this.props.clip;
           let video = this._videoMeta();
 
           // Set playback rate of the video
           if (this._video) {
-            this._video.playbackRate = displayOptions.get('playback_speed');
+            this._video.playbackRate = frontendSettings.get('playback_speed');
           }
 
           // Figure out how big the thumbnail should be
-          let small_height = this.props.expand ? video.height : 100 * displayOptions.get('thumbnail_size');
+          let small_height = this.props.expand ? video.height : 100 * frontendSettings.get('thumbnail_size');
           let small_width = video.width * small_height / video.height;
           let vidStyle = this.state.showVideo ? {
             zIndex: 2,
@@ -184,7 +186,7 @@ export default class ClipView extends React.Component {
 
           // Determine which video frame to display
           let display_frame =
-            displayOptions.get('show_middle_frame') && clip.max_frame
+            frontendSettings.get('show_middle_frame') && clip.max_frame
             ? Math.round((clip.max_frame + clip.min_frame) / 2)
             : clip.min_frame;
           let path = `${window.location.protocol}//${window.location.hostname}/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
@@ -224,7 +226,7 @@ export default class ClipView extends React.Component {
                  <source src={`/system_media/${video.path}`} />
                  {video.srt_extension != ''
                   ? <track kind="subtitles"
-                           src={`/api/subtitles?dataset=${DATASET}&video=${video.id}`}
+                           src={`/api/subtitles?video=${video.id}`}
                            srcLang="en" />
                   : <span />}
                </video>
@@ -246,10 +248,9 @@ export default class ClipView extends React.Component {
                 onSetTrack={() => {}}
                 onDeleteTrack={() => {}}
                 onSelect={() => {}}
-                path={path}
-                searchResult={this.props.searchResult} />
+                path={path} />
             </div>
-            {(this.props.expand || displayOptions.get('show_inline_metadata')) && this.props.showMeta
+            {(this.props.expand || frontendSettings.get('show_inline_metadata')) && this.props.showMeta
              ?
              <table className='search-result-meta' style={{width: small_width}}>
                <tbody>
@@ -265,7 +266,7 @@ export default class ClipView extends React.Component {
              </table>
              : <div />}
           </div>
-      }}</SettingsContext.Consumer>
+      }}</Consumer>
     );
   }
 }

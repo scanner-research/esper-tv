@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 
 tracks = list(PersonTrack.objects.filter(video__videotag__tag__name='pose-test'))
 for i, track in enumerate(tracks):

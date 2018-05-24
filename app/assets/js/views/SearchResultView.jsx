@@ -1,14 +1,15 @@
 import React from 'react';
 import * as Rb from 'react-bootstrap';
+import _ from 'lodash';
 import {observer} from 'mobx-react';
 import {observable, autorun, toJS} from 'mobx';
 import {SidebarView, SELECT_MODES, LABEL_MODES} from './SidebarView.jsx';
 import ClipView from './ClipView.jsx';
 import TimelineView from './TimelineView.jsx';
 import axios from 'axios';
-import {GlobalContext, SearchContext, SettingsContext, PythonContext} from './contexts.jsx';
+import {BackendSettingsContext, SearchContext, FrontendSettingsContext, PythonContext} from './contexts.jsx';
 import keyboardManager from 'utils/KeyboardManager.jsx';
-import _ from 'lodash';
+import Consumer from 'utils/Consumer.jsx';
 
 // Displays results with basic pagination
 @observer
@@ -29,7 +30,7 @@ class GroupsView extends React.Component {
   }
 
   _isSelected = (i) => {
-    let select_mode = this._displayOptions.get('select_mode');
+    let select_mode = this._frontendSettings.get('select_mode');
     return (select_mode == SELECT_MODES.RANGE &&
             (this.state.selected_start == i ||
              (this.state.selected_start <= i && i <= this.state.selected_end))) ||
@@ -63,7 +64,7 @@ class GroupsView extends React.Component {
       let green = this.state.positive_ex;
       let labeled = [];
 
-      let select_mode = this._displayOptions.get('select_mode');
+      let select_mode = this._frontendSettings.get('select_mode');
       if (select_mode == SELECT_MODES.RANGE) {
         let end = this.state.selected_end == -1 ? this.state.selected_start : this.state.selected_end;
         for (let i = this.state.selected_start; i <= end; i++) {
@@ -71,19 +72,19 @@ class GroupsView extends React.Component {
             continue;
           }
 
-          labeled.push(this.props.searchResult.result[i]);
+          labeled.push(this._searchResult.result[i]);
           green.add(i);
         }
       } else if (select_mode == SELECT_MODES.INDIVDIUAL) {
         for (let i of this.state.selected) {
-          labeled.push(this.props.searchResult.result[i]);
+          labeled.push(this._searchResult.result[i]);
           green.add(i);
         }
       }
 
       // TODO(wcrichto): make saving state + errors more apparent to user (without alert boxes)
       axios
-        .post('/api/labeled', {dataset: DATASET, groups: labeled, label_mode: this._displayOptions.get('label_mode')})
+        .post('/api/labeled', {groups: labeled, label_mode: this._frontendSettings.get('label_mode')})
         .then(((response) => {
           if (!response.data.success) {
             console.error(response.data.error);
@@ -106,7 +107,7 @@ class GroupsView extends React.Component {
   }
 
   _onSelect = (e) => {
-    let select_mode = this._displayOptions.get('select_mode');
+    let select_mode = this._frontendSettings.get('select_mode');
     if (select_mode == SELECT_MODES.RANGE) {
       if (this.state.selected_start == -1){
         this.setState({
@@ -159,7 +160,7 @@ class GroupsView extends React.Component {
   }
 
   _numPages = () => {
-    return Math.floor((this.props.searchResult.result.length - 1)/ this._displayOptions.get('results_per_page'));
+    return Math.floor((this._searchResult.result.length - 1)/ this._frontendSettings.get('results_per_page'));
   }
 
   _prevPage = (e) => {
@@ -173,8 +174,8 @@ class GroupsView extends React.Component {
   }
 
   componentDidUpdate() {
-    if (this.props.searchResult != this._lastResult) {
-      this._lastResult = this.props.searchResult;
+    if (this._searchResult != this._lastResult) {
+      this._lastResult = this._searchResult;
       this.setState({
         page: 0,
         positive_ex: new Set(),
@@ -188,38 +189,37 @@ class GroupsView extends React.Component {
 
   render () {
     return (
-      <PythonContext.Consumer>{python => {
-        this._python = python;
-        return <SettingsContext.Consumer>{displayOptions => {
-            this._displayOptions = displayOptions;
-            return <div className='groups'>
-              <div>
-                {_.range(displayOptions.get('results_per_page') * this.state.page,
-                         Math.min(displayOptions.get('results_per_page') * (this.state.page + 1),
-                                  this.props.searchResult.result.length))
-                  .map((i) => <GroupView key={i} group={this.props.searchResult.result[i]} group_id={i}
-                                         onSelect={this._onSelect} onIgnore={this._onIgnore}
-                                         colorClass={this._getColorClass(i)}
-                                         searchResult={this.props.searchResult} />)}
-                <div className='clearfix' />
-              </div>
-              <div className='page-buttons'>
-                <Rb.ButtonGroup>
-                  <Rb.Button onClick={this._prevPage}>&larr;</Rb.Button>
-                  <Rb.Button onClick={this._nextPage}>&rarr;</Rb.Button>
-                  <span key={this.state.page}>
-                    <Rb.FormControl type="text" defaultValue={this.state.page + 1} onKeyPress={(e) => {
-                        if (e.key === 'Enter') { this.setState({
-                          page: Math.min(Math.max(parseInt(e.target.value)-1, 0), this._numPages())
-                        }); }
-                    }} />
-                  </span>
-                  <span className='page-count'>/ {this._numPages() + 1}</span>
-                </Rb.ButtonGroup>
-              </div>
-            </div>;
-        }}</SettingsContext.Consumer>
-      }}</PythonContext.Consumer>);
+      <Consumer contexts={[FrontendSettingsContext, SearchContext, PythonContext]}>{(frontendSettings, searchResult, python) => {
+          this._searchResult = searchResult;
+          this._python = python;
+          this._frontendSettings = frontendSettings;
+          return <div className='groups'>
+            <div>
+              {_.range(frontendSettings.get('results_per_page') * this.state.page,
+                       Math.min(frontendSettings.get('results_per_page') * (this.state.page + 1),
+                                this._searchResult.result.length))
+                .map((i) => <GroupView key={i} group={this._searchResult.result[i]} group_id={i}
+                                       onSelect={this._onSelect} onIgnore={this._onIgnore}
+                                       colorClass={this._getColorClass(i)} />)}
+              <div className='clearfix' />
+            </div>
+            <div className='page-buttons'>
+              <Rb.ButtonGroup>
+                <Rb.Button onClick={this._prevPage}>&larr;</Rb.Button>
+                <Rb.Button onClick={this._nextPage}>&rarr;</Rb.Button>
+                <span key={this.state.page}>
+                  <Rb.FormControl type="text" defaultValue={this.state.page + 1} onKeyPress={(e) => {
+                      if (e.key === 'Enter') { this.setState({
+                        page: Math.min(Math.max(parseInt(e.target.value)-1, 0), this._numPages())
+                      }); }
+                  }} />
+                </span>
+                <span className='page-count'>/ {this._numPages() + 1}</span>
+              </Rb.ButtonGroup>
+            </div>
+          </div>;
+      }}</Consumer>
+    );
   }
 }
 
@@ -265,26 +265,25 @@ class GroupView extends React.Component {
   render () {
     let group = this.props.group;
     return (
-      <SettingsContext.Consumer>{displayOptions =>
+      <FrontendSettingsContext.Consumer>{frontendSettings =>
         <div className={'group ' + this.props.colorClass} onMouseEnter={this._onMouseEnter}
              onMouseLeave={this._onMouseLeave}>
           {this.props.colorClass != '' ? <div className={'select-overlay ' + this.props.colorClass} /> : <div />}
-          {displayOptions.get('timeline_view') && group.type == 'contiguous'
-           ? <TimelineView group={group} expand={this.state.expand} searchResult={this.props.searchResult} />
+          {frontendSettings.get('timeline_view') && group.type == 'contiguous'
+           ? <TimelineView group={group} expand={this.state.expand}  />
            : <div className={group.type}>
              {group.label && group.label !== ''
               ? <div className='group-label'>{group.label}</div>
               : <span />}
              <div className='group-elements'>
                {group.elements.map((clip, i) =>
-                 <ClipView key={i} clip={clip} showMeta={true} expand={this.state.expand}
-                           searchResult={this.props.searchResult} />)}
+                 <ClipView key={i} clip={clip} showMeta={true} expand={this.state.expand} />)}
 
                <div className='clearfix' />
              </div>
            </div>}
         </div>
-      }</SettingsContext.Consumer>
+      }</FrontendSettingsContext.Consumer>
     );
   }
 }
@@ -341,14 +340,14 @@ export default class SearchResultView extends React.Component {
       timeline_range: 20,
       track_color_identity: false,
       label_mode: LABEL_MODES.DEFAULT,
-      select_mode: SELECT_MODES.RANGE
+      select_mode: SELECT_MODES.RANGE,
     };
 
     if (_.size(this.props.settings) > 0) {
       console.log(this.props.settings);
       Object.assign(settings, this.props.settings);
     } else {
-      let cached = localStorage.getItem('displayOptions');
+      let cached = localStorage.getItem('frontendSettings');
       if (cached !== null) {
         Object.assign(settings, JSON.parse(cached));
       }
@@ -357,24 +356,20 @@ export default class SearchResultView extends React.Component {
     this._settings = observable.map(settings);
 
     autorun(() => {
-      localStorage.displayOptions = JSON.stringify(toJS(this._settings));
+      localStorage.frontendSettings = JSON.stringify(toJS(this._settings));
     });
   }
 
   render() {
     let hasJupyter = this.props.jupyter !== null;
     return (
-      <SettingsContext.Provider value={this._settings}>
-        <SearchContext.Provider value={this.props.searchResult}>
-          <GlobalContext.Provider value={this.props.globals}>
-            <div className='search-results'>
-              {hasJupyter ? <JupyterButton {...this.props} /> : <div />}
-              <SidebarView {...this.props} />
-              <GroupsView {...this.props} />
-            </div>
-          </GlobalContext.Provider>
-        </SearchContext.Provider>
-      </SettingsContext.Provider>
+      <FrontendSettingsContext.Provider value={this._settings}>
+        <div className='search-results'>
+          {hasJupyter ? <JupyterButton {...this.props} /> : <div />}
+          <SidebarView {...this.props} />
+          <GroupsView {...this.props} />
+        </div>
+      </FrontendSettingsContext.Provider>
     )
   }
 }

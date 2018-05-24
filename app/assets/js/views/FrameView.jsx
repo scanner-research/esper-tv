@@ -1,9 +1,10 @@
 import React from 'react';
 import {observer} from 'mobx-react';
 import Select2 from 'react-select2-wrapper';
-import {GlobalContext, SettingsContext} from './contexts';
+import {BackendSettingsContext, FrontendSettingsContext, SearchContext} from './contexts';
 import Spinner from './Spinner.jsx';
 import keyboardManager from 'utils/KeyboardManager.jsx';
+import Consumer from 'utils/Consumer.jsx';
 
 export let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
@@ -15,7 +16,7 @@ export let boundingRect = (div) => {
   };
 };
 
-// TODO(wcrichto): if you move a box and mouseup outsie the box, then the mouseup doesn't
+// TODO(wcrichto): if you move a box and mouseup outside the box, then the mouseup doesn't
 // register with the BoxView
 
 @observer
@@ -95,7 +96,7 @@ class BoxView extends React.Component {
     let box = this.props.box;
     let {width, height} = this.props;
     if (chr == 'g') {
-      let keys = _.sortBy(_.map(_.keys(this.props.searchResult.genders), (x) => parseInt(x)));
+      let keys = _.sortBy(_.map(_.keys(this._searchResult.genders), (x) => parseInt(x)));
       box.gender_id = keys[(_.indexOf(keys, box.gender_id) + 1) % keys.length];
       // TODO(wcrichto): mobx should catch this update, but doesn't?
       this.forceUpdate();
@@ -146,7 +147,8 @@ class BoxView extends React.Component {
 
   render() {
     return (
-      <SettingsContext.Consumer>{displayOptions => {
+      <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
+          this._searchResult = searchResult;
           let box = this.props.box;
           let offsetX = 0;
           let offsetY = 0;
@@ -156,9 +158,9 @@ class BoxView extends React.Component {
           }
 
           let color =
-            displayOptions.get('show_gender_as_border') && box.gender_id
-            ? this.props.searchResult.gender_colors[this.props.searchResult.genders[box.gender_id].name]
-            : this.props.searchResult.labeler_colors[box.labeler_id];
+            frontendSettings.get('show_gender_as_border') && box.gender_id
+            ? this._searchResult.gender_colors[this._searchResult.genders[box.gender_id].name]
+            : this._searchResult.labeler_colors[box.labeler_id];
 
           let style = {
             left: box.bbox_x1 * this.props.width + offsetX,
@@ -167,7 +169,7 @@ class BoxView extends React.Component {
             height: (box.bbox_y2-box.bbox_y1) * this.props.height,
             borderColor: color,
             borderStyle: box.background ? 'dashed' : 'solid',
-            opacity: displayOptions.get('annotation_opacity')
+            opacity: frontendSettings.get('annotation_opacity')
           };
 
 
@@ -199,37 +201,35 @@ class BoxView extends React.Component {
             }
           }).bind(this);
 
-          return <GlobalContext.Consumer>{globals => {
-              let things = globals.things[globals.selected];
-              return (<div>
-                {box.identity_id
-                 ? <div className='bbox-label' style={labelStyle}>
-                   {modifyLabel(things[box.identity_id])}
-                 </div>
-                 : <div />}
-                <div onMouseOver={this._onMouseOver}
-                     onMouseOut={this._onMouseOut}
-                     onMouseUp={this._onMouseUp}
-                     onMouseDown={this._onMouseDown}
-                     className='bounding-box'
-                     style={style}
-                     ref={(n) => {this._div = n}} />
-                {this.state.showSelect
-                 ? <div style={selectStyle}>
-                   <Select2
-                     ref={(n) => {this._select = n;}}
-                     data={_.map(things, (v, k) => ({text: v, id: k}))}
-                     options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
-                     onSelect={this._onSelect}
-                     onClose={(e) => {
-                         this.setState({showSelect: false});
-                         keyboardManager.unlock();
-                     }} />
-                 </div>
-                 : <div />}
-              </div>);
-          }}</GlobalContext.Consumer>;
-      }}</SettingsContext.Consumer>);
+          let things = backendSettings.things[backendSettings.selected];
+          return (<div>
+            {box.identity_id
+             ? <div className='bbox-label' style={labelStyle}>
+               {modifyLabel(things[box.identity_id])}
+             </div>
+             : <div />}
+            <div onMouseOver={this._onMouseOver}
+                 onMouseOut={this._onMouseOut}
+                 onMouseUp={this._onMouseUp}
+                 onMouseDown={this._onMouseDown}
+                 className='bounding-box'
+                 style={style}
+                 ref={(n) => {this._div = n}} />
+            {this.state.showSelect
+             ? <div style={selectStyle}>
+               <Select2
+                 ref={(n) => {this._select = n;}}
+                 data={_.map(things, (v, k) => ({text: v, id: k}))}
+                 options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
+                 onSelect={this._onSelect}
+                 onClose={(e) => {
+                     this.setState({showSelect: false});
+                     keyboardManager.unlock();
+                 }} />
+             </div>
+             : <div />}
+          </div>);
+      }}</Consumer>);
   }
 }
 
@@ -253,21 +253,21 @@ let HAND_RIGHT_COLOR = 'rgb(95, 231, 118)';
 @observer
 class PoseView extends React.Component {
   render() {
-    return <SettingsContext.Consumer>{displayOptions => {
+    return <FrontendSettingsContext.Consumer>{frontendSettings => {
         let w = this.props.width;
         let h = this.props.height;
         let all_kp = this.props.pose.keypoints;
-        let opacity = displayOptions.get('annotation_opacity');
+        let opacity = frontendSettings.get('annotation_opacity');
         let kp_sets = [];
 
         // Conditionally draw each part of the keypoints depending on our options
-        if (displayOptions.get('show_pose')) {
+        if (frontendSettings.get('show_pose')) {
           kp_sets.push([all_kp.pose, POSE_PAIRS, POSE_COLOR]);
         }
-        if (displayOptions.get('show_face')) {
+        if (frontendSettings.get('show_face')) {
           kp_sets.push([all_kp.face, FACE_PAIRS, FACE_COLOR]);
         }
-        if (displayOptions.get('show_hands')) {
+        if (frontendSettings.get('show_hands')) {
           kp_sets = kp_sets.concat([
             [all_kp.hand_left, HAND_PAIRS, HAND_LEFT_COLOR],
             [all_kp.hand_right, HAND_PAIRS, HAND_RIGHT_COLOR],
@@ -281,7 +281,7 @@ class PoseView extends React.Component {
           let color = kp_set[2];
           // Normally color is just the one in the kp_set, but we special case drawing
           // the left side of the pose a different color if the option is enabled
-          if (displayOptions.get('show_lr') &&
+          if (frontendSettings.get('show_lr') &&
               kp_set[0].length == all_kp.pose.length &&
               (_.includes(POSE_LEFT, pair[0]) || _.includes(POSE_LEFT, pair[1]))) {
             color = POSE_LEFT_COLOR;
@@ -308,7 +308,7 @@ class PoseView extends React.Component {
             </g>
           )}
         </svg>
-    }}</SettingsContext.Consumer>;
+    }}</FrontendSettingsContext.Consumer>;
   }
 }
 
@@ -540,8 +540,8 @@ export class FrameView extends React.Component {
       bbox_y1: (Math.min(this.state.startY, this.state.curY) + 1)/height,
       bbox_x2: (Math.max(this.state.curX, this.state.startX) - 1)/width,
       bbox_y2: (Math.max(this.state.curY, this.state.startY) - 1)/height,
-      labeler_id: _.find(this.props.searchResult.labelers, (l) => l.name == 'handlabeled-face').id,
-      gender_id: _.find(this.props.searchResult.genders, (l) => l.name == 'U').id,
+      labeler_id: _.find(this._searchResult.labelers, (l) => l.name == 'handlabeled-face').id,
+      gender_id: _.find(this._searchResult.genders, (l) => l.name == 'U').id,
       type: 'bbox',
       id: -1,
       background: false
@@ -569,57 +569,57 @@ export class FrameView extends React.Component {
 
   render() {
     return (
-      <SettingsContext.Consumer>{displayOptions =>
-        <div className='frame'
-             onMouseDown={this._onMouseDownLocal}
-             onMouseUp={this._onMouseUpLocal}
-             onMouseOver={this._onMouseOver}
-             onMouseOut={this._onMouseOut}
-             ref={(n) => { this._div = n; }}>
-          {displayOptions.get('crop_bboxes') && this.props.bboxes.length > 0
-           ? <ProgressiveImage
-               src={this.props.path}
-               crop={this.props.bboxes[0]}
-               width={this.props.full_width}
-               height={this.props.full_height}
-               target_width={this.props.small_width}
-               target_height={this.props.small_height}
-               onLoad={() => this.setState({imageLoaded: true})} />
-           : <div>
-             {this.state.imageLoaded
-              ? <div>
-                {this.state.showDraw && this.state.startX != -1 && keyboardManager.modifiers.has('shift')
-                 ? <BoxView box={this._makeBox()} width={this.props.small_width} height={this.props.small_height}
-                            searchResult={this.props.searchResult} />
-                 : <div />}
-                {this.props.bboxes.map((box, i) => {
-                   if (box.type == 'bbox') {
-                     return <BoxView box={box} key={i} i={i} width={this.props.small_width}
-                                     height={this.props.small_height}
-                                     onClick={this.props.onClick}
-                                     onDelete={this._onDelete}
-                                     onTrack={this._onTrack}
-                                     onSetTrack={this._onSetTrack}
-                                     onDeleteTrack={this._onDeleteTrack}
-                                     expand={this.props.expand}
-                                     searchResult={this.props.searchResult} />;
-                   } else if (box.type == 'pose') {
-                     return <PoseView pose={box} key={i} width={this.props.small_width}
-                                      height={this.props.small_height} expand={this.props.expand} />;
-                   }})}
-              </div>
-              : <div />}
-             <ProgressiveImage
-               src={this.props.path}
-               width={this.props.full_width}
-               height={this.props.full_height}
-               crop={null}
-               target_width={this.props.small_width}
-               target_height={this.props.small_height}
-               onLoad={() => this.setState({imageLoaded: true})} />
-           </div>}
-        </div>
-      }</SettingsContext.Consumer>
+      <Consumer contexts={[FrontendSettingsContext, SearchContext]}>{(frontendSettings, searchResult) => {
+          this._searchResult = searchResult;
+          return <div className='frame'
+                      onMouseDown={this._onMouseDownLocal}
+                      onMouseUp={this._onMouseUpLocal}
+                      onMouseOver={this._onMouseOver}
+                      onMouseOut={this._onMouseOut}
+                      ref={(n) => { this._div = n; }}>
+            {frontendSettings.get('crop_bboxes') && this.props.bboxes.length > 0 && !this.props.expand
+             ? <ProgressiveImage
+                 src={this.props.path}
+                 crop={this.props.bboxes[0]}
+                 width={this.props.full_width}
+                 height={this.props.full_height}
+                 target_width={this.props.small_width}
+                 target_height={this.props.small_height}
+                 onLoad={() => this.setState({imageLoaded: true})} />
+             : <div>
+               {this.state.imageLoaded
+                ? <div>
+                  {this.state.showDraw && this.state.startX != -1 && keyboardManager.modifiers.has('shift')
+                   ? <BoxView box={this._makeBox()} width={this.props.small_width}
+                              height={this.props.small_height} />
+                   : <div />}
+                  {this.props.bboxes.map((box, i) => {
+                     if (box.type == 'bbox') {
+                       return <BoxView box={box} key={i} i={i} width={this.props.small_width}
+                                       height={this.props.small_height}
+                                       onClick={this.props.onClick}
+                                       onDelete={this._onDelete}
+                                       onTrack={this._onTrack}
+                                       onSetTrack={this._onSetTrack}
+                                       onDeleteTrack={this._onDeleteTrack}
+                                       expand={this.props.expand} />;
+                     } else if (box.type == 'pose') {
+                       return <PoseView pose={box} key={i} width={this.props.small_width}
+                                        height={this.props.small_height} expand={this.props.expand} />;
+                     }})}
+                </div>
+                : <div />}
+               <ProgressiveImage
+                 src={this.props.path}
+                 width={this.props.full_width}
+                 height={this.props.full_height}
+                 crop={null}
+                 target_width={this.props.small_width}
+                 target_height={this.props.small_height}
+                 onLoad={() => this.setState({imageLoaded: true})} />
+             </div>}
+          </div>;
+      }}</Consumer>
     );
   }
 };

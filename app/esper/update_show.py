@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 
 for video in Video.objects.all():
     parts = os.path.splitext(os.path.split(video.path)[1])[0].split('_')

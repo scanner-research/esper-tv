@@ -10,7 +10,6 @@ export default class SearchResult {
     this.videos = results.videos;
     this.frames = results.frames;
     this.labelers = results.labelers;
-    this.dataset = results.dataset;
     this.count = results.count;
     this.type = results.type;
     this.genders = results.genders;

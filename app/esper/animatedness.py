@@ -1,10 +1,10 @@
-from query.datasets.prelude import *
-from query.datasets.tvnews.shot_detect import shot_detect, shot_stitch
-from query.datasets.tvnews.face_detect import face_detect
-from query.datasets.tvnews.face_embed import face_embed
-from query.datasets.tvnews.pose_detect import pose_detect
-from query.datasets.tvnews.identity_detect import identity_detect
-from query.datasets.tvnews.gender_detect import gender_detect
+from esper.prelude import *
+from esper.tvnews.shot_detect import shot_detect, shot_stitch
+from esper.tvnews.face_detect import face_detect
+from esper.tvnews.face_embed import face_embed
+from esper.tvnews.pose_detect import pose_detect
+from esper.tvnews.identity_detect import identity_detect
+from esper.tvnews.gender_detect import gender_detect
 
 POSE_STRIDE = 3
 

@@ -1,4 +1,4 @@
-from query.datasets.prelude import *
+from esper.prelude import *
 from sklearn import metrics
 
 gender_names = {g.id: g.name for g in Gender.objects.all()}

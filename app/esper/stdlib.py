@@ -1,4 +1,3 @@
-from __future__ import print_function
 from django.http import JsonResponse
 from collections import defaultdict
 from django.forms.models import model_to_dict
@@ -12,25 +11,16 @@ import traceback
 from timeit import default_timer as now
 import os
 import query.base_models as base_models
-from ..base_models import ModelDelegator
 import importlib
-import query.datasets.queries as queries
+import esper.queries as queries
 from typing import Any, Dict, List, Union
 from django.db.models.query import QuerySet
 from django.db.models import F
 from django.db.models.functions import Cast
 import django.db.models as models
-from query.datasets.prelude import collect, BUCKET
+from esper.prelude import collect, BUCKET
 from query.base_models import Track
-
-def load_models(globals: Dict, dataset: Union[str, None] = None) -> None:
-    if dataset is None:
-        dataset = os.environ.get('DATASET')
-    m = ModelDelegator(dataset)
-    m.import_all(globals)
-
-load_models(globals())
-
+from query.models import Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender
 
 def access(obj: Any, path: str) -> Any:
     fields = path.split('__')
@@ -208,11 +198,6 @@ def qs_to_result(result: QuerySet,
                 id_to_position = defaultdict(lambda: float('inf'))
                 for i, id_ in enumerate(custom_order_by_id):
                     id_to_position[id_] = i
-#                 with Timer('a'):
-                    #                    result.values(frame_path + '__video', frame_path + '__number',
-                    #                                  frame_path + '__id').print_sql()
-                    #                    sys.stdout.flush()
-
                 for inst in list(
                         result.values(
                             'id', frame_path + '__video', frame_path + '__number',
@@ -222,18 +207,17 @@ def qs_to_result(result: QuerySet,
                     frames[frame_key] = min(id_to_position[inst['id']], frames[frame_key]
                                             if frame_key in frames else float('inf'))
                     frame_ids.add(inst[frame_path + '__id'])
-                sys.stdout.flush()
                 all_results = get_all_results()
                 frames = sorted([x for x in frames.items()], key=lambda x: x[1])
                 frames = [x[0] for x in frames[:limit]]
 
-            sys.stdout.flush()
             for (video, frame_num, frame_id) in frames:
                 materialized_result.append({
                     'video': video,
                     'min_frame': frame_num,
                     'objects': [fn(inst) for inst in all_results[frame_id]]
                 })
+
 
         else:
             for inst in result[:limit * stride:stride]:
@@ -327,50 +311,28 @@ UnlabeledFace = _UnlabeledFace()
 
 
 def esper_js_globals():
-    schemas = []
-    things = {}
-    queries_ = {}
-
-    common_queries = queries.queries['datasets']
-
-    def load_queries(name):
-        mod = importlib.import_module('query.datasets.{}.queries'.format(name))
-        return mod.queries[name]
 
     def get_fields(cls):
         fields = cls._meta.get_fields()
         return [f.name for f in fields if isinstance(f, models.Field)]
 
-    for name, ds in list(ModelDelegator().datasets().items()):
-        schema = []
-
-        # Get queries for dataset
-        if os.path.isfile('query/datasets/{}/queries.py'.format(name)):
-            ds_queries = load_queries(name)
-        else:
-            ds_queries = []
-        queries_[name] = common_queries + ds_queries
-
+    schema = []
+    # TODO(wcrichto): fix schema finding code
+    if False:
         # Get schema for dataset
         for cls in ds.all_models():
             schema.append([cls, get_fields(getattr(ds, cls))])
-        schemas.append([name, schema])
 
-        if hasattr(ds, 'Thing'):
-            mod = importlib.import_module('query.datasets.{}.models'.format(name))
-            things[name] = {
-                d['id']: d['name']
-                for d in ds.Thing.objects.filter(
-                    type__name='person').order_by('name').values('id', 'name')
-            }
-        else:
-            things[name] = []
+    things = {
+        d['id']: d['name']
+        for d in Thing.objects.filter(
+            type__name='person').order_by('name').values('id', 'name')
+    }
 
     return {
         'bucket': BUCKET,
-        'selected': os.environ.get('DATASET'),
-        'schemas': schemas,
-        'queries': queries_,
+        'schema': schema,
+        'queries': queries.queries,
         'things': things
     }
 
