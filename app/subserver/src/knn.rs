@@ -10,9 +10,8 @@ use std::sync::Mutex;
 use block_timer::BlockTimer;
 use rand::{thread_rng, sample, Rng};
 use rustlearn::prelude::*;
-// use rustlearn::svm::libsvm::svc::Hyperparameters;
-// use rustlearn::svm::libsvm::svc::KernelType;
-use rustlearn::linear_models::sgdclassifier::Hyperparameters;
+use rustlearn::svm::libsvm::svc::Hyperparameters;
+use rustlearn::svm::libsvm::svc::KernelType;
 
 
 const FEATURE_DIM: usize = 128;
@@ -38,7 +37,7 @@ impl Features {
         let feature_length = FEATURE_DIM;
         let num_bytes = feature_length * mem::size_of::<f32>();
 
-        let features: Vec<_> = (0..1).collect::<Vec<_>>().par_iter().flat_map(|i| {
+        let features: Vec<_> = (0..8).collect::<Vec<_>>().par_iter().flat_map(|i| {
             let path = format!("/app/.cache/all_embs_flat_{}.bin", i);
             let mut file = File::open(path).expect("cannot open");
             let mut bytebuf = Vec::new();
@@ -56,6 +55,8 @@ impl Features {
 
             features
         }).collect();
+        
+        println!("Feature count: {}", features.len());
 
         let mut file = File::open("/app/.cache/face_ids.bin").expect("cannot open");
         let mut bytebuf = Vec::new();
@@ -118,7 +119,8 @@ impl Features {
         ids.iter().map(|id| &self.features[self.ids.binary_search(&id).unwrap()]).collect()
     }
     
-    pub fn svm(&self, pos_ids: &Vec<Id>, neg_ids: &Vec<Id>, n_neg_samples: usize) -> Vec<u64> {
+    pub fn svm(&self, pos_ids: &Vec<Id>, neg_ids: &Vec<Id>, n_neg_samples: usize, 
+               n_pos_samples: usize, min_t: f32, max_t: f32) -> Vec<(u64,f32)> {
         let pos_features: Vec<&FeatureVec> = pos_ids.iter()
             .map(|i| self.ids.binary_search(&i))
             .filter(|r| r.is_ok())
@@ -130,6 +132,14 @@ impl Features {
             .map(|r| &self.features[r.unwrap()])
             .collect();
         
+        // Balance dataset by geting points close to positive examples
+        let pos_sample_features: Vec<&FeatureVec> = self.knn(&Target::Ids(pos_ids.clone()), n_pos_samples, neg_ids, 0.25).iter()
+            .map(|(i, _)| self.ids.binary_search(&i))
+            .filter(|r| r.is_ok())
+            .map(|r| &self.features[r.unwrap()])
+            .collect();
+        
+        // Use negative sampling to augment the negative set
         let mut rng = thread_rng();
         let neg_samples = sample(&mut rng, &self.ids, n_neg_samples);
         let neg_sample_features: Vec<&FeatureVec> = neg_samples.iter()
@@ -139,28 +149,36 @@ impl Features {
             .collect();
         
         let n_pos = pos_features.len();
+        let n_pos_samples = pos_sample_features.len();
         let n_neg = neg_features.len();
         let n_neg_samples = neg_sample_features.len();
         
-        let mut X = Array::zeros(n_pos + n_neg + n_neg_samples, FEATURE_DIM);
-        let mut y = Array::zeros(n_pos + n_neg + n_neg_samples, 1);
+        let mut X = Array::zeros(n_pos + n_pos_samples + n_neg + n_neg_samples, FEATURE_DIM);
+        let mut y = Array::ones(n_pos + n_pos_samples + n_neg + n_neg_samples, 1);
         for i in 0..n_pos {
-            y.set(i, 0, 1.);
+            y.set(i, 0, 0.);
             for j in 0..FEATURE_DIM {
                 X.set(i, j, pos_features[i][j]);
             }
         }
+        for i in 0..n_pos_samples {
+            y.set(i + n_pos, 0, 0.);
+            for j in 0..FEATURE_DIM {
+                X.set(i + n_pos, j, pos_sample_features[i][j]);
+            }
+        }
         for i in 0..n_neg {
             for j in 0..FEATURE_DIM {
-                X.set(i + n_pos, j, neg_features[i][j]);
+                X.set(i + n_pos + n_pos_samples, j, neg_features[i][j]);
             }
         }
         for i in 0..n_neg_samples {
             for j in 0..FEATURE_DIM {
-                X.set(i + n_pos + n_neg, j, neg_sample_features[i][j]);
+                X.set(i + n_pos + n_pos_samples + n_neg, j, neg_sample_features[i][j]);
             }
         }
         
+        // Shuffle the dataset
         let mut shuffled_idxs: Vec<usize> = Vec::with_capacity(X.rows());
         for i in 0..X.rows() {
             shuffled_idxs.push(i as usize);
@@ -169,29 +187,25 @@ impl Features {
         X = X.get_rows(&shuffled_idxs);
         y = y.get_rows(&shuffled_idxs);
         
-//         let mut model = Hyperparameters::new(X.cols(), KernelType::Linear, 2).build();
-        let mut model = Hyperparameters::new(X.cols())
-                                         .learning_rate(1.0)
-                                         .l2_penalty(0.5)
-                                         .l1_penalty(0.0)
-                                         .build();
+        let mut model = Hyperparameters::new(X.cols(), KernelType::Linear, 2)
+                                            .C(0.3)
+                                            .build();
+
+        model.fit(&X, &y).expect("Failed to fit");
         
-        let num_epochs = 20;
-        for i in 0..num_epochs {
-            model.fit(&X, &y).expect("Failed to fit");
-        }
-        
-        let labels: Vec<_> = self.features.par_iter().map(
+        let mut labels: Vec<_> = self.features.par_iter().map(
             |f| {
                 let mut x = Array::zeros(1, FEATURE_DIM);
                 for i in 0..FEATURE_DIM {
                     x.set(0, i, f[i]);
                 }
-                model.predict(&x).expect("Failed to predict").get(0, 0) as f32
+                model.decision_function(&x).expect("Failed to predict").get(0, 0) as f32
             }
         ).enumerate().collect();
-//         labels.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
-        labels.par_iter().filter(|(_, a)| *a > 0.5)
-              .map(|(i, _)| &self.ids[*i]).cloned().collect()
+        labels.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+        labels.par_iter()
+              .filter(|(_, s)| min_t <= *s && *s <= max_t)
+              .map(|(i, a)| (*&self.ids[*i], *a))
+              .collect()
     }
 }

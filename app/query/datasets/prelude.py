@@ -805,13 +805,17 @@ def face_knn(features=None, ids=None, k=None,
     return r.json()
 
 
-def face_svm(pos_ids, neg_ids=[], neg_samples=1000):
+def face_svm(pos_ids, neg_ids=[], neg_samples=1000, pos_samples=500,
+             min_threshold=-2.0, max_threshold=2.0):
     r = requests.post(
         'http://localhost:8111/facesearch_svm',
         json={
             'pos_ids': pos_ids,
             'neg_ids': neg_ids,
-            'neg_samples': neg_samples
+            'pos_samples': pos_samples,
+            'neg_samples': neg_samples,
+            'min_threshold': min_threshold,
+            'max_threshold': max_threshold
         })
     return r.json()
 

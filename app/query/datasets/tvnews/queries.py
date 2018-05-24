@@ -672,15 +672,15 @@ def face_search_svm_by_id():
     #     741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225, 
     #     178251]
     
-    increment = 0.1
-    min_thresh = -2.0
-    max_thresh = 2.0
+    increment = 0.2
+    min_thresh = -5.0
+    max_thresh = 1.0
     max_results_per_group = 50
     exclude_labeled = False
 
     face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
 
-    face_scores = face_svm(target_face_ids, not_target_face_ids, 1000)
+    face_scores = face_svm(target_face_ids, not_target_face_ids, 1000, 500, min_thresh, max_thresh)
     
     face_scores_by_bucket = {} 
     idx = 0

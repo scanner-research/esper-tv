@@ -207,20 +207,20 @@ def qs_to_result(result: QuerySet,
                 id_to_position = defaultdict(lambda: float('inf'))
                 for i, id_ in enumerate(custom_order_by_id):
                     id_to_position[id_] = i
-                with Timer('a'):
+#                 with Timer('a'):
                     #                    result.values(frame_path + '__video', frame_path + '__number',
                     #                                  frame_path + '__id').print_sql()
                     #                    sys.stdout.flush()
 
-                    for inst in list(
-                            result.values(
-                                'id', frame_path + '__video', frame_path + '__number',
-                                frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)):
-                        frame_key = (inst[frame_path + '__video'], inst[frame_path + '__number'],
-                                     inst[frame_path + '__id'])
-                        frames[frame_key] = min(id_to_position[inst['id']], frames[frame_key]
-                                                if frame_key in frames else float('inf'))
-                        frame_ids.add(inst[frame_path + '__id'])
+                for inst in list(
+                        result.values(
+                            'id', frame_path + '__video', frame_path + '__number',
+                            frame_path + '__id').annotate(m=F('id') % stride).filter(m=0)):
+                    frame_key = (inst[frame_path + '__video'], inst[frame_path + '__number'],
+                                 inst[frame_path + '__id'])
+                    frames[frame_key] = min(id_to_position[inst['id']], frames[frame_key]
+                                            if frame_key in frames else float('inf'))
+                    frame_ids.add(inst[frame_path + '__id'])
                 sys.stdout.flush()
                 all_results = get_all_results()
                 frames = sorted([x for x in frames.items()], key=lambda x: x[1])

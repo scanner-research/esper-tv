@@ -99,14 +99,18 @@ fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<(u64,f32)>> {
 struct FaceSearchSVMInput {
     pos_ids: Vec<u64>,
     neg_ids: Vec<u64>,
-    neg_samples: usize
+    min_threshold: f32,
+    max_threshold: f32,
+    neg_samples: usize,
+    pos_samples: usize
 }
 
 #[post("/facesearch_svm", format="application/json", data="<input>")]
-fn face_search_svm(input: Json<FaceSearchSVMInput>) -> Json<Vec<u64>> {
+fn face_search_svm(input: Json<FaceSearchSVMInput>) -> Json<Vec<(u64,f32)>> {
     let pos_ids = input.pos_ids.iter().map(|i| *i as knn::Id).collect();
     let neg_ids = input.neg_ids.iter().map(|i| *i as knn::Id).collect();
-    Json(FEATURES.svm(&pos_ids, &neg_ids, input.neg_samples))
+    Json(FEATURES.svm(&pos_ids, &neg_ids, input.neg_samples, input.pos_samples,
+                      input.min_threshold, input.max_threshold))
 }
 
 #[derive(Serialize, Deserialize)]
