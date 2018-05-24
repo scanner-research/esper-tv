@@ -1,5 +1,5 @@
 from query.datasets.prelude import *
-from scannerpy.stdlib import pipelines, parsers
+from scannerpy.stdlib import pipelines, readers
 
 LABELER, _ = Labeler.objects.get_or_create(name='tinyfaces')
 LABELED_TAG, _ = Tag.objects.get_or_create(name='tinyfaces:labeled')
@@ -17,7 +17,8 @@ def face_detect(videos, all_frames, force=False):
         log.debug('Depickling')
         all_bboxes = pickle.load(open('/app/bboxes.pkl', 'rb'))
 
-        def load_bboxes((video, vid_frames)):
+        def load_bboxes(tup):
+            (video, vid_frames) = tup
             name = output_name(video, vid_frames)
             if name not in all_bboxes: return None
             return [[{
@@ -121,7 +122,7 @@ def face_detect(videos, all_frames, force=False):
             for (video, video_frames) in tqdm(zip(videos, filtered_frames)):
                 # video_faces = list(
                 #     db.table(output_name(video, video_frames)).load(
-                #         ['bboxes'], lambda lst, db: parsers.bboxes(lst[0], db.protobufs)))
+                #         ['bboxes'], lambda lst, db: readers.bboxes(lst[0], db.protobufs)))
 
                 all_frames.append([Frame(video=video, number=n) for n in video_frames])
 
