@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom';
 import axios from 'axios';
 import SearchResultView from 'views/SearchResultView.jsx';
 import SearchResult from 'models/SearchResult.jsx';
-import {PythonContext} from 'views/contexts.jsx';
+import {PythonContext, BackendSettingsContext, SearchContext} from 'views/contexts.jsx';
+import Provider from 'utils/Provider.jsx';
 
 // For some reason, `import` syntax doesn't work here? AMD issues?
 let widgets = require('@jupyter-widgets/base');
