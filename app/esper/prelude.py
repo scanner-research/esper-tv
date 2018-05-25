@@ -9,7 +9,6 @@ from django.utils import timezone
 from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
-from pyspark.sql import SparkSession, Row
 from functools import reduce
 from typing import Dict
 from pprint import pprint
@@ -30,7 +29,6 @@ import json
 import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import gc
-import csv
 import requests
 import cv2
 import itertools
@@ -610,67 +608,6 @@ def collect(l, kfn):
 # For breaking out of nested loops
 class Break(Exception):
     pass
-
-
-SPARK_DATA_PREFIX = '/app/spark-data'
-SPARK_MEMORY = '40g'  #'80g'  #'256g'
-
-
-class SparkWrapper:
-    def __init__(self):
-        self.spark = SparkSession.builder \
-            .master("spark://spark:7077") \
-            .config("spark.driver.memory", SPARK_MEMORY) \
-            .config("spark.worker.memory", SPARK_MEMORY) \
-            .config("spark.executor.memory", SPARK_MEMORY) \
-            .config("spark.driver.maxResultSize", SPARK_MEMORY) \
-            .config("spark.rpc.message.maxSize", "2047") \
-            .getOrCreate()
-        self.sc = self.spark.sparkContext
-
-    # queryset to dataframe
-    def qs_to_df(self, qs):
-        qs.save_to_csv('tmp')
-        return self.spark.read.format("csv").option("header", "true").option(
-            "inferSchema", "true").load("/app/pg/tmp.csv")
-
-    # dictionaries to dataframe
-    def dicts_to_df(self, ds):
-        return self.spark.createDataFrame(self.sc.parallelize(ds, 96).map(lambda d: Row(**d)))
-
-    def append_column(self, df, name, col):
-        csv_path = '/app/{}.csv'.format(name)
-        with open(csv_path, 'wb') as f:
-            writer = csv.writer(f, delimiter=',')
-            writer.writerow(['id', name])
-            for id, x in col:
-                writer.writerow([id, str(x).lower() if x is not None else ''])
-        col_df = self.spark.read.format("csv").option("header", "true").option(
-            "inferSchema", "true").load(csv_path)
-        # os.remove(csv_path)
-
-        # wcrichto 1-26-18: withColumn appears to fail in practice with inscrutable errors, so
-        # we have to use a join instead.
-        return df.join(col_df, df.id == col_df.id).drop(col_df.id)
-
-    def median(self, df, col):
-        return df.approxQuantile(col, [0.5], 0.001)[0]
-
-    def load(self, key, fn, force=False):
-        key = '{}/{}'.format(SPARK_DATA_PREFIX, key)
-        has_dir = os.path.isdir(key)
-        if not has_dir or force:
-            log.debug('Not cached, loading spark key {}'.format(key))
-            if force and has_dir:
-                shutil.rmtree(key)
-            with Timer('Computing data'):
-                df = fn()
-            with Timer('Writing data'):
-                df.write.save(key)
-            return df
-        else:
-            with Timer('Reading data'):
-                return self.spark.read.load(key)
 
 
 # http://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html

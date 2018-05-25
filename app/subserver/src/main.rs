@@ -36,7 +36,7 @@ mod json;
 
 lazy_static! {
     static ref CORPUS: Corpus<corpus::IndexedTable>  = {
-        let paths: Vec<_> = glob("/app/subs/*").expect("Glob failed")
+        let paths: Vec<_> = glob("/app/data/subs/*").expect("Glob failed")
             .filter_map(|s| match s {
                 Ok(p) => {
                     Some(p.to_str().expect("Path -> str failed").to_string())
@@ -87,7 +87,7 @@ fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<(u64,f32)>> {
         Target::Ids(input.ids.iter().map(|i| *i as knn::Id).collect())
     };
     let non_targets: Vec<knn::Id> = input.non_targets.iter().map(|i| *i as knn::Id).collect();
-    
+
     Json(if input.k == -1 {
         FEATURES.tnn(&target, input.min_threshold, input.max_threshold, &non_targets, input.non_target_penalty)
     } else {

@@ -23,5 +23,5 @@ pyopenssl
 statsmodels
 scikit-learn
 tqdm
-setuptools_rust
 google_images_download
+psutil
