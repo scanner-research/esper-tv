@@ -298,6 +298,12 @@ export default class SearchResultView extends React.Component {
 
   _onClick = () => {
     let disabled = !this.state.keyboardDisabled;
+
+    // wcrichto 5-25-18: in order to disable the Jupyter keyboard manager, we have to call disable in an infinite
+    // loop. This is because the ipywidgets framework uses KeyboardManager.register_events on the widget container
+    // which can cause unpredictable behavior in unexpectedly reactivating the keyboard manager (hard to consistently
+    // maintain focus on the widget area), so the simplest hacky solution is just to forcibly disable the manager
+    // by overriding all other changes to its settings.
     if (disabled) {
       this._timer = setInterval(() => {this.props.jupyter.keyboard_manager.disable();}, 100);
     } else {
