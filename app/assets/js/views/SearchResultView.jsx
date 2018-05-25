@@ -288,7 +288,8 @@ class GroupView extends React.Component {
   }
 }
 
-class JupyterButton extends React.Component {
+@observer
+export default class SearchResultView extends React.Component {
   state = {
     keyboardDisabled: false
   }
@@ -306,22 +307,6 @@ class JupyterButton extends React.Component {
     this.setState({keyboardDisabled: disabled});
   }
 
-  componentWillUnmount() {
-    clearInterval(this._timer);
-    this.props.jupyter.keyboard_manager.enable();
-  }
-
-  render() {
-    return (
-      <button onClick={this._onClick}>{
-        this.state.keyboardDisabled ? 'Enable Jupyter keyboard' : 'Disable Jupyter keyboard'
-      }</button>
-    );
-  }
-}
-
-@observer
-export default class SearchResultView extends React.Component {
   componentWillMount() {
     let settings = {
       results_per_page: 50,
@@ -360,14 +345,23 @@ export default class SearchResultView extends React.Component {
     });
   }
 
+  componentWillUnmount() {
+    clearInterval(this._timer);
+    this.props.jupyter.keyboard_manager.enable();
+  }
+
   render() {
     let hasJupyter = this.props.jupyter !== null;
+    let JupyterButton = () => <button onClick={this._onClick}>{
+        this.state.keyboardDisabled ? 'Enable Jupyter keyboard' : 'Disable Jupyter keyboard'
+    }</button>;
     return (
       <FrontendSettingsContext.Provider value={this._settings}>
         <div className='search-results'>
-          {hasJupyter ? <JupyterButton {...this.props} /> : <div />}
+          {hasJupyter ? <JupyterButton /> : <div />}
           <SidebarView {...this.props} />
           <GroupsView {...this.props} />
+          {hasJupyter ? <JupyterButton /> : <div />}
         </div>
       </FrontendSettingsContext.Provider>
     )
