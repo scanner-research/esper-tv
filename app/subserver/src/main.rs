@@ -70,7 +70,8 @@ fn sub_count(input: Json<SubSearchInput>) -> Json<Vec<u64>> {
 
 #[derive(Serialize, Deserialize)]
 struct FaceSearchInput {
-    features: Vec<f32>,
+    exemplar: Vec<f32>,
+    exemplars: Vec<Vec<f32>>,
     ids: Vec<u64>,
     k: isize,
     min_threshold: f32,
@@ -81,10 +82,12 @@ struct FaceSearchInput {
 
 #[post("/facesearch", format="application/json", data="<input>")]
 fn face_search(input: Json<FaceSearchInput>) -> Json<Vec<(u64,f32)>> {
-    let target = if input.ids.is_empty() {
-        Target::Exemplar(Array::from_vec(input.features.clone()))
-    } else {
+    let target = if !input.ids.is_empty() {
         Target::Ids(input.ids.iter().map(|i| *i as knn::Id).collect())
+    } else if !input.exemplars.is_empty() {
+        Target::Exemplars(input.exemplars.iter().map(|v| Array::from_vec(v.clone())).collect())
+    } else {
+        Target::Exemplar(Array::from_vec(input.exemplar.clone()))
     };
     let non_targets: Vec<knn::Id> = input.non_targets.iter().map(|i| *i as knn::Id).collect();
     

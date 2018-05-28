@@ -38,7 +38,7 @@ def file_size(filename):
     return st.st_size
 
 
-def fetch_images(name, outdir, n=25, query_extras=None,
+def fetch_images(name, outdir=IMG_CACHE_DIR, n=25, query_extras=None,
                  force=False):
     """Fetch images from Google"""
     out_subdir =  os.path.join(outdir, name)
@@ -178,42 +178,45 @@ def _get_models():
     return _face_detector, _face_embeddor
 
 
-def embed_images(raw_images, one_face_per_img):
-    face_detector, face_embeddor = _get_models()
+def detect_faces_in_images(raw_images):
+    face_detector, _ = _get_models()
 
     detected_faces = face_detector.face_detect(raw_images)
-    cropped_images = []
+    result = []
+    
     for img, detections in zip(raw_images, detected_faces):
         if len(detections) == 0:
-            print('Failed to detect faces in image')
-            continue
-        if len(detections) > 1:
-            print('Multiple faces detected in image')
-            if one_face_per_img:
-                continue
-        for box in detections:
-            print('Face:', box)
-            x1 = int(math.floor(box.x1))
-            x2 = int(math.ceil(box.x2))
-            y1 = int(math.floor(box.y1))
-            y2 = int(math.ceil(box.y2))
-            cropped_images.append(img[y1:y2, x1:x2, :])
+            result.append([])
+        else:
+            cropped_images = []
+            for box in detections:
+                x1 = int(math.floor(box.x1))
+                x2 = int(math.ceil(box.x2))
+                y1 = int(math.floor(box.y1))
+                y2 = int(math.ceil(box.y2))
+                cropped_image = img[y1:y2, x1:x2, :]
+                if cropped_image.size > 0:  
+                    cropped_images.append(cropped_image)
+            result.append(cropped_images)
+    return result
+    
 
-    # detect faces
+def embed_images(cropped_images, one_face_per_img=True):
+    _, face_embeddor = _get_models()
     embs = []
-    for img in cropped_images:
-        if img.size == 0:
+    for img_list in cropped_images:
+        if one_face_per_img and len(img_list) > 1:
             continue
-        emb = face_embeddor.embed(img)
-        embs.append(emb)
+        for img in img_list:
+            if img.size == 0:
+                continue
+            emb = face_embeddor.embed(img)
+            embs.append(emb)
 
     if len(embs) == 0:
         raise RuntimeError('No embeddings were created')
 
-    emb_0 = embs[0]
-    emb_mean = np.mean(embs, axis=0)
-    assert emb_mean.shape == emb_0.shape
-    return emb_mean
+    return embs
 
 
 def embed_directory(name_path, one_face_per_img=True):
@@ -236,7 +239,9 @@ def embed_directory(name_path, one_face_per_img=True):
         raw_images.append(im)
         image_paths.append(img_path)
 
-    return embed_images(raw_images, one_face_per_img)
+    return np.mean(
+        embed_images(detect_faces_in_images(raw_images), one_face_per_img), 
+        axis=0)
 
 
 def name_to_embedding(name, n=25, cache=True, one_face_per_img=True):
