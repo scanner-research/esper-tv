@@ -110,7 +110,7 @@ class PrecisionModel(object):
             return idx_to_face_ids, idx_to_bucket
 
         lower_face_ids, self.lower_coresp_buckets = sample_buckets(lower_buckets, n=50)
-        upper_face_ids, self.upper_coresp_buckets = sample_buckets(upper_buckets, n=100)
+        upper_face_ids, self.upper_coresp_buckets = sample_buckets(upper_buckets, n=50)
 
         self.lower_face_qs = Face.objects.filter(id__in=lower_face_ids)
         assert(self.lower_face_qs.count() == len(lower_face_ids))
@@ -200,7 +200,7 @@ def load_and_select_faces_from_images(img_dir):
     return selected_crops
 
 
-def face_search_by_embeddings(embs, increment=0.05, min_thresh=0., max_thresh=1.,
+def face_search_by_embeddings(embs, increment=0.05, min_thresh=0., max_thresh=1.2,
                               exclude_labeled=False, show_name=None):
     face_sims = face_knn(targets=embs, min_threshold=min_thresh, max_threshold=max_thresh)
     
@@ -309,7 +309,7 @@ def compute_gender_breakdown(model):
     return gender_breakdown
 
 
-def show_gender_examples(model, precision_thresh=0.8, n=100):
+def show_gender_examples(model, precision_thresh=0.8, n=50):
     """
     Tiled examples for each gender pertaining to a labeled identity
     """
@@ -318,16 +318,15 @@ def show_gender_examples(model, precision_thresh=0.8, n=100):
         if model.precision_by_bucket[k] >= precision_thresh:
             selected_ids.extend(model.face_ids_by_bucket[k])
     
+    results = {}
     for gender in ['M', 'F', 'U']:
         ids = [
             x['face__id'] for x in FaceGender.objects.filter(
                 face__id__in=selected_ids, gender__name=gender
             ).distinct('face__id').values('face__id')[:n]
         ]
-        im = faces_to_tiled_img(Face.objects.filter(id__in=ids), cols=10)
-        print('Gender', ':', gender)
-        imshow(im)
-        plt.show()
+        results[gender] = qs_to_result(Face.objects.filter(id__in=ids))
+    return esper_widget(group_results([x for x in results.items()]), crop_bboxes=True)
         
 
 def plot_histogram_of_face_sizes(model, max_bucket=35):

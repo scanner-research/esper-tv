@@ -13,6 +13,7 @@ import os
 import query.base_models as base_models
 import importlib
 import esper.queries as queries
+import esper.embed_google_images as embed_google_images
 from typing import Any, Dict, List, Union
 from django.db.models.query import QuerySet
 from django.db.models import F

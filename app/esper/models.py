@@ -40,7 +40,8 @@ class Frame(base.Frame):
 
 
 class Labeler(base.Labeler):
-    pass
+    data_path = base.CharField()
+    created = models.DateTimeField(auto_now_add=True, blank=True)
 
 
 class Gender(models.Model):
@@ -116,6 +117,7 @@ class FaceGender(base.Attribute):
 class FaceIdentity(base.Attribute):
     face = models.ForeignKey(Face)
     identity = models.ForeignKey(Thing)
+    probability = models.FloatField(default=1.)
 
     class Meta:
         unique_together = ('labeler', 'face')

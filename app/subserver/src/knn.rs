@@ -27,7 +27,8 @@ pub struct Features {
 
 pub enum Target {
     Ids(Vec<Id>),
-    Exemplar(FeatureVec)
+    Exemplar(FeatureVec),
+    Exemplars(Vec<FeatureVec>)
 }
 
 impl Features {
@@ -94,6 +95,7 @@ impl Features {
     pub fn knn(&self, target: &Target, k: usize, non_targets: &Vec<Id>, non_target_penalty: f32) -> Vec<(u64,f32)> {
         let targets = match target {
             Target::Exemplar(v) => vec![v],
+            Target::Exemplars(vs) => vs.iter().collect(),
             Target::Ids(ids) => ids.iter().map(
                 |i| &self.features[self.ids.binary_search(&i).unwrap()]
             ).collect()
@@ -106,6 +108,7 @@ impl Features {
     pub fn tnn(&self, target: &Target, min_t: f32, max_t: f32, non_targets: &Vec<Id>, non_target_penalty: f32) -> Vec<(u64,f32)> {
         let targets = match target {
             Target::Exemplar(v) => vec![v],
+            Target::Exemplars(vs) => vs.iter().collect(),
             Target::Ids(ids) => ids.iter().map(
                 |i| &self.features[self.ids.binary_search(&i).unwrap()]
             ).collect()
