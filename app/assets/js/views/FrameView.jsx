@@ -158,9 +158,9 @@ class BoxView extends React.Component {
           }
 
           let color =
-            frontendSettings.get('show_gender_as_border') && box.gender_id
+            box.gender_id !== undefined
             ? this._searchResult.gender_colors[this._searchResult.genders[box.gender_id].name]
-            : this._searchResult.labeler_colors[box.labeler_id];
+            : 'red';
 
           let style = {
             left: box.bbox_x1 * this.props.width + offsetX,
