@@ -352,8 +352,13 @@ export default class SearchResultView extends React.Component {
   }
 
   componentWillUnmount() {
-    clearInterval(this._timer);
-    this.props.jupyter.keyboard_manager.enable();
+    if (this._timer != null) {
+      clearInterval(this._timer);
+    }
+
+    if (this.props.jupyter !== null) {
+      this.props.jupyter.keyboard_manager.enable();
+    }
   }
 
   render() {
