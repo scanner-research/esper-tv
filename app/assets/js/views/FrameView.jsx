@@ -201,11 +201,10 @@ class BoxView extends React.Component {
             }
           }).bind(this);
 
-          let things = backendSettings.things[backendSettings.selected];
           return (<div>
             {box.identity_id
              ? <div className='bbox-label' style={labelStyle}>
-               {modifyLabel(things[box.identity_id])}
+               {modifyLabel(backendSettings.things[box.identity_id])}
              </div>
              : <div />}
             <div onMouseOver={this._onMouseOver}
@@ -219,7 +218,7 @@ class BoxView extends React.Component {
              ? <div style={selectStyle}>
                <Select2
                  ref={(n) => {this._select = n;}}
-                 data={_.map(things, (v, k) => ({text: v, id: k}))}
+                 data={_.map(backendSettings.things, (v, k) => ({text: v, id: k}))}
                  options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
                  onSelect={this._onSelect}
                  onClose={(e) => {
