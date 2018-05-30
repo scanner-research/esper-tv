@@ -12,29 +12,49 @@ except ImportError as e:
 import _pickle as pickle
 import os
 import concurrent.futures
+import tempfile
+import random
+import string
 
+from subprocess import check_call
 from esper import embed_google_images
 from collections import defaultdict, Counter
 from django.db.models.functions import Cast
 from django.db.models import F, Sum, FloatField, Count, IntegerField
+from django.db import transaction
 
 
 RESULTS_DIR = '/app/data/face_eval'
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
 
-    
+GCS_MODEL_PREFIX = 'gs://esper/tvnews/face_identity_model'
+
+
+def random_hex_string(length):
+    return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
+
+
 class FaceIdentityModel(object):
     """
     Standardized results from a run of the face identity model
     """
     
-    def __init__(self, name, face_ids_by_bucket, precision_by_bucket, model_params):
+    def __init__(self, name, face_ids_by_bucket, face_ids_to_score, precision_by_bucket, model_params):
         self.name = name
+        self._face_ids_to_score = face_ids_to_score
         self._face_ids_by_bucket = face_ids_by_bucket
         self._precision_by_bucket = precision_by_bucket
         self._model_params = model_params
      
+    @property
+    def model_params(self):
+        return self._model_params
+    
+    @property
+    def face_ids_to_score(self):
+        return self._face_ids_to_score
+    
     @property
     def precision_by_bucket(self):
         return self._precision_by_bucket
@@ -71,16 +91,20 @@ class FaceIdentityModel(object):
         return sum(self._precision_by_bucket[k] * len(self._face_ids_by_bucket[k]) 
                    for k in self.buckets)
     
-    @staticmethod
-    def save(obj, out_path=None):
-        if not out_path:
-            out_path = os.path.join(RESULTS_DIR, '{}.pkl'.format(obj.name))
-        with open(out_path, 'wb') as f:
-            pickle.dump(obj, f)
+    def dumps(self):
+        return pickle.dumps({
+            'name': self.name,
+            'face_ids_to_score': self._face_ids_to_score,
+            'face_ids_by_bucket': self._face_ids_by_bucket,
+            'precision_by_bucket': self._precision_by_bucket,
+            'model_params': self._model_params
+        })
     
-    @staticmethod
-    def dumps(obj):
-        return pickle.dumps(obj)
+    def save(self, out_path=None):
+        if not out_path:
+            out_path = os.path.join(RESULTS_DIR, '{}.pkl'.format(self.name))
+        with open(out_path, 'wb') as f:
+            f.write(self.dumps())
     
     @staticmethod
     def load(in_path=None, name=None):
@@ -88,7 +112,71 @@ class FaceIdentityModel(object):
             in_path = os.path.join(RESULTS_DIR, '{}.pkl'.format(name))
         with open(in_path, 'rb') as f:
             obj = pickle.load(f)
-        return obj
+        return FaceIdentityModel(
+            name=obj['name'],
+            face_ids_to_score=obj['face_ids_to_score'],
+            face_ids_by_bucket=obj['face_ids_by_bucket'],
+            precision_by_bucket=obj['precision_by_bucket'],
+            model_params=obj['model_params']
+        )
+    
+    def save_to_gcs(self, out_path=None):
+        if not out_path:
+            out_path = os.path.join(GCS_MODEL_PREFIX, '{}.pkl'.format(self.name))
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(self.dumps())
+            f.flush()
+            check_call(['gsutil', 'cp', f.name, out_path])
+        return out_path
+    
+    @staticmethod
+    def load_from_gcs(in_path=None, name=None):
+        if not in_path:
+            in_path = os.path.join(GCS_MODEL_PREFIX, '{}.pkl'.format(name))
+        tmp_file = '/tmp/face_identity_{}.pkl'.format(random_hex_string(16))
+        try:
+            check_call(['gsutil', 'cp', in_path, tmp_file])
+            return FaceIdentityModel.load(in_path=tmp_file)
+        finally:
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
+    
+
+def commit_face_identities_to_db(model, person, labeler):
+    """person is a Thing and labeler is a Labeler"""
+    id_set = set()
+    
+    min_prob = 0.001
+    
+    # build score interpolation function
+    f_x = []
+    f_y = []
+    for k in sorted(model.buckets):
+        f_x.append((k[0] + k[1]) / 2.)
+        f_y.append(model.precision_by_bucket[k])
+    
+    with transaction.atomic():
+        for k in sorted(model.buckets):
+            # Skip if the whole bucket is less than the threshold
+            if np.interp(k[0], f_x, f_y) < min_prob and np.interp(k[1], f_x, f_y) < min_prob:
+                continue
+                
+            face_ids = model.face_ids_by_bucket[k]
+            face_scores = [model.face_ids_to_score[x] for x in face_ids]
+            face_probs = [float(x) for x in np.interp(face_scores, f_x, f_y)]
+            for i, p in zip(face_ids, face_probs):
+                if p >= min_prob:
+                    if i in id_set:
+                        print('Warning: face id {} is duplicated in more than one bucket'.format(i))
+                        continue
+                    else:
+                        id_set.add(i)
+                    FaceIdentity.objects.create(
+                        face_id=i,
+                        probability=p, 
+                        labeler=labeler, 
+                        identity=person
+                    )
     
 
 class PrecisionModel(object):
@@ -201,20 +289,13 @@ def load_and_select_faces_from_images(img_dir):
 
 
 def face_search_by_embeddings(embs, increment=0.05, min_thresh=0., max_thresh=1.2,
-                              exclude_labeled=False, show_name=None):
+                              exclude_labeled=False):
     face_sims = face_knn(targets=embs, min_threshold=min_thresh, max_threshold=max_thresh)
+    face_ids_to_score = { a : b for a, b in face_sims if b >= min_thresh and b < max_thresh }
     
-    if show_name is not None:
-        face_set = set(x['id'] for x in Face.objects.filter(shot__video__show__name=show_name).values('id'))
-    else:
-        face_set = None
-
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
         face_ids = [x for x, _ in filter(lambda z: z[1] >= t and z[1] < t + increment, face_sims)]
-        
-        if face_set is not None:
-            face_ids = [x for x in filter(lambda x: x in face_set, face_ids)]
             
         if len(face_ids) != 0:
             results_by_bucket[(t, t + increment)] = face_ids
@@ -222,7 +303,7 @@ def face_search_by_embeddings(embs, increment=0.05, min_thresh=0., max_thresh=1.
     if len(results_by_bucket) == 0:
         raise Exception('No results to show')
         
-    return results_by_bucket
+    return results_by_bucket, face_ids_to_score
 
 
 def faces_to_tiled_img(faces, cols=12):

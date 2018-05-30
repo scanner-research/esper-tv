@@ -127,7 +127,7 @@ def handlabeled():
 
 @query("Donald Trump")
 def donald_trump():
-    return qs_to_result(FaceIdentity.objects.filter(identity__name='donald trump'))
+    return qs_to_result(FaceIdentity.objects.filter(identity__name='donald trump', probability__gt=0.99))
 
 
 @query("Commercials")
