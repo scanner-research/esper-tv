@@ -85,6 +85,8 @@ services:
       - TERM={term}
       - RUST_BACKTRACE=full
     tty: true # https://github.com/docker/compose/issues/2231#issuecomment-165137408
+    security_opt: # make gdb work
+      - seccomp=unconfined
 """.format(
         nginx_port=NGINX_PORT,
         ipython_port=IPYTHON_PORT,
@@ -118,7 +120,6 @@ ports: ["5432"]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', required=True)
-    parser.add_argument('--dataset', default='default')
     parser.add_argument('--extra-processes', nargs='*', default=[], choices=extra_processes.keys())
     parser.add_argument('--extra-services', nargs='*', default=[], choices=extra_services.keys())
     parser.add_argument(
@@ -232,7 +233,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
 
     for service in list(config.services.values()):
         env_vars = [
-            'ESPER_ENV={}'.format(base_config.storage.type), 'DATASET={}'.format(args.dataset),
+            'ESPER_ENV={}'.format(base_config.storage.type),
             'DATA_PATH={}'.format(base_config.storage.path), 'HOSTNAME={}'.format(hostname)
         ]
 

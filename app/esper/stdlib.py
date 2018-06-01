@@ -21,7 +21,8 @@ from django.db.models.functions import Cast
 import django.db.models as models
 from esper.prelude import collect, BUCKET
 from query.base_models import Track
-from query.models import Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender
+from query.models import \
+    Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType
 
 def access(obj: Any, path: str) -> Any:
     fields = path.split('__')
@@ -244,16 +245,13 @@ def qs_to_result(result: QuerySet,
                 'max_frame': t.max_frame,
             }
 
-            # if model is not None and False:
-            #     min_model = model.objects.filter(frame__number=t.min_frame, tracks=t)[0]
-            #     result['objects'] = [pose_to_dict(Pose.objects.filter(person=min_model)[0])]
-            # else:
-            #     result['objects'] = []
-
             if cls is Speaker:
-                result['gender_id'] = t.gender_id
+                result['gender'] = t.gender_id
                 if t.identity is not None:
-                    result['identity'] = t.identity.id
+                    result['identity'] = t.identity_id
+
+            if cls is Segment:
+                result['thing'] = t.thing.id
 
             materialized_result.append(result)
         materialized_result.sort(key=itemgetter('video', 'min_frame'))
@@ -325,9 +323,11 @@ def esper_js_globals():
             schema.append([cls, get_fields(getattr(ds, cls))])
 
     things = {
-        d['id']: d['name']
-        for d in Thing.objects.filter(
-            type__name='person').order_by('name').values('id', 'name')
+        ty.name: {
+            d.id: d.name
+            for d in Thing.objects.filter(type=ty)
+        }
+        for ty in ThingType.objects.all()
     }
 
     return {
@@ -365,9 +365,9 @@ def result_with_metadata(result):
     genders = to_dict(Gender.objects.all())
 
     return {
-        'count': result['count'],
+        'count': result['count'] if 'count' in result else 0,
+        'type': result['type'] if 'type' in result else '',
         'result': result['result'],
-        'type': result['type'],
         'videos': videos,
         'frames': frames,
         'labelers': labelers,

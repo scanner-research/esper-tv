@@ -114,14 +114,11 @@ def srt_to_vtt(s):
 
 # Get subtitles for video
 def subtitles(request):
-    m = ModelDelegator(request.GET.get('dataset'))
-    m.import_all(globals())
-
     video_id = request.GET.get('video')
     video = Video.objects.get(id=video_id)
 
     srt = video.srt_extension
-    sub_path = '/app/subs/{}.{}.srt'.format(video.item_name(), srt)
+    sub_path = '/app/data/subs/{}.{}.srt'.format(video.item_name(), srt)
 
     s = open(sub_path, 'rb').read().decode('utf-8')
     vtt = srt_to_vtt(s)

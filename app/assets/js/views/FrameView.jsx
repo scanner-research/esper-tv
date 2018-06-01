@@ -1,10 +1,10 @@
 import React from 'react';
 import {observer} from 'mobx-react';
-import Select2 from 'react-select2-wrapper';
 import {BackendSettingsContext, FrontendSettingsContext, SearchContext} from './contexts';
 import Spinner from './Spinner.jsx';
-import keyboardManager from 'utils/KeyboardManager.jsx';
 import Consumer from 'utils/Consumer.jsx';
+import keyboardManager from 'utils/KeyboardManager.jsx';
+import Select from './Select.jsx';
 
 export let boundingRect = (div) => {
   let r = div.getBoundingClientRect();
@@ -109,11 +109,6 @@ class BoxView extends React.Component {
       this.props.onDelete(this.props.i);
     } else if(chr == 't') {
       this.setState({showSelect: !this.state.showSelect});
-      if (this.state.showSelect) {
-        keyboardManager.lock();
-      } else {
-        keyboardManager.unlock();
-      }
       //this.props.onTrack(this.props.i);
     } else if(chr == 'q') {
       this.props.onSetTrack(this.props.i);
@@ -122,12 +117,9 @@ class BoxView extends React.Component {
     }
   }
 
-  _onSelect = (e) => {
-    keyboardManager.unlock();
-
-    this.props.box.identity_id = e.target.value;
+  _onSelect = (value) => {
+    this.props.box.identity_id = value;
     this.setState({showSelect: false});
-    e.preventDefault();
   }
 
   componentDidMount() {
@@ -137,12 +129,6 @@ class BoxView extends React.Component {
   componentWillUnmount() {
     document.removeEventListener('keypress', this._onKeyPress);
     document.removeEventListener('mousemove', this._onMouseMove);
-  }
-
-  componentDidUpdate() {
-    if (this.state.showSelect) {
-      this._select.el.select2('open');
-    }
   }
 
   render() {
@@ -160,7 +146,7 @@ class BoxView extends React.Component {
           let color =
             box.gender_id !== undefined
             ? this._searchResult.gender_colors[this._searchResult.genders[box.gender_id].name]
-            : 'red';
+            : 'yellow';
 
           let style = {
             left: box.bbox_x1 * this.props.width + offsetX,
@@ -204,7 +190,7 @@ class BoxView extends React.Component {
           return (<div>
             {box.identity_id
              ? <div className='bbox-label' style={labelStyle}>
-               {modifyLabel(backendSettings.things[box.identity_id])}
+               {modifyLabel(backendSettings.things['person'][box.identity_id])}
              </div>
              : <div />}
             <div onMouseOver={this._onMouseOver}
@@ -216,15 +202,12 @@ class BoxView extends React.Component {
                  ref={(n) => {this._div = n}} />
             {this.state.showSelect
              ? <div style={selectStyle}>
-               <Select2
-                 ref={(n) => {this._select = n;}}
-                 data={_.map(backendSettings.things, (v, k) => ({text: v, id: k}))}
-                 options={{placeholder: 'Search', width: this.props.expand ? 200 : 100, closeOnSelect: false}}
+               <Select
+                 data={_.map(backendSettings.things['person'], (v, k) => [k, v])}
+                 width={this.props.expand ? 200 : 100}
                  onSelect={this._onSelect}
-                 onClose={(e) => {
-                     this.setState({showSelect: false});
-                     keyboardManager.unlock();
-                 }} />
+                 onClose={(e) => {this.setState({showSelect: false});}}
+               />
              </div>
              : <div />}
           </div>);

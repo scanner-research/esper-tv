@@ -244,11 +244,11 @@ class GroupView extends React.Component {
     }
   }
 
-  _onMouseEnter = () => {
+  _onMouseOver = () => {
     document.addEventListener('keypress', this._onKeyPress);
   }
 
-  _onMouseLeave = () => {
+  _onMouseOut = () => {
     document.removeEventListener('keypress', this._onKeyPress);
   }
 
@@ -266,8 +266,8 @@ class GroupView extends React.Component {
     let group = this.props.group;
     return (
       <FrontendSettingsContext.Consumer>{frontendSettings =>
-        <div className={'group ' + this.props.colorClass} onMouseEnter={this._onMouseEnter}
-             onMouseLeave={this._onMouseLeave}>
+        <div className={'group ' + this.props.colorClass} onMouseOver={this._onMouseOver}
+             onMouseOut={this._onMouseOut}>
           {this.props.colorClass != '' ? <div className={'select-overlay ' + this.props.colorClass} /> : <div />}
           {frontendSettings.get('timeline_view') && group.type == 'contiguous'
            ? <TimelineView group={group} expand={this.state.expand}  />

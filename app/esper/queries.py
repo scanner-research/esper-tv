@@ -34,11 +34,15 @@ def query(name):
 
 @query("All faces")
 def all_faces():
+    from query.models import Face
+    from esper.stdlib import qs_to_result
     return qs_to_result(Face.objects.all(), stride=1000)
 
 
 @query("All videos")
 def all_videos():
+    from query.models import Video
+    from esper.stdlib import qs_to_result
     return qs_to_result(Video.objects.all())
 
 
@@ -120,6 +124,8 @@ def not_handlabeled():
 
 @query("Handlabeled faces/genders")
 def handlabeled():
+    from query.models import FaceGender
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         FaceGender.objects.filter(labeler__name='handlabeled-gender').annotate(
             identity=F('face__faceidentity__identity')))
@@ -127,16 +133,22 @@ def handlabeled():
 
 @query("Donald Trump")
 def donald_trump():
+    from query.models import FaceIdentity
+    from esper.stdlib import qs_to_result
     return qs_to_result(FaceIdentity.objects.filter(identity__name='donald trump', probability__gt=0.99))
 
 
 @query("Commercials")
 def commercials():
+    from query.models import Commercial
+    from esper.stdlib import qs_to_result
     return qs_to_result(Commercial.objects.filter(labeler__name='haotian-commercials'))
 
 
 @query("Positive segments")
 def positive_segments():
+    from query.models import Segment
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         Segment.objects.filter(labeler__name='haotian-segments',
                                polarity__isnull=False).order_by('-polarity'))
@@ -144,6 +156,8 @@ def positive_segments():
 
 @query("Negative segments")
 def negative_segments():
+    from query.models import Segment
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         Segment.objects.filter(labeler__name='haotian-segments',
                                polarity__isnull=False).order_by('polarity'))
@@ -151,6 +165,8 @@ def negative_segments():
 
 @query("Segments about Donald Trump")
 def segments_about_donald_trump():
+    from query.models import Segment
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',
@@ -159,6 +175,8 @@ def segments_about_donald_trump():
 
 @query("Segments about North Korea")
 def segments_about_north_korea():
+    from query.models import Segment
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',
@@ -168,6 +186,8 @@ def segments_about_north_korea():
 
 @query("Segments about immigration")
 def segments_about_immigration():
+    from query.models import Segment
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',
@@ -176,6 +196,8 @@ def segments_about_immigration():
 
 @query("Sunday morning news shows")
 def sunday_morning_news_shows():
+    from query.models import Video
+    from esper.stdlib import qs_to_result
     return qs_to_result(
         Video.objects.filter(
             time__week_day=1,
@@ -183,6 +205,8 @@ def sunday_morning_news_shows():
 
 @query("Fox News videos")
 def fox_news_videos():
+    from query.models import Video
+    from esper.stdlib import qs_to_result
     return qs_to_result(Video.objects.filter(channel__name='FOXNEWS'))
 
 
@@ -484,6 +508,11 @@ def frames_with_two_women():
     return qs_to_result(face_qs.filter(face__person__frame__in=frames))
 
 def panels():
+    from query.base_models import BoundingBox
+    from query.models import Labeler, Face, Frame
+    from esper.stdlib import qs_to_result
+    from django.db.models import OuterRef, Count, IntegerField
+
     mtcnn = Labeler.objects.get(name='mtcnn')
     face_qs = Face.objects.annotate(height=BoundingBox.height_expr()).filter(
         height__gte=0.25, labeler=mtcnn, shot__in_commercial=False)
@@ -491,7 +520,7 @@ def panels():
         face_qs.filter(person__frame=OuterRef('pk')) \
         .values('person__frame') \
         .annotate(c=Count('*')) \
-        .values('c'), models.IntegerField())) \
+        .values('c'), IntegerField())) \
         .filter(c__gte=3, c__lte=3).order_by('id')
 
     output_frames = []
@@ -511,7 +540,7 @@ def panels():
 
 @query("Panels")
 def panels_():
-    from esper.tvnews.queries import panels
+    from esper.queries import panels
     return simple_result([{
         'video': frame.video.id,
         'min_frame': frame.number,
@@ -575,11 +604,17 @@ def animated_rachel_maddow():
 
 @query("Audio labels")
 def audio_labels():
+    from query.models import Speaker
+    from esper.stdlib import qs_to_result
     return qs_to_result(Speaker.objects.all(), group=True, limit=10000)
 
 
 @query("Non-handlabeled random audio")
 def nonhandlabeled_random_audio():
+    from query.models import Video, Speaker, Commercial
+    from esper.stdlib import qs_to_result
+    from django.db.models import Subquery, Count
+
     videos = Video.objects.annotate(
         c=Subquery(
             Speaker.objects.filter(video=OuterRef('pk')).values('video').annotate(
@@ -615,6 +650,9 @@ def nonhandlabeled_random_audio():
 
 @query("Caption search")
 def caption_search():
+    from esper.prelude import caption_search
+    from query.models import Video
+
     results = caption_search('DONALD TRUMP')
     videos = {v.id: v for v in Video.objects.all()}
 
@@ -712,8 +750,8 @@ def face_search_by_id():
 
     face_sims = face_knn(ids=target_face_ids, min_threshold=min_thresh, max_threshold=max_thresh,
                          not_ids=not_target_face_ids)
-    
-    face_sims_by_bucket = {} 
+
+    face_sims_by_bucket = {}
     idx = 0
     max_idx = len(face_sims)
     for t in frange(min_thresh, max_thresh, increment):
@@ -722,7 +760,7 @@ def face_search_by_id():
         while idx < max_idx and face_sims[idx][1] < cur_thresh:
             idx += 1
         face_sims_by_bucket[t] = face_sims[start_idx:idx]
-    
+
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
         face_ids = [x for x, _ in face_sims_by_bucket[t]]
@@ -751,27 +789,27 @@ def face_search_svm_by_id():
 #     not_target_face_ids =  [
 #         1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608,
 #         4831099, 2172821, 1981350, 1095709, 4427683, 1762835]
-    
+
     # Melania Trump
     target_face_ids = [
         2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617,
         1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072]
     not_target_face_ids = []
-    
+
     # Bernie Sanders
     # target_face_ids = [
-    #     644710, 4686364, 2678025, 62032, 13248, 4846879, 4804861, 561270, 2651257, 
-    #     2083010, 2117202, 1848221, 2495606, 4465870, 3801638, 865102, 3861979, 4146727, 
+    #     644710, 4686364, 2678025, 62032, 13248, 4846879, 4804861, 561270, 2651257,
+    #     2083010, 2117202, 1848221, 2495606, 4465870, 3801638, 865102, 3861979, 4146727,
     #     3358820, 2087225, 1032403, 1137346, 2220864, 5384396, 3885087, 5107580, 2856632,
     #     335131, 4371949, 533850, 5384760, 3335516]
     # not_target_face_ids = [
     #     2656438, 1410140, 4568590, 2646929, 1521533, 1212395, 178315, 1755096, 3476158,
-    #     3310952, 1168204, 3062342, 1010748, 1275607, 2190958, 2779945, 415610, 1744917, 
-    #     5210138, 3288162, 5137166, 4169061, 3774070, 2595170, 382055, 2365443, 712023, 
-    #     5214225, 178251, 1039121, 5336597, 525714, 4522167, 3613622, 5161408, 2091095, 
-    #     741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225, 
+    #     3310952, 1168204, 3062342, 1010748, 1275607, 2190958, 2779945, 415610, 1744917,
+    #     5210138, 3288162, 5137166, 4169061, 3774070, 2595170, 382055, 2365443, 712023,
+    #     5214225, 178251, 1039121, 5336597, 525714, 4522167, 3613622, 5161408, 2091095,
+    #     741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225,
     #     178251]
-    
+
     increment = 0.2
     min_thresh = -5.0
     max_thresh = 1.0
@@ -781,8 +819,8 @@ def face_search_svm_by_id():
     face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
 
     face_scores = face_svm(target_face_ids, not_target_face_ids, 1000, 500, min_thresh, max_thresh)
-    
-    face_scores_by_bucket = {} 
+
+    face_scores_by_bucket = {}
     idx = 0
     max_idx = len(face_scores)
     for t in frange(min_thresh, max_thresh, increment):
@@ -791,7 +829,7 @@ def face_search_svm_by_id():
         while idx < max_idx and face_scores[idx][1] < cur_thresh:
             idx += 1
         face_scores_by_bucket[t] = face_scores[start_idx:idx]
-    
+
     results_by_bucket = {}
     for t in frange(min_thresh, max_thresh, increment):
         face_ids = [x for x, _ in face_scores_by_bucket[t]]

@@ -244,11 +244,12 @@ class MetadataView extends React.Component {
         ['b', 'mark as background face'],
         ['s', 'select frames to save'],
         ['a', 'mark selected as labeled'],
-        ['x', 'mark frame to ignore']
+        ['x', 'mark frame to ignore'],
+        ['t', 'set identity']
       ]],
       ['Track labeling', [
         ['m', 'merge current and last track'],
-        ['t', 'start/end new track'],
+        ['i', 'start/end new track'],
         ['enter', 'skip to next track'],
         ['z', 'undo last action']
       ]]
@@ -261,19 +262,19 @@ class MetadataView extends React.Component {
           <div className='meta-key'>Type</div>
           <div className='meta-val'>{searchResult.type}</div>
         </div>
-        <div className='meta-block colors'>
-          <div className='meta-key'>Labelers</div>
-          <div className='meta-val'>
+        {/* <div className='meta-block colors'>
+            <div className='meta-key'>Labelers</div>
+            <div className='meta-val'>
             {_.values(searchResult.labelers).map((labeler, i) =>
-              <div key={i}>
-                {labeler.name}: &nbsp;
-                <div style={{backgroundColor: searchResult.labeler_colors[labeler.id],
-                             width: '10px', height: '10px', display: 'inline-box'}} />
-              </div>
+            <div key={i}>
+            {labeler.name}: &nbsp;
+            <div style={{backgroundColor: searchResult.labeler_colors[labeler.id],
+            width: '10px', height: '10px', display: 'inline-box'}} />
+            </div>
             )}
             <div className='clearfix' />
-          </div>
-        </div>
+            </div>
+            </div> */}
         <div className='meta-block'>
           <div className='meta-key'>Count</div>
           <div className='meta-val'>{searchResult.count}</div>

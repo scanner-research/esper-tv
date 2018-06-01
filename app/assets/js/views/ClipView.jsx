@@ -128,12 +128,10 @@ export default class ClipView extends React.Component {
         this._video.addEventListener('ended', this.props.onVideoStop);
       }
 
-      /*
-       *       if (this._lastDisplayTime != this.props.displayTime) {
-       *         this._video.currentTime = this.props.displayTime;
-       *         this._lastDisplayTime = this.props.displayTime;
-       *       }
-       * */
+      if (this._lastDisplayTime != this.props.displayTime) {
+        this._video.currentTime = this.props.displayTime;
+        this._lastDisplayTime = this.props.displayTime;
+      }
 
       if (this.props.onTimeUpdate) {
         if (this._timeUpdateInterval) {

@@ -4,32 +4,38 @@ import ClipView from './ClipView.jsx';
 import {observer} from 'mobx-react';
 import {toJS} from 'mobx';
 import keyboardManager from 'utils/KeyboardManager.jsx';
+import Consumer from 'utils/Consumer.jsx';
+import {FrontendSettingsContext, BackendSettingsContext, SearchContext} from './contexts.jsx';
+import Select from './Select.jsx';
+import {PALETTE} from 'utils/Color.jsx';
 
 @observer
 class MarkerView extends React.Component {
   render() {
-    let {t, w, h, mw, mh, mf, label, type, color, ..._} = this.props;
-    let range = DISPLAY_OPTIONS.get('timeline_range');
-    let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
-    let x = time_to_x(t);
-    let margin = mw;
-    if (0 <= x && x <= w) {
-      if (type == 'open') {
-        let points = `${mw*2},${margin} 0,${margin} 0,${mh-2*margin} ${mw*2},${mh-2*margin}`;
-        return (<g transform={`translate(${x}, 0)`}>
-          <polyline fill="none" stroke={color} strokeWidth={mw} points={points} />
-          <text x={mw+4} y={h/2} alignmentBaseline="middle" fontSize={mf}>{label}</text>
-        </g>);
-      } else {
-        let points = `${-mw*2},${margin} 0,${margin} 0,${mh-2*margin} ${-mw*2},${mh-2*margin}`;
-        return (<g transform={`translate(${x}, 0)`}>
-          <polyline fill="none" stroke={color} strokeWidth={mw} points={points} />
-          <text x={-(mw+4)} y={h/2} alignmentBaseline="middle" textAnchor="end" fontSize={mf}>{label}</text>
-        </g>);
-      }
-    } else {
-      return <g />;
-    }
+    return <Consumer contexts={[FrontendSettingsContext]}>{ frontendSettings => {
+        let {t, w, h, mw, mh, mf, label, type, color, ..._} = this.props;
+        let range = frontendSettings.get('timeline_range');
+        let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
+        let x = time_to_x(t);
+        let margin = mw;
+        if (0 <= x && x <= w) {
+          if (type == 'open') {
+            let points = `${mw*2},${margin} 0,${margin} 0,${mh-2*margin} ${mw*2},${mh-2*margin}`;
+            return (<g transform={`translate(${x}, 0)`}>
+              <polyline fill="none" stroke={color} strokeWidth={mw} points={points} />
+              <text x={mw+4} y={h/2} alignmentBaseline="middle" fontSize={mf}>{label}</text>
+            </g>);
+          } else {
+            let points = `${-mw*2},${margin} 0,${margin} 0,${mh-2*margin} ${-mw*2},${mh-2*margin}`;
+            return (<g transform={`translate(${x}, 0)`}>
+              <polyline fill="none" stroke={color} strokeWidth={mw} points={points} />
+              <text x={-(mw+4)} y={h/2} alignmentBaseline="middle" textAnchor="end" fontSize={mf}>{label}</text>
+            </g>);
+          }
+        } else {
+          return <g />;
+        }
+    }}</Consumer>
   }
 }
 
@@ -39,7 +45,7 @@ class TrackView extends React.Component {
   _mouseY = -1
 
   _onKeyPress = (e) => {
-    if (keyboardManager.lock()) {
+    if (keyboardManager.locked()) {
       return;
     }
 
@@ -74,36 +80,48 @@ class TrackView extends React.Component {
   }
 
   render() {
-    let {track, w, h, mw, mh, mf, video, ..._} = this.props;
-    let label = track.gender_id;
-    let identity = track.identity;
-    let start = track.min_frame / video.fps;
-    let end = track.max_frame / video.fps;
+    return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
+        let {min_frame, max_frame, gender_id, identity, thing_id, w, h, mw, mh, mf, video, ..._} = this.props;
+        let start = min_frame / video.fps;
+        let end = max_frame / video.fps;
 
-    let range = DISPLAY_OPTIONS.get('timeline_range');
-    let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
-    let x1 = time_to_x(start);
-    let x2 = time_to_x(end);
+        let range = frontendSettings.get('timeline_range');
+        let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
+        let x1 = time_to_x(start);
+        let x2 = time_to_x(end);
 
-    let ident_colors = this.props.searchResult.labeler_colors
-    let color = DISPLAY_OPTIONS.get('track_color_identity')
-         ? ident_colors[identity % ident_colors.length]
-         : this.props.searchResult.gender_colors[this.props.searchResult.genders[label].name];
+        let color;
+        if (gender_id !== undefined) {
+          color = searchResult.gender_colors[searchResult.genders[gender_id].name];
+        } else if (identity !== undefined) {
+          let ident_colors = PALETTE;
+          color = ident_colors[identity % ident_colors.length];
+        } else {
+          color = '#eee';
+        }
 
-    return (
-      <g ref={(n) => {this._g = n;}}>
-        <rect x={x1} width={x2-x1} y={0} height={h} fill={color} />
-        {range < 600
-         ? <g>
-           <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
-           <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
-           {identity !== undefined
-            ? <text x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">{identity}</text>
-            : <g />}
-         </g>
-         : <g />}
-      </g>
-    );
+        let text = null;
+        if (identity !== undefined) {
+          text = identity;
+        } else if (thing_id !== undefined) {
+          text = backendSettings.things['topic'][thing_id];
+        }
+
+        return (
+          <g ref={(n) => {this._g = n;}}>
+            <rect x={x1} width={x2-x1} y={0} height={h} fill={color} />
+            {range < 600
+             ? <g>
+               <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
+               <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
+               {text !== null
+                ? <text x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">{text}</text>
+                : <g />}
+             </g>
+             : <g />}
+          </g>
+        );
+    }}</Consumer>;
   }
 }
 
@@ -115,15 +133,19 @@ export default class TimelineView extends React.Component {
     displayTime: -1,
     startX: -1,
     startY: -1,
-    trackStart: -1
+    trackStart: -1,
+    moused: false,
+    showSelect: false
   }
 
   _videoPlaying = false;
-  _lastPlaybackSpeed = DISPLAY_OPTIONS.get('playback_speed');
+  _lastPlaybackSpeed = null;
   _undoStack = [];
 
   _onTimeUpdate = (t) => {
-    this.setState({currentTime: t});
+    if (t != this.state.currentTime) {
+      this.setState({currentTime: t});
+    }
   }
 
   _localCoords = (e) => {
@@ -140,7 +162,7 @@ export default class TimelineView extends React.Component {
     if (this.state.startX != -1) {
       let [x, y] = this._localCoords(e);
       let dx = x - this.state.startX;
-      let dt = DISPLAY_OPTIONS.get('timeline_range') * dx / boundingRect(this._svg).width * -1;
+      let dt = this._frontendSettings.get('timeline_range') * dx / boundingRect(this._svg).width * -1;
       this.setState({
         displayTime: this.state.clickedTime + dt,
         currentTime: this.state.clickedTime + dt
@@ -152,14 +174,14 @@ export default class TimelineView extends React.Component {
     this.setState({startX: -1, startY: -1});
   }
 
-  _onMouseLeave = (e) => {
+  _timelineOnMouseOut = (e) => {
     if (this.state.startX != -1) {
       this.setState({startX: -1, startY: -1});
     }
   }
 
   _video = () => {
-    return this.props.searchResult.videos[this.props.group.elements[0].video];
+    return this._searchResult.videos[this.props.group.elements[0].video];
   }
 
   _onVideoPlay = () => {
@@ -182,27 +204,47 @@ export default class TimelineView extends React.Component {
 
   _onTrackKeyPress = (e, i) => {
     let chr = String.fromCharCode(e.which);
+
+    // Change track gender
     if (chr == 'g') {
       this._pushState();
       let track = this.props.group.elements[i];
-      let keys = _.sortBy(_.map(_.keys(this.props.searchResult.genders), (x) => parseInt(x)));
+      let keys = _.sortBy(_.map(_.keys(this._searchResult.genders), (x) => parseInt(x)));
       track.gender_id = keys[(_.indexOf(keys, track.gender_id) + 1) % keys.length];
     }
 
+    // Merge track
     else if (chr == 'm') {
       this._pushState();
       this.props.group.elements[i-1].max_frame = this.props.group.elements[i].max_frame;
       this.props.group.elements.splice(i, 1);
     }
 
+    // Delete track
     else if (chr == 'd') {
       this._pushState();
       this.props.group.elements.splice(i, 1);
     }
+
+    // Change track topic
+    else if (chr == 't') {
+      this.setState({showSelect: true});
+    }
+
+    this.forceUpdate();
+  }
+
+  _onSelect = (value) => {
+    let fps = this._video().fps;
+    let curFrame = this.state.currentTime * fps;
+    let curTrack = this.props.group.elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
+      clip.min_frame <= curFrame && curFrame <= clip.max_frame)[0][1];
+    this.props.group.elements[curTrack].thing_id = value;
+    this.setState({showSelect: false});
   }
 
   _onKeyPress = (e) => {
-    if (keyboardManager.lock() || !this._videoPlaying) {
+    if (keyboardManager.locked() || !(this._videoPlaying || this.state.moused)) {
       return;
     }
 
@@ -210,6 +252,7 @@ export default class TimelineView extends React.Component {
 
     let fps = this._video().fps;
     let curFrame = this.state.currentTime * fps;
+
     let elements = this.props.group.elements;
     if (chr == '\r') {
       let lastTrack = elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
@@ -226,16 +269,16 @@ export default class TimelineView extends React.Component {
     }
 
     else if (chr == 'r') {
-      let playbackSpeed = DISPLAY_OPTIONS.get('playback_speed');
+      let playbackSpeed = this._frontendSettings.get('playback_speed');
       if (playbackSpeed != 1) {
-        DISPLAY_OPTIONS.set('playback_speed', 1);
+        this._frontendSettings.set('playback_speed', 1);
         this._lastPlaybackSpeed = playbackSpeed;
       } else {
-        DISPLAY_OPTIONS.set('playback_speed', this._lastPlaybackSpeed);
+        this._frontendSettings.set('playback_speed', this._lastPlaybackSpeed);
       }
     }
 
-    else if (chr == 't') {
+    else if (chr == 'i') {
       if (this.state.trackStart == -1) {
         this.setState({trackStart: this.state.currentTime});
       } else {
@@ -280,7 +323,7 @@ export default class TimelineView extends React.Component {
           video: elements[0].video,
           min_frame: start,
           max_frame: end,
-          gender_id: _.find(this.props.searchResult.genders, (l) => l.name == 'M').id
+          gender_id: _.find(this._searchResult.genders, (l) => l.name == 'M').id
         });
         this.props.group.elements = _.sortBy(elements, ['min_frame']);
 
@@ -308,6 +351,14 @@ export default class TimelineView extends React.Component {
     }
   }
 
+  _containerOnMouseOver = () => {
+    this.setState({moused: true});
+  }
+
+  _containerOnMouseOut = () => {
+    this.setState({moused: false});
+  }
+
   componentDidMount() {
     document.addEventListener('keypress', this._onKeyPress);
     this.setState({
@@ -322,59 +373,86 @@ export default class TimelineView extends React.Component {
   // TODO(wcrichto): timeline disappears after deleting first track in the timeline
 
   render() {
-    let group = this.props.group;
-    let expand = this.props.expand;
+    return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
+        this._frontendSettings = frontendSettings;
+        this._searchResult = searchResult;
 
-    let clip = {
-      video: group.elements[0].video,
-      min_frame: group.elements[0].min_frame,
-      max_frame: group.elements[group.elements.length-1].max_frame
-    };
+        if (this._lastPlaybackSpeed === null) {
+          this._lastPlaybackSpeed = this._frontendSettings.get('playback_speed');
+        }
 
-    let video = this._video();
-    let small_height = expand ? video.height : 100 * DISPLAY_OPTIONS.get('thumbnail_size');
-    let small_width = video.width * small_height / video.height;
+        let group = this.props.group;
+        let expand = this.props.expand;
 
-    let style = {
-      width: small_width,
-    };
+        let clip = {
+          video: group.elements[0].video,
+          min_frame: group.elements[0].min_frame,
+          max_frame: group.elements[group.elements.length-1].max_frame
+        };
 
-    let timeboxStyle = {
-      width: small_width,
-      height: expand ? 60 : 20
-    }
+        let video = this._video();
+        let small_height = expand ? video.height : 100 * this._frontendSettings.get('thumbnail_size');
+        let small_width = video.width * small_height / video.height;
 
-    let tprops = {
-      w: timeboxStyle.width,
-      h: timeboxStyle.height,
-      mw: expand ? 4 : 2,
-      mh: timeboxStyle.height,
-      mf: expand ? 16 : 12,
-      currentTime: this.state.currentTime,
-      video: video,
-      searchResult: this.props.searchResult
-    };
+        let style = {
+          width: small_width,
+        };
 
-    return (<div className='timeline' style={style}>
-      <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
-                expand={this.props.expand} displayTime={this.state.displayTime}
-                onVideoPlay={this._onVideoPlay}
-                onVideoStop={this._onVideoStop} />
-      <svg className='time-container' style={timeboxStyle} onMouseDown={this._onMouseDown}
-           onMouseMove={this._onMouseMove}
-           onMouseUp={this._onMouseUp}
-           onMouseLeave={this._onMouseLeave}
-           ref={(n) => {this._svg = n;}}>
-        <g>{group.elements.map((track, i) =>
-          <TrackView key={i} i={i} track={track} onKeyPress={this._onTrackKeyPress} {...tprops} />)}
-        </g>
-        {this.state.trackStart != -1
-         ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
-         : <g />}
-        <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(20, 230, 20)" strokeWidth={tprops.mw*1.5} />
-        <MarkerView t={clip.min_frame/video.fps} type="open" color="black" {...tprops} />
-        <MarkerView t={clip.max_frame/video.fps} type="close" color="black"  {...tprops} />
-      </svg>
-    </div>);
+        let timeboxStyle = {
+          width: small_width,
+          height: expand ? 60 : 20
+        }
+
+        let tprops = {
+          w: timeboxStyle.width,
+          h: timeboxStyle.height,
+          mw: expand ? 4 : 2,
+          mh: timeboxStyle.height,
+          mf: expand ? 16 : 12,
+          currentTime: this.state.currentTime,
+          video: video,
+        };
+
+      let selectWidth = 200;
+      let selectStyle = {
+        left: timeboxStyle.width / 2 - selectWidth / 2,
+        top: small_height,
+        position: 'absolute',
+        zIndex: 1000
+      };
+
+        return <div className='timeline' style={style} onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
+          <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
+                    expand={this.props.expand} displayTime={this.state.displayTime}
+                    onVideoPlay={this._onVideoPlay}
+                    onVideoStop={this._onVideoStop} />
+          <svg className='time-container' style={timeboxStyle} onMouseDown={this._onMouseDown}
+               onMouseMove={this._onMouseMove}
+               onMouseUp={this._onMouseUp}
+               onMouseOut={this._timelineOnMouseOut}
+               ref={(n) => {this._svg = n;}}>
+            <g>{group.elements.map((track, i) =>
+              // We destructure the track b/c mobx doesn't seem to be observing updates to it?
+              <TrackView key={i} i={i} onKeyPress={this._onTrackKeyPress}  {...track} {...tprops} />)}
+            </g>
+            {this.state.trackStart != -1
+             ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
+             : <g />}
+            <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(20, 230, 20)" strokeWidth={tprops.mw*1.5} />
+            <MarkerView t={clip.min_frame/video.fps} type="open" color="black" {...tprops} />
+            <MarkerView t={clip.max_frame/video.fps} type="close" color="black"  {...tprops} />
+          </svg>
+          {this.state.showSelect
+           ? <div style={selectStyle}>
+             <Select
+               data={_.map(backendSettings.things['topic'], (v, k) => [k, v])}
+               width={selectWidth}
+               onSelect={this._onSelect}
+               onClose={(e) => {this.setState({showSelect: false});}}
+             />
+           </div>
+           : <div />}
+        </div>;
+    }}</Consumer>
   }
 }
