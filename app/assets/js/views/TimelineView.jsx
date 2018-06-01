@@ -1,7 +1,7 @@
 import React from 'react';
 import {boundingRect} from './FrameView.jsx';
 import ClipView from './ClipView.jsx';
-import {observer} from 'mobx-react';
+import {observer, inject} from 'mobx-react';
 import {toJS} from 'mobx';
 import keyboardManager from 'utils/KeyboardManager.jsx';
 import Consumer from 'utils/Consumer.jsx';
@@ -81,9 +81,9 @@ class TrackView extends React.Component {
 
   render() {
     return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
-        let {min_frame, max_frame, gender_id, identity, thing_id, w, h, mw, mh, mf, video, ..._} = this.props;
-        let start = min_frame / video.fps;
-        let end = max_frame / video.fps;
+        let {track, w, h, mw, mh, mf, video, ..._} = this.props;
+        let start = track.min_frame / video.fps;
+        let end = track.max_frame / video.fps;
 
         let range = frontendSettings.get('timeline_range');
         let time_to_x = (t) => w/2 + (t - this.props.currentTime) / (range/2) * w/2;
@@ -91,20 +91,20 @@ class TrackView extends React.Component {
         let x2 = time_to_x(end);
 
         let color;
-        if (gender_id !== undefined) {
-          color = searchResult.gender_colors[searchResult.genders[gender_id].name];
-        } else if (identity !== undefined) {
+        if (track.gender_id !== undefined) {
+          color = searchResult.gender_colors[searchResult.genders[track.gender_id].name];
+        } else if (track.identity !== undefined) {
           let ident_colors = PALETTE;
-          color = ident_colors[identity % ident_colors.length];
+          color = ident_colors[track.identity % ident_colors.length];
         } else {
           color = '#eee';
         }
 
         let text = null;
-        if (identity !== undefined) {
-          text = identity;
-        } else if (thing_id !== undefined) {
-          text = backendSettings.things['topic'][thing_id];
+        if (track.identity !== undefined) {
+          text = track.identity;
+        } else if (track.thing_id !== undefined) {
+          text = backendSettings.things['topic'][track.thing_id];
         }
 
         return (
@@ -413,13 +413,13 @@ export default class TimelineView extends React.Component {
           video: video,
         };
 
-      let selectWidth = 200;
-      let selectStyle = {
-        left: timeboxStyle.width / 2 - selectWidth / 2,
-        top: small_height,
-        position: 'absolute',
-        zIndex: 1000
-      };
+        let selectWidth = 200;
+        let selectStyle = {
+          left: timeboxStyle.width / 2 - selectWidth / 2,
+          top: small_height,
+          position: 'absolute',
+          zIndex: 1000
+        };
 
         return <div className='timeline' style={style} onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
           <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
@@ -433,7 +433,7 @@ export default class TimelineView extends React.Component {
                ref={(n) => {this._svg = n;}}>
             <g>{group.elements.map((track, i) =>
               // We destructure the track b/c mobx doesn't seem to be observing updates to it?
-              <TrackView key={i} i={i} onKeyPress={this._onTrackKeyPress}  {...track} {...tprops} />)}
+              <TrackView key={i} i={i} track={track} onKeyPress={this._onTrackKeyPress} {...tprops} />)}
             </g>
             {this.state.trackStart != -1
              ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
