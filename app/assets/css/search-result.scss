@@ -124,11 +124,10 @@
     }
 
     .timeline {
-        float: left;
+        display: flex;
 
         .time-container {
             position: relative;
-            float: left;
             border: 1px solid black;
             background: white;
         }
@@ -139,7 +138,6 @@
     }
 
     .clip {
-        float: left;
         position: relative;
         z-index: 5;
 
@@ -196,8 +194,39 @@
             }
         }
 
-        .media-container {
-            position: relative;
+        .video-row {
+            > div { float: left; }
+
+            .media-container {
+                position: relative;
+            }
+
+            .sub-container {
+                height: 100%;
+                border: 1px solid black;
+                padding: 5px;
+                user-select: none;
+                position: relative;
+
+                .sub-scroll {
+                    height: 100%;
+                }
+
+                .sub-autoscroll {
+                    position: absolute;
+                    opacity: 0.2;
+                    right: 5px;
+                    top: 5px;
+
+                    &:hover {
+                        opacity: 1;
+                    }
+                }
+
+                .subtitle {
+                    margin-bottom: 5px;
+                }
+            }
         }
 
         .loading-video {

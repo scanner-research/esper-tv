@@ -5,18 +5,22 @@ import Spinner from './Spinner.jsx';
 import manager from 'utils/KeyboardManager.jsx';
 import {FrontendSettingsContext, SearchContext} from './contexts.jsx';
 import Consumer from 'utils/Consumer.jsx';
+import _ from 'lodash';
 
 @observer
 export default class ClipView extends React.Component {
   state = {
     showVideo: false,
     loadingVideo: false,
-    loopVideo: false
+    loopVideo: false,
+    subAutoScroll: true
   }
 
   fullScreen = false
   frames = []
   _lastDisplayTime = -1
+  _formattedSubs = null
+  _curSub = null
 
   constructor() {
     super();
@@ -141,6 +145,11 @@ export default class ClipView extends React.Component {
           this.props.onTimeUpdate(this._video.currentTime);
         }, 16);
       }
+
+      // Scroll captions to current time
+      if (this._curSub !== null && this.state.subAutoScroll) {
+        this._subContainer.scrollTop = (this._curSub.offsetTop + this._curSub.clientHeight / 2) - this._subContainer.clientHeight / 2;
+      }
     } else {
       // If the video disappears after being shown (e.g. b/c the clip was de-expanded)
       // we have to catch the interval clear then too
@@ -152,6 +161,10 @@ export default class ClipView extends React.Component {
 
   _videoMeta = () => {
     return this._searchResult.videos[this.props.clip.video];
+  }
+
+  _subOnScroll = (e) => {
+    // TODO: change video time when scrolling
   }
 
   componentWillUnmount() {
@@ -167,6 +180,7 @@ export default class ClipView extends React.Component {
         this._searchResult = searchResult;
           let clip = this.props.clip;
           let video = this._videoMeta();
+          let show_subs = frontendSettings.get('subtitle_sidebar');
 
           // Set playback rate of the video
           if (this._video) {
@@ -215,38 +229,111 @@ export default class ClipView extends React.Component {
           let meta_per_row = this.props.expand ? 4 : 2;
           let td_style = {width: `${100 / meta_per_row}%`};
 
+          let sub_width = this.props.expand ? 480 : 50;
+          let subStyle = {
+            width: sub_width,
+            fontSize: this.props.expand ? '14px' : '12px'
+          };
+
+          let SubtitleView = () => {
+            if (this._video.textTracks.length == 0) {
+              return <span>Loading...</span>
+            }
+            let subs = this._video.textTracks[0].cues;
+            if (!subs || subs.length == 0) {
+              return <span>Loading...</span>
+            }
+
+            //if (this._formattedSubs === null) {
+              let formattedSubs = [];
+              let curSub = "";
+              let startTime = 0;
+              _.forEach(subs, (sub) => {
+                let parts = sub.text.split('>>');
+                curSub += parts[0] + ' ';
+
+                if (parts.length > 1) {
+                  formattedSubs.push({
+                    text: _.trim(curSub),
+                    start: startTime,
+                    end: sub.endTime
+                  })
+
+                  startTime = sub.startTime;
+                  parts.slice(1, -1).forEach((text) => {
+                    formattedSubs.push({
+                      text: _.trim(text),
+                      start: startTime,
+                      end: sub.endTime
+                    })
+                  });
+
+                  curSub = parts[parts.length - 1];
+                }
+              });
+
+              this._formattedSubs = formattedSubs;
+            //}
+
+            let i = 0;
+            while (i < this._formattedSubs.length && this._formattedSubs[i].start <= this._video.currentTime) { i++; }
+            i = Math.max(i - 1, 0);
+
+            return <div>{this._formattedSubs.map((sub, j) =>
+              <div key={j} className='subtitle' ref={(n) => { if (i == j) { this._curSub = n; } }}>
+                {i == j ? <strong>>> {sub.text}</strong> : <span>>> {sub.text}</span>}
+              </div>)}
+            </div>;
+          };
+
           return <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}
                       onMouseEnter={this._onMouseEnter}
                       onMouseLeave={this._onMouseLeave}>
-            <div className='media-container'>
-              {this.state.loadingVideo || this.state.showVideo
-               ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
-                 <source src={`/system_media/${video.path}`} />
-                 {video.srt_extension != ''
-                  ? <track kind="subtitles"
-                           src={`/api/subtitles?video=${video.id}`}
-                           srcLang="en" />
-                  : <span />}
-               </video>
+            <div className='video-row' style={{height: small_height}}>
+              <div className='media-container'>
+                {this.state.loadingVideo || this.state.showVideo
+                 ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
+                   <source src={`/system_media/${video.path}`} />
+                   {video.srt_extension != ''
+                    ? <track kind="subtitles"
+                             src={`/api/subtitles?video=${video.id}`}
+                             srcLang="en" />
+                    : <span />}
+                 </video>
+                 : <div />}
+                {this.state.loadingVideo
+                 ? <div className='loading-video'><Spinner /></div>
+                 : <div />}
+                <FrameView
+                  bboxes={clip.objects || []}
+                  small_width={small_width}
+                  small_height={small_height}
+                  full_width={video.width}
+                  full_height={video.height}
+                  onClick={this.props.onBoxClick}
+                  expand={this.props.expand}
+                  onChangeGender={() => {}}
+                  onChangeLabel={() => {}}
+                  onTrack={() => {}}
+                  onSetTrack={() => {}}
+                  onDeleteTrack={() => {}}
+                  onSelect={() => {}}
+                  path={path} />
+              </div>
+              {show_subs && this.props.expand && this._video
+               ? <div className='sub-container' style={subStyle}>
+                 <button className='sub-autoscroll' onClick={() => {
+                     this.setState({subAutoScroll: !this.state.subAutoScroll});
+                 }}>
+                   {this.state.subAutoScroll ? 'Disable autoscroll' : 'Enable autoscroll'}
+                 </button>
+                 <div className='sub-scroll' onScroll={this._subOnScroll}
+                      style={{overflow: this.state.subAutoScroll ? 'hidden' : 'auto'}}
+                      ref={(n) => {this._subContainer = n;}}>
+                   <SubtitleView />
+                 </div>
+               </div>
                : <div />}
-              {this.state.loadingVideo
-               ? <div className='loading-video'><Spinner /></div>
-               : <div />}
-              <FrameView
-                bboxes={clip.objects || []}
-                small_width={small_width}
-                small_height={small_height}
-                full_width={video.width}
-                full_height={video.height}
-                onClick={this.props.onBoxClick}
-                expand={this.props.expand}
-                onChangeGender={() => {}}
-                onChangeLabel={() => {}}
-                onTrack={() => {}}
-                onSetTrack={() => {}}
-                onDeleteTrack={() => {}}
-                onSelect={() => {}}
-                path={path} />
             </div>
             {(this.props.expand || frontendSettings.get('show_inline_metadata')) && this.props.showMeta
              ?

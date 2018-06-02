@@ -332,6 +332,7 @@ export default class SearchResultView extends React.Component {
       track_color_identity: false,
       label_mode: LABEL_MODES.DEFAULT,
       select_mode: SELECT_MODES.RANGE,
+      subtitle_sidebar: true
     };
 
     if (_.size(this.props.settings) > 0) {

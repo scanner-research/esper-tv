@@ -164,6 +164,12 @@ class OptionsView extends React.Component {
       type: 'radio',
       filter: (g) => g.type == 'contiguous'
     },
+    {
+      name: 'Show subtitle sidebar',
+      key: 'subtitle_sidebar',
+      type: 'radio',
+      filter: (g) => g.type == 'contiguous'
+    },
   ]
 
   render() {

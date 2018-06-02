@@ -8,6 +8,7 @@ import Consumer from 'utils/Consumer.jsx';
 import {FrontendSettingsContext, BackendSettingsContext, SearchContext} from './contexts.jsx';
 import Select from './Select.jsx';
 import {PALETTE} from 'utils/Color.jsx';
+import axios from 'axios';
 
 @observer
 class MarkerView extends React.Component {
@@ -122,6 +123,28 @@ class TrackView extends React.Component {
           </g>
         );
     }}</Consumer>;
+  }
+}
+
+class SubtitleView extends React.Component {
+  state = {
+    loaded: false
+  }
+
+  componentDidMount() {
+    axios.get(`/api/subtitles?video=${this.props.video}`)
+         .then((response) => {
+           console.log(response);
+           this.setState({loaded: true});
+         });
+  }
+
+  render() {
+    return <div>
+      {this.state.loaded
+       ? <span>Loaded</span>
+       : <span>...</span>}
+    </div>;
   }
 }
 
@@ -391,17 +414,18 @@ export default class TimelineView extends React.Component {
         };
 
         let video = this._video();
-        let small_height = expand ? video.height : 100 * this._frontendSettings.get('thumbnail_size');
-        let small_width = video.width * small_height / video.height;
-
-        let style = {
-          width: small_width,
-        };
+        let vid_height = expand ? video.height : 100 * this._frontendSettings.get('thumbnail_size');
+        let vid_width = video.width * vid_height / video.height;
 
         let timeboxStyle = {
-          width: small_width,
+          width: vid_width,
           height: expand ? 60 : 20
-        }
+        };
+
+        let containerStyle = {
+          width: vid_width,
+          height: vid_height + timeboxStyle.height
+        };
 
         let tprops = {
           w: timeboxStyle.width,
@@ -416,42 +440,44 @@ export default class TimelineView extends React.Component {
         let selectWidth = 200;
         let selectStyle = {
           left: timeboxStyle.width / 2 - selectWidth / 2,
-          top: small_height,
+          top: vid_height,
           position: 'absolute',
           zIndex: 1000
         };
 
-        return <div className='timeline' style={style} onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
-          <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
-                    expand={this.props.expand} displayTime={this.state.displayTime}
-                    onVideoPlay={this._onVideoPlay}
-                    onVideoStop={this._onVideoStop} />
-          <svg className='time-container' style={timeboxStyle} onMouseDown={this._onMouseDown}
-               onMouseMove={this._onMouseMove}
-               onMouseUp={this._onMouseUp}
-               onMouseOut={this._timelineOnMouseOut}
-               ref={(n) => {this._svg = n;}}>
-            <g>{group.elements.map((track, i) =>
-              // We destructure the track b/c mobx doesn't seem to be observing updates to it?
-              <TrackView key={i} i={i} track={track} onKeyPress={this._onTrackKeyPress} {...tprops} />)}
-            </g>
-            {this.state.trackStart != -1
-             ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
-             : <g />}
-            <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(20, 230, 20)" strokeWidth={tprops.mw*1.5} />
-            <MarkerView t={clip.min_frame/video.fps} type="open" color="black" {...tprops} />
-            <MarkerView t={clip.max_frame/video.fps} type="close" color="black"  {...tprops} />
-          </svg>
-          {this.state.showSelect
-           ? <div style={selectStyle}>
-             <Select
-               data={_.map(backendSettings.things['topic'], (v, k) => [k, v])}
-               width={selectWidth}
-               onSelect={this._onSelect}
-               onClose={(e) => {this.setState({showSelect: false});}}
-             />
-           </div>
-           : <div />}
+        return <div className='timeline' onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
+          <div className='column'>
+            <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
+                      expand={this.props.expand} displayTime={this.state.displayTime}
+                      onVideoPlay={this._onVideoPlay}
+                      onVideoStop={this._onVideoStop} />
+            <svg className='time-container' style={timeboxStyle} onMouseDown={this._onMouseDown}
+                 onMouseMove={this._onMouseMove}
+                 onMouseUp={this._onMouseUp}
+                 onMouseOut={this._timelineOnMouseOut}
+                 ref={(n) => {this._svg = n;}}>
+              <g>{group.elements.map((track, i) =>
+                // We destructure the track b/c mobx doesn't seem to be observing updates to it?
+                <TrackView key={i} i={i} track={track} onKeyPress={this._onTrackKeyPress} {...tprops} />)}
+              </g>
+              {this.state.trackStart != -1
+               ? <MarkerView t={this.state.trackStart} type="open" color="rgb(230, 230, 20)" {...tprops} />
+               : <g />}
+              <line x1={tprops.w/2} x2={tprops.w/2} y1={0} y2={tprops.h} stroke="rgb(20, 230, 20)" strokeWidth={tprops.mw*1.5} />
+              <MarkerView t={clip.min_frame/video.fps} type="open" color="black" {...tprops} />
+              <MarkerView t={clip.max_frame/video.fps} type="close" color="black"  {...tprops} />
+            </svg>
+            {this.state.showSelect
+             ? <div style={selectStyle}>
+               <Select
+                 data={_.map(backendSettings.things['topic'], (v, k) => [k, v])}
+                 width={selectWidth}
+                 onSelect={this._onSelect}
+                 onClose={(e) => {this.setState({showSelect: false});}}
+               />
+             </div>
+             : <div />}
+          </div>
         </div>;
     }}</Consumer>
   }
