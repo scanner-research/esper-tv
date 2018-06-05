@@ -7,6 +7,7 @@ import tempfile
 
 class Show(models.Model):
     name = base.CharField()
+    hosts = models.ManyToManyField('Thing', blank=True)
 
 
 class Channel(models.Model):
