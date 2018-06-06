@@ -8,7 +8,6 @@ import Consumer from 'utils/Consumer.jsx';
 import {FrontendSettingsContext, BackendSettingsContext, SearchContext} from './contexts.jsx';
 import Select from './Select.jsx';
 import {PALETTE} from 'utils/Color.jsx';
-import axios from 'axios';
 
 @observer
 class MarkerView extends React.Component {
@@ -101,11 +100,11 @@ class TrackView extends React.Component {
           color = '#eee';
         }
 
-        let text = null;
+        let texts = [];
         if (track.identity !== undefined) {
-          text = track.identity;
-        } else if (track.thing_id !== undefined) {
-          text = backendSettings.things['topic'][track.thing_id];
+          texts = [track.identity];
+        } else if (track.things !== undefined) {
+          texts = track.things.map((id) => backendSettings.things['topic'][id]);
         }
 
         return (
@@ -115,9 +114,10 @@ class TrackView extends React.Component {
              ? <g>
                <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
                <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
-               {text !== null
-                ? <text x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">{text}</text>
-                : <g />}
+               {texts.map((text, i) =>
+                 <text key={i} x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">
+                   {text}
+                 </text>)}
              </g>
              : <g />}
           </g>
@@ -126,27 +126,6 @@ class TrackView extends React.Component {
   }
 }
 
-class SubtitleView extends React.Component {
-  state = {
-    loaded: false
-  }
-
-  componentDidMount() {
-    axios.get(`/api/subtitles?video=${this.props.video}`)
-         .then((response) => {
-           console.log(response);
-           this.setState({loaded: true});
-         });
-  }
-
-  render() {
-    return <div>
-      {this.state.loaded
-       ? <span>Loaded</span>
-       : <span>...</span>}
-    </div>;
-  }
-}
 
 @observer
 export default class TimelineView extends React.Component {

@@ -120,6 +120,10 @@ export default class ClipView extends React.Component {
     }
   }
 
+  _subDivScroll = (subDiv) => {
+    return (subDiv.offsetTop + subDiv.clientHeight / 2) - this._subContainer.clientHeight / 2;
+  }
+
   componentDidUpdate() {
     if (this._video) {
       this._video.addEventListener('seeked', this._onSeeked);
@@ -132,23 +136,27 @@ export default class ClipView extends React.Component {
         this._video.addEventListener('ended', this.props.onVideoStop);
       }
 
-      if (this._lastDisplayTime != this.props.displayTime) {
+      if (this.props.displayTime !== undefined && this._lastDisplayTime != this.props.displayTime) {
         this._video.currentTime = this.props.displayTime;
         this._lastDisplayTime = this.props.displayTime;
       }
 
-      if (this.props.onTimeUpdate) {
-        if (this._timeUpdateInterval) {
-          clearInterval(this._timeUpdateInterval);
-        }
-        this._timeUpdateInterval = setInterval(() => {
-          this.props.onTimeUpdate(this._video.currentTime);
-        }, 16);
+      if (this._timeUpdateInterval) {
+        clearInterval(this._timeUpdateInterval);
       }
+      this._timeUpdateInterval = setInterval(() => {
+        if (this.props.onTimeUpdate) {
+          this.props.onTimeUpdate(this._video.currentTime);
+        }
+
+        // HACK FOR NOW: need to forcibly re-render every tick for subtitles to work properly
+        this.forceUpdate();
+      }, 16);
 
       // Scroll captions to current time
       if (this._curSub !== null && this.state.subAutoScroll) {
-        this._subContainer.scrollTop = (this._curSub.offsetTop + this._curSub.clientHeight / 2) - this._subContainer.clientHeight / 2;
+        let subDiv = this._subDivs[this._curSub];
+        this._subContainer.scrollTop = this._subDivScroll(subDiv);
       }
     } else {
       // If the video disappears after being shown (e.g. b/c the clip was de-expanded)
@@ -164,7 +172,23 @@ export default class ClipView extends React.Component {
   }
 
   _subOnScroll = (e) => {
+    if (this.state.subAutoScroll) {
+      return;
+    }
+
     // TODO: change video time when scrolling
+    let scroll = this._subContainer.scrollTop;
+
+    let i;
+    for (i = 0; i < _.size(this._subDivs); ++i) {
+      if (scroll < this._subDivScroll(this._subDivs[i])) {
+        break;
+      }
+    }
+
+    i = Math.min(i, _.size(this._subDivs) - 1);
+
+    this._video.currentTime = this._formattedSubs[i].start;
   }
 
   componentWillUnmount() {
@@ -237,51 +261,50 @@ export default class ClipView extends React.Component {
 
           let SubtitleView = () => {
             if (this._video.textTracks.length == 0) {
-              return <span>Loading...</span>
+              return <span>Loading track...</span>
             }
             let subs = this._video.textTracks[0].cues;
             if (!subs || subs.length == 0) {
-              return <span>Loading...</span>
+              return <span>Loading subtitles...</span>
             }
 
-            //if (this._formattedSubs === null) {
-              let formattedSubs = [];
-              let curSub = "";
-              let startTime = 0;
-              _.forEach(subs, (sub) => {
-                let parts = sub.text.split('>>');
-                curSub += parts[0] + ' ';
+            // TODO: is there a proper way to cache this? We can't just compute it on the first
+            // go since the text tracks are streamed in, not loaded all in at once.
+            this._formattedSubs = [];
+            let curSub = "";
+            let startTime = 0;
+            _.forEach(subs, (sub) => {
+              let parts = sub.text.split('>>');
+              curSub += parts[0] + ' ';
 
-                if (parts.length > 1) {
-                  formattedSubs.push({
-                    text: _.trim(curSub),
+              if (parts.length > 1) {
+                this._formattedSubs.push({
+                  text: _.trim(curSub),
+                  start: startTime,
+                  end: sub.endTime
+                })
+
+                startTime = sub.startTime;
+                parts.slice(1, -1).forEach((text) => {
+                  this._formattedSubs.push({
+                    text: _.trim(text),
                     start: startTime,
                     end: sub.endTime
                   })
+                });
 
-                  startTime = sub.startTime;
-                  parts.slice(1, -1).forEach((text) => {
-                    formattedSubs.push({
-                      text: _.trim(text),
-                      start: startTime,
-                      end: sub.endTime
-                    })
-                  });
-
-                  curSub = parts[parts.length - 1];
-                }
-              });
-
-              this._formattedSubs = formattedSubs;
-            //}
+                curSub = parts[parts.length - 1];
+              }
+            });
 
             let i = 0;
             while (i < this._formattedSubs.length && this._formattedSubs[i].start <= this._video.currentTime) { i++; }
-            i = Math.max(i - 1, 0);
 
+            this._curSub = Math.max(i - 1, 0);
+            this._subDivs = {};
             return <div>{this._formattedSubs.map((sub, j) =>
-              <div key={j} className='subtitle' ref={(n) => { if (i == j) { this._curSub = n; } }}>
-                {i == j ? <strong>>> {sub.text}</strong> : <span>>> {sub.text}</span>}
+              <div key={j} className='subtitle' ref={(n) => { this._subDivs[j] = n; }}>
+                {this._curSub == j ? <strong>>> {sub.text}</strong> : <span>>> {sub.text}</span>}
               </div>)}
             </div>;
           };
