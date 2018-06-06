@@ -23,6 +23,7 @@ from esper.prelude import collect, BUCKET
 from query.base_models import Track
 from query.models import \
     Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType
+import django.apps
 
 def access(obj: Any, path: str) -> Any:
     fields = path.split('__')
@@ -316,11 +317,8 @@ def esper_js_globals():
         return [f.name for f in fields if isinstance(f, models.Field)]
 
     schema = []
-    # TODO(wcrichto): fix schema finding code
-    if False:
-        # Get schema for dataset
-        for cls in ds.all_models():
-            schema.append([cls, get_fields(getattr(ds, cls))])
+    for m in django.apps.apps.get_models():
+        schema.append([m.__name__, get_fields(m)])
 
     things = {
         ty.name: {

@@ -102,7 +102,6 @@
         float: left;
         position: relative;
 
-
         .select-overlay {
             position: absolute;
             left: 0;
@@ -113,14 +112,17 @@
             opacity: 0.5;
         }
 
-        .flat {
+        .grouped {
+            .element {
+                float: left;
+                padding: 5px;
+            }
         }
 
         .contiguous {
             margin: 5px;
             border: 2px solid #ccc;
         }
-
     }
 
     .timeline {

@@ -277,8 +277,9 @@ class GroupView extends React.Component {
               : <span />}
              <div className='group-elements'>
                {group.elements.map((clip, i) =>
-                 <ClipView key={i} clip={clip} showMeta={true} expand={this.state.expand} />)}
-
+                 <div key={i} className='element'>
+                   <ClipView clip={clip} showMeta={true} expand={this.state.expand} />
+                 </div>)}
                <div className='clearfix' />
              </div>
            </div>}

@@ -65,7 +65,7 @@ class SchemaView extends React.Component {
     return (
       <div className='schema'>
         <div className='schema-classes'>
-          {GLOBALS.schemas.map((cls, i) =>
+          {GLOBALS.schema.map((cls, i) =>
             <Rb.Panel key={i} className='schema-class'>
               <div className='schema-class-name'>{cls[0]}</div>
               <div className='schema-class-fields'>
