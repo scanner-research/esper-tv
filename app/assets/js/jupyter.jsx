@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
+import _ from 'lodash';
 import SearchResultView from 'views/SearchResultView.jsx';
 import SearchResult from 'models/SearchResult.jsx';
 import {PythonContext, BackendSettingsContext, SearchContext} from 'views/contexts.jsx';
@@ -29,6 +30,9 @@ export let EsperView = widgets.DOMWidgetView.extend({
       console.log(this.model, fields);
       this.model.save_changes();
     };
+
+    globals.things_flat = {};
+    _.merge(globals.things_flat, ... _.values(globals.things));
 
     ReactDOM.render(
       <Provider values={[

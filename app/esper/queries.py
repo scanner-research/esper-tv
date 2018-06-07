@@ -109,6 +109,8 @@ def two_poses_with_two_hands_above_head():
 
 @query("Non-handlabeled random faces/genders")
 def not_handlabeled():
+    from query.models import Labeler, Tag, FaceGender
+    from esper.stdlib import qs_to_result
     import random
     l = Labeler.objects.get(name='rudecarnie')
     t = Tag.objects.get(name='handlabeled-face:labeled')

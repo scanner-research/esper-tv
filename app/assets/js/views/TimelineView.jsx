@@ -49,6 +49,8 @@ class TrackView extends React.Component {
       return;
     }
 
+    e.preventDefault();
+
     let rect = boundingRect(this._g);
     let [x, y] = this._localCoords();
     if (!(0 <= x && x <= rect.width && 0 <= y && y <= rect.height)) {
@@ -108,7 +110,7 @@ class TrackView extends React.Component {
         if (track.identity !== undefined) {
           texts = [track.identity];
         } else if (track.things !== undefined) {
-          texts = track.things.map((id) => backendSettings.things['topic'][id]);
+          texts = track.things.map((id) => backendSettings.things_flat[id]);
         }
 
         return (
@@ -234,14 +236,14 @@ export default class TimelineView extends React.Component {
     else if (chr == 'n') {
       this._pushState();
       let track = this.props.group.elements[i];
-      let new_track = _.clone(track);
+      let new_track = _.cloneDeep(toJS(track));
 
       let fps = this._video().fps;
       let frame = Math.round(this.state.currentTime * fps);
       track.max_frame = frame;
       new_track.min_frame = frame;
 
-      this.props.group.elements.splice(i, 0, new_track);
+      this.props.group.elements.splice(i+1, 0, new_track);
     }
 
     // Delete track
@@ -331,7 +333,7 @@ export default class TimelineView extends React.Component {
 
           // [---[+++]---]
           else if (clip.min_frame <= start && end <= clip.max_frame) {
-            let new_clip = _.clone(clip);
+            let new_clip = _.cloneDeep(clip);
             new_clip.min_frame = end;
             clip.max_frame = start;
             to_add.push(new_clip);
@@ -423,8 +425,7 @@ export default class TimelineView extends React.Component {
 
         console.assert(group.elements.length > 0);
         let clip = {
-          video: group.elements[0].video,
-          min_frame: group.elements[0].min_frame,
+          video: group.elements[0].video,          min_frame: group.elements[0].min_frame,
           max_frame: group.elements[group.elements.length-1].max_frame
         };
 
@@ -486,7 +487,7 @@ export default class TimelineView extends React.Component {
             {this.state.showSelect
              ? <div style={selectStyle}>
                <Select
-                 data={_.map(backendSettings.things['topic'], (v, k) => [k, v])}
+                 data={_.sortBy(_.map(backendSettings.things_flat, (v, k) => [k, v]), [1])}
                  width={selectWidth}
                  onSelect={this._onSelect}
                  onClose={(e) => {this.setState({showSelect: false});}}

@@ -37,6 +37,9 @@ export default class App extends React.Component {
       img.onerror = (() => this.setState({valid: false})).bind(this);
       img.src = "https://storage.cloud.google.com/esper/do_not_delete.jpg";
     }
+
+    GLOBALS.things_flat = {};
+    _.merge(GLOBALS.things_flat, ... _.values(GLOBALS.things));
   }
 
   _onSearch = (results) => {

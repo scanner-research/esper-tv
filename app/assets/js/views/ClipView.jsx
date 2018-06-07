@@ -143,6 +143,7 @@ export default class ClipView extends React.Component {
         this._lastDisplayTime = this.props.displayTime;
       }
 
+      let updateFps = 24;
       if (this._timeUpdateInterval) {
         clearInterval(this._timeUpdateInterval);
       }
@@ -153,7 +154,7 @@ export default class ClipView extends React.Component {
 
         // HACK FOR NOW: need to forcibly re-render every tick for subtitles to work properly
         this.forceUpdate();
-      }, 100);
+      }, 1000 / updateFps);
 
       // Scroll captions to current time
       if (this._curSub !== null && this.state.subAutoScroll && this._subContainer !== null) {

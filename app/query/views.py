@@ -37,6 +37,7 @@ def _print(*args):
     pprint((*args))
     sys.stdout.flush()
 
+
 # Renders home page
 def index(request):
     return render(request, 'index.html', {'globals': json.dumps(esper_js_globals())})
@@ -58,7 +59,7 @@ def search(request):
             _globals[k] = globals()[k]
         for k in locals():
             _locals[k] = locals()[k]
-        exec ((params['code']), _globals, _locals)
+        exec((params['code']), _globals, _locals)
         result = _locals['FN']()
         ############### ^^^ DANGER -- REMOTE CODE EXECUTION ^^^ ###############
 
@@ -140,10 +141,8 @@ def save_frame_labels(groups):
         Frame.objects.get(video_id=vid, number=frame_num).id
         for (vid, frame_num, faces) in all_frames
     ]
-    Frame.tags.through.objects.filter(
-        frame__id__in=frame_ids, tag=labeled_tag).delete()
-    Frame.tags.through.objects.filter(
-        frame__id__in=frame_ids, tag=verified_tag).delete()
+    Frame.tags.through.objects.filter(frame__id__in=frame_ids, tag=labeled_tag).delete()
+    Frame.tags.through.objects.filter(frame__id__in=frame_ids, tag=verified_tag).delete()
     Face.objects.filter(person__frame__id__in=frame_ids, labeler=face_labeler).delete()
 
     all_tags = []
@@ -153,10 +152,8 @@ def save_frame_labels(groups):
     all_identities = []
     for (vid, frame_num, faces) in all_frames:
         frame = Frame.objects.get(video_id=vid, number=frame_num)
-        all_tags.append(
-            Frame.tags.through(frame_id=frame.id, tag_id=labeled_tag.id))
-        all_tags.append(
-            Frame.tags.through(frame_id=frame.id, tag_id=verified_tag.id))
+        all_tags.append(Frame.tags.through(frame_id=frame.id, tag_id=labeled_tag.id))
+        all_tags.append(Frame.tags.through(frame_id=frame.id, tag_id=verified_tag.id))
         for face in faces:
             all_people.append(Person(frame=frame))
 
@@ -253,11 +250,12 @@ def save_topic_segments(groups):
     topics = []
     for group in groups:
         for e in group['elements']:
-            segments.append(Segment(
-                labeler=segment_labeler,
-                video_id=e['video'],
-                min_frame=e['min_frame'],
-                max_frame=e['max_frame']))
+            segments.append(
+                Segment(
+                    labeler=segment_labeler,
+                    video_id=e['video'],
+                    min_frame=e['min_frame'],
+                    max_frame=e['max_frame']))
             topics.append(e['things'])
 
     Segment.objects.bulk_create(segments)
@@ -274,6 +272,7 @@ class LabelMode(enum.IntEnum):
     DEFAULT = 0
     SINGLE_IDENTITY = 1
     TOPIC_SEGMENTS = 2
+
 
 # Register frames as labeled
 def labeled(request):
