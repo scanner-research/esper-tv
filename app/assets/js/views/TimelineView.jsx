@@ -69,6 +69,10 @@ class TrackView extends React.Component {
     return [this._mouseX - rect.left, this._mouseY - rect.top];
   }
 
+  _onDeleteLabel = (i) => {
+    this.props.track.things.splice(i, 1);
+  }
+
   componentDidMount() {
     document.addEventListener('keypress', this._onKeyPress);
     document.addEventListener('mousemove', this._onMouseMove);
@@ -114,10 +118,16 @@ class TrackView extends React.Component {
              ? <g>
                <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
                <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
-               {texts.map((text, i) =>
-                 <text key={i} x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">
-                   {text}
-                 </text>)}
+               <foreignObject x={x1+2} y={0} width={1000} height={h}>
+                 <div className='track-label-container' xmlns="http://www.w3.org/1999/xhtml">
+                   {texts.map((text, i) =>
+                     <div key={i} className='track-label'>
+                       <span>{text}</span>
+                       <span className="oi oi-x" onClick={() => this._onDeleteLabel(i)}></span>
+                     </div>
+                   )}
+                 </div>
+               </foreignObject>
              </g>
              : <g />}
           </g>
@@ -204,9 +214,7 @@ export default class TimelineView extends React.Component {
     }
   }
 
-  _onTrackKeyPress = (e, i) => {
-    let chr = String.fromCharCode(e.which);
-
+  _onTrackKeyPress = (chr, i) => {
     // Change track gender
     if (chr == 'g') {
       this._pushState();
@@ -241,7 +249,10 @@ export default class TimelineView extends React.Component {
     let curFrame = this.state.currentTime * fps;
     let curTrack = this.props.group.elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
       clip.min_frame <= curFrame && curFrame <= clip.max_frame)[0][1];
-    this.props.group.elements[curTrack].thing_id = value;
+
+    let track = this.props.group.elements[curTrack];
+    if (!track.things) { track.things = []; }
+    track.things.push(value);
     this.setState({showSelect: false});
   }
 
@@ -325,7 +336,9 @@ export default class TimelineView extends React.Component {
           video: elements[0].video,
           min_frame: start,
           max_frame: end,
-          gender_id: _.find(this._searchResult.genders, (l) => l.name == 'M').id
+          // TODO(wcrichto): how to define reasonable defaults when labeling different kinds of
+          // tracks?
+          //gender_id: _.find(this._searchResult.genders, (l) => l.name == 'M').id
         });
         this.props.group.elements = _.sortBy(elements, ['min_frame']);
 
@@ -348,7 +361,8 @@ export default class TimelineView extends React.Component {
       } else if (curTracks.length > 1) {
         console.error('Attempting to process multiple tracks');
       } else {
-        this._onTrackKeyPress(e, curTracks[0][1]);
+        let chr = String.fromCharCode(e.which);
+        this._onTrackKeyPress(chr, curTracks[0][1]);
       }
     }
   }
@@ -386,6 +400,7 @@ export default class TimelineView extends React.Component {
         let group = this.props.group;
         let expand = this.props.expand;
 
+        console.assert(group.elements.length > 0);
         let clip = {
           video: group.elements[0].video,
           min_frame: group.elements[0].min_frame,
@@ -424,7 +439,8 @@ export default class TimelineView extends React.Component {
           zIndex: 1000
         };
 
-        return <div className='timeline' onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
+        return <div className={'timeline ' + (this.props.expand ? 'expanded' : '')}
+                    onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
           <div className='column'>
             <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
                       expand={this.props.expand} displayTime={this.state.displayTime}

@@ -22,7 +22,7 @@ import django.db.models as models
 from esper.prelude import collect, BUCKET
 from query.base_models import Track
 from query.models import \
-    Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType
+    Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType, Segment
 import django.apps
 
 def access(obj: Any, path: str) -> Any:

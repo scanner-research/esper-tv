@@ -137,6 +137,49 @@
         .time-marker {
             position: absolute;
         }
+
+        .track-label {
+            float: left;
+            border: 1px solid rgba(0, 0, 0, 0.4);
+            padding: 1px;
+            margin: auto 1px auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            font-size: 9px;
+            position: relative;
+            top: 50%;
+            transform: translateY(-50%);
+            user-select: none;
+
+            .oi {
+                display: none;
+            }
+        }
+
+        .track-label-container {
+            overflow: auto;
+            height: 100%;
+        }
+
+        &.expanded {
+            .track-label {
+                padding: 2px 5px;
+                margin: auto 5px auto;
+                font-size: 18px;
+
+                .oi {
+                    margin-left: 4px;
+                    display: inline;
+                    cursor: pointer;
+                }
+
+                .oi:empty:before {
+                    font-size: 12px;
+                    position: relative;
+                    bottom: 2px;
+                }
+            }
+        }
     }
 
     .clip {

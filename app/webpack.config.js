@@ -44,7 +44,7 @@ module.exports = env => {
         })
       }, {
         // Stops Bootstrap from complaining
-        test: /\.(png|woff|woff2|eot|ttf|svg)$/,
+        test: /\.(png|woff|woff2|eot|ttf|svg|otf)$/,
         loader: 'url-loader?limit=100000'
       }, {
         // Compile JSX files to JS

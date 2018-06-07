@@ -21,6 +21,7 @@ export default class ClipView extends React.Component {
   _lastDisplayTime = -1
   _formattedSubs = null
   _curSub = null
+  _subDivs = null
 
   constructor() {
     super();
@@ -154,11 +155,14 @@ export default class ClipView extends React.Component {
       }, 16);
 
       // Scroll captions to current time
-      if (this._curSub !== null && this.state.subAutoScroll) {
+      if (this._curSub !== null && this.state.subAutoScroll && this._subContainer !== null) {
         let subDiv = this._subDivs[this._curSub];
         this._subContainer.scrollTop = this._subDivScroll(subDiv);
       }
     } else {
+      this._curSub = null;
+      this._subDivs = null;
+
       // If the video disappears after being shown (e.g. b/c the clip was de-expanded)
       // we have to catch the interval clear then too
       if (this._timeUpdateInterval) {

@@ -19,6 +19,7 @@ import traceback
 from pprint import pprint
 from esper.stdlib import *
 from esper.prelude import *
+import django.apps
 
 ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
@@ -78,9 +79,8 @@ def search(request):
 # Get distinct values in schema
 def schema(request):
     params = json.loads(request.body.decode('utf-8'))
-    m = ModelDelegator(params['dataset'])
 
-    cls = getattr(m, params['cls_name'])
+    cls = next(m for m in django.apps.apps.get_models() if m.__name__ == params['cls_name'])
     result = [
         r[params['field']]
         for r in cls.objects.values(params['field']).distinct().order_by(params['field'])[:100]
@@ -126,25 +126,25 @@ def subtitles(request):
     return HttpResponse(vtt, content_type="text/vtt")
 
 
-def save_frame_labels(m, groups):
-    face_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-face')
-    gender_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-gender')
-    identity_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-identity')
-    labeled_tag, _ = m.Tag.objects.get_or_create(name='handlabeled-face:labeled')
-    verified_tag, _ = m.Tag.objects.get_or_create(name='tmp-verified')
+def save_frame_labels(groups):
+    face_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-face')
+    gender_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-gender')
+    identity_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-identity')
+    labeled_tag, _ = Tag.objects.get_or_create(name='handlabeled-face:labeled')
+    verified_tag, _ = Tag.objects.get_or_create(name='tmp-verified')
 
     all_frames = [(elt['video'], elt['min_frame'], elt['objects']) for group in groups
                   for elt in group['elements']]
 
     frame_ids = [
-        m.Frame.objects.get(video_id=vid, number=frame_num).id
+        Frame.objects.get(video_id=vid, number=frame_num).id
         for (vid, frame_num, faces) in all_frames
     ]
-    m.Frame.tags.through.objects.filter(
+    Frame.tags.through.objects.filter(
         tvnews_frame__id__in=frame_ids, tvnews_tag=labeled_tag).delete()
-    m.Frame.tags.through.objects.filter(
+    Frame.tags.through.objects.filter(
         tvnews_frame__id__in=frame_ids, tvnews_tag=verified_tag).delete()
-    m.Face.objects.filter(person__frame__id__in=frame_ids, labeler=face_labeler).delete()
+    Face.objects.filter(person__frame__id__in=frame_ids, labeler=face_labeler).delete()
 
     all_tags = []
     all_people = []
@@ -152,13 +152,13 @@ def save_frame_labels(m, groups):
     all_genders = []
     all_identities = []
     for (vid, frame_num, faces) in all_frames:
-        frame = m.Frame.objects.get(video_id=vid, number=frame_num)
+        frame = Frame.objects.get(video_id=vid, number=frame_num)
         all_tags.append(
-            m.Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=labeled_tag.id))
+            Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=labeled_tag.id))
         all_tags.append(
-            m.Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=verified_tag.id))
+            Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=verified_tag.id))
         for face in faces:
-            all_people.append(m.Person(frame=frame))
+            all_people.append(Person(frame=frame))
 
             face_params = {
                 'bbox_score': 1.0,
@@ -169,37 +169,37 @@ def save_frame_labels(m, groups):
             }
             for k in ['bbox_x1', 'bbox_x2', 'bbox_y1', 'bbox_y2']:
                 face_params[k] = face[k]
-            all_faces.append(m.Face(**face_params))
+            all_faces.append(Face(**face_params))
 
             all_genders.append(
-                m.FaceGender(face_id=None, gender_id=face['gender_id'], labeler=gender_labeler))
+                FaceGender(face_id=None, gender_id=face['gender_id'], labeler=gender_labeler))
 
             if 'identity_id' in face:
                 all_identities.append(
-                    m.FaceIdentity(
+                    FaceIdentity(
                         face_id=None, identity_id=face['identity_id'], labeler=identity_labeler))
             else:
                 all_identities.append(None)
 
-    m.Frame.tags.through.objects.bulk_create(all_tags)
+    Frame.tags.through.objects.bulk_create(all_tags)
 
-    m.Person.objects.bulk_create(all_people)
+    Person.objects.bulk_create(all_people)
 
     for (p, f) in zip(all_people, all_faces):
         f.person_id = p.id
-    m.Face.objects.bulk_create(all_faces)
+    Face.objects.bulk_create(all_faces)
 
     for (f, g, i) in zip(all_faces, all_genders, all_identities):
         g.face_id = f.id
         if i is not None:
             i.face_id = f.id
-    m.FaceGender.objects.bulk_create(all_genders)
-    m.FaceIdentity.objects.bulk_create([i for i in all_identities if i is not None])
+    FaceGender.objects.bulk_create(all_genders)
+    FaceIdentity.objects.bulk_create([i for i in all_identities if i is not None])
 
 
-def save_speaker_labels(m, groups):
-    audio_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-audio')
-    segment_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-audio:labeled')
+def save_speaker_labels(groups):
+    audio_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-audio')
+    segment_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-audio:labeled')
     speakers = []
     segments = []
     for group in groups:
@@ -207,7 +207,7 @@ def save_speaker_labels(m, groups):
         frame_nums = []
         for e in elements:
             speakers.append(
-                m.Speaker(
+                Speaker(
                     labeler=audio_labeler,
                     video_id=e['video'],
                     min_frame=e['min_frame'],
@@ -218,57 +218,62 @@ def save_speaker_labels(m, groups):
 
         frame_nums.sort()
         segments.append(
-            m.Segment(
+            Segment(
                 labeler=segment_labeler,
                 video_id=elements[0]['video'],
                 min_frame=frame_nums[0],
                 max_frame=frame_nums[-1]))
 
-    m.Speaker.objects.bulk_create(speakers)
-    m.Segment.objects.bulk_create(segments)
+    Speaker.objects.bulk_create(speakers)
+    Segment.objects.bulk_create(segments)
 
 
-def save_single_identity_labels(m, groups):
-    identity_labeler, _ = m.Labeler.objects.get_or_create(name='handlabeled-identity')
+def save_single_identity_labels(groups):
+    identity_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-identity')
 
     last_obj = groups[-1]['elements'][0]['objects'][0]
     if not 'identity_id' in last_obj:
         raise Exception("Missing identity on last object")
 
-    identity = m.Thing.objects.get(id=last_obj['identity_id'])
+    identity = Thing.objects.get(id=last_obj['identity_id'])
 
     face_ids = [o['id'] for g in groups for e in g['elements'] for o in e['objects']]
     identities = [
-        m.FaceIdentity(face_id=face_id, identity=identity, labeler=identity_labeler)
+        FaceIdentity(face_id=face_id, identity=identity, labeler=identity_labeler)
         for face_id in face_ids if face_id != -1
     ]
 
-    m.FaceIdentity.objects.filter(face_id__in=face_ids, labeler=identity_labeler).delete()
-    m.FaceIdentity.objects.bulk_create(identities)
+    FaceIdentity.objects.filter(face_id__in=face_ids, labeler=identity_labeler).delete()
+    FaceIdentity.objects.bulk_create(identities)
 
+
+def save_topic_segments(groups):
+    pass
 
 class LabelMode(enum.IntEnum):
     DEFAULT = 0
     SINGLE_IDENTITY = 1
-
+    TOPIC_SEGMENTS = 2
 
 # Register frames as labeled
 def labeled(request):
     try:
         params = json.loads(request.body.decode('utf-8'))
-        m = ModelDelegator(params['dataset'])
 
         label_mode = int(params['label_mode'])
         groups = params['groups']
         ty = groups[0]['type']
         if label_mode == LabelMode.DEFAULT:
             if ty == 'flat':
-                save_frame_labels(m, groups)
+                save_frame_labels(groups)
             else:
-                save_speaker_labels(m, groups)
+                save_speaker_labels(groups)
 
         elif label_mode == LabelMode.SINGLE_IDENTITY:
-            save_single_identity_labels(m, groups)
+            save_single_identity_labels(groups)
+
+        elif label_mode == LabelMode.TOPIC_SEGMENTS:
+            save_topic_segments(gropus)
 
         else:
             raise Exception('Invalid label mode: {}'.format(label_mode))
