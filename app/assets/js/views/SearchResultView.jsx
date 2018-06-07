@@ -83,6 +83,7 @@ class GroupsView extends React.Component {
       }
 
       // TODO(wcrichto): make saving state + errors more apparent to user (without alert boxes)
+      document.body.style.cursor = 'wait';
       axios
         .post('/api/labeled', {groups: labeled, label_mode: this._frontendSettings.get('label_mode')})
         .then(((response) => {
@@ -102,6 +103,9 @@ class GroupsView extends React.Component {
         .catch((error) => {
           console.error(error);
           alert(error);
+        })
+        .finally(() => {
+          document.body.style.cursor = 'auto';
         });
     }
   }

@@ -141,9 +141,9 @@ def save_frame_labels(groups):
         for (vid, frame_num, faces) in all_frames
     ]
     Frame.tags.through.objects.filter(
-        tvnews_frame__id__in=frame_ids, tvnews_tag=labeled_tag).delete()
+        frame__id__in=frame_ids, tag=labeled_tag).delete()
     Frame.tags.through.objects.filter(
-        tvnews_frame__id__in=frame_ids, tvnews_tag=verified_tag).delete()
+        frame__id__in=frame_ids, tag=verified_tag).delete()
     Face.objects.filter(person__frame__id__in=frame_ids, labeler=face_labeler).delete()
 
     all_tags = []
@@ -154,9 +154,9 @@ def save_frame_labels(groups):
     for (vid, frame_num, faces) in all_frames:
         frame = Frame.objects.get(video_id=vid, number=frame_num)
         all_tags.append(
-            Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=labeled_tag.id))
+            Frame.tags.through(frame_id=frame.id, tag_id=labeled_tag.id))
         all_tags.append(
-            Frame.tags.through(tvnews_frame_id=frame.id, tvnews_tag_id=verified_tag.id))
+            Frame.tags.through(frame_id=frame.id, tag_id=verified_tag.id))
         for face in faces:
             all_people.append(Person(frame=frame))
 
@@ -248,7 +248,27 @@ def save_single_identity_labels(groups):
 
 
 def save_topic_segments(groups):
-    pass
+    segment_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-topic')
+    segments = []
+    topics = []
+    for group in groups:
+        for e in group['elements']:
+            segments.append(Segment(
+                labeler=segment_labeler,
+                video_id=e['video'],
+                min_frame=e['min_frame'],
+                max_frame=e['max_frame']))
+            topics.append(e['things'])
+
+    Segment.objects.bulk_create(segments)
+
+    topic_links = []
+    for (seg, ts) in zip(segments, topics):
+        for t in ts:
+            topic_links.append(Segment.things.through(segment_id=seg.id, thing_id=t))
+
+    Segment.things.through.objects.bulk_create(topic_links)
+
 
 class LabelMode(enum.IntEnum):
     DEFAULT = 0
@@ -273,7 +293,7 @@ def labeled(request):
             save_single_identity_labels(groups)
 
         elif label_mode == LabelMode.TOPIC_SEGMENTS:
-            save_topic_segments(gropus)
+            save_topic_segments(groups)
 
         else:
             raise Exception('Invalid label mode: {}'.format(label_mode))

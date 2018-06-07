@@ -147,7 +147,8 @@ export default class TimelineView extends React.Component {
     startY: -1,
     trackStart: -1,
     moused: false,
-    showSelect: false
+    showSelect: false,
+    clipWidth: null
   }
 
   _videoPlaying = false;
@@ -228,6 +229,19 @@ export default class TimelineView extends React.Component {
       this._pushState();
       this.props.group.elements[i-1].max_frame = this.props.group.elements[i].max_frame;
       this.props.group.elements.splice(i, 1);
+    }
+
+    else if (chr == 'n') {
+      this._pushState();
+      let track = this.props.group.elements[i];
+      let new_track = _.clone(track);
+
+      let fps = this._video().fps;
+      let frame = Math.round(this.state.currentTime * fps);
+      track.max_frame = frame;
+      new_track.min_frame = frame;
+
+      this.props.group.elements.splice(i, 0, new_track);
     }
 
     // Delete track
@@ -359,7 +373,7 @@ export default class TimelineView extends React.Component {
       if (curTracks.length == 0) {
         console.warn('No tracks to process');
       } else if (curTracks.length > 1) {
-        console.error('Attempting to process multiple tracks');
+        console.error('Attempting to process multiple tracks', curTracks);
       } else {
         let chr = String.fromCharCode(e.which);
         this._onTrackKeyPress(chr, curTracks[0][1]);
@@ -384,6 +398,13 @@ export default class TimelineView extends React.Component {
 
   componentWillUnmount() {
     document.removeEventListener('keypress', this._onKeyPress);
+  }
+
+  componentDidUpdate() {
+    let width = this._clip.width();
+    if (width != this.state.clipWidth) {
+      this.setState({clipWidth: width});
+    }
   }
 
   // TODO(wcrichto): timeline disappears after deleting first track in the timeline
@@ -412,7 +433,7 @@ export default class TimelineView extends React.Component {
         let vid_width = video.width * vid_height / video.height;
 
         let timeboxStyle = {
-          width: vid_width,
+          width: this.state.clipWidth !== null && expand ? this.state.clipWidth : vid_width,
           height: expand ? 60 : 20
         };
 
@@ -444,8 +465,8 @@ export default class TimelineView extends React.Component {
           <div className='column'>
             <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
                       expand={this.props.expand} displayTime={this.state.displayTime}
-                      onVideoPlay={this._onVideoPlay}
-                      onVideoStop={this._onVideoStop} />
+                      onVideoPlay={this._onVideoPlay} onVideoStop={this._onVideoStop}
+                      ref={(n) => {this._clip = n;}} />
             <svg className='time-container' style={timeboxStyle} onMouseDown={this._onMouseDown}
                  onMouseMove={this._onMouseMove}
                  onMouseUp={this._onMouseUp}
