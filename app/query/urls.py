@@ -6,5 +6,6 @@ urlpatterns = [
     url(r'^api/schema', views.schema, name='schema'),
     url(r'^api/subtitles', views.subtitles, name='subtitles'),
     url(r'^api/labeled', views.labeled, name='labeled'),
+    url(r'^api/newthings', views.newthings, name='newthings'),
     url(r'^', views.index, name='index')
 ]

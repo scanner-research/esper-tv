@@ -8,6 +8,7 @@ import Consumer from 'utils/Consumer.jsx';
 import {FrontendSettingsContext, BackendSettingsContext, SearchContext} from './contexts.jsx';
 import Select from './Select.jsx';
 import {PALETTE} from 'utils/Color.jsx';
+import axios from 'axios';
 
 @observer
 class MarkerView extends React.Component {
@@ -266,10 +267,36 @@ export default class TimelineView extends React.Component {
     let curTrack = this.props.group.elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
       clip.min_frame <= curFrame && curFrame <= clip.max_frame)[0][1];
 
-    let track = this.props.group.elements[curTrack];
-    if (!track.things) { track.things = []; }
-    track.things.push(value);
-    this.setState({showSelect: false});
+    // valueKey is set if sent as a new option, value is set otherwise
+    value = value.map(opt => ({k: parseInt(opt.valueKey || opt.value), v: opt.label}));
+    let toSave = value.filter(opt => opt.k == -1).map(opt => opt.v);
+    let promise = toSave.length > 0
+                ? axios.post('/api/newthings', {things: toSave}).then((response) => {
+                  console.log(response.data);
+                  if (!response.data.success) {
+                    alert(response.data.error);
+                    return [];
+                  }
+
+                  console.log(response.data);
+                  let newthings = response.data.newthings;
+                  newthings.forEach(thing => {
+                    this._backendSettings.things[thing.type][thing.id] = thing.name;
+                    this._backendSettings.things_flat[thing.id] = thing.name;
+                  });
+                  return newthings.map(thing => ({k: thing.id, v: thing.name}));
+                })
+                : Promise.resolve([]);
+
+    promise.then(newopts => {
+      let newvalues = value.filter(opt => opt.k != -1).concat(newopts);
+
+      let track = this.props.group.elements[curTrack];
+      if (!track.things) { track.things = []; }
+      newvalues.forEach(opt => {track.things.push(opt.k);});
+
+      this.setState({showSelect: false});
+    });
   }
 
   _onKeyPress = (e) => {
@@ -415,6 +442,7 @@ export default class TimelineView extends React.Component {
     return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
         this._frontendSettings = frontendSettings;
         this._searchResult = searchResult;
+        this._backendSettings = backendSettings;
 
         if (this._lastPlaybackSpeed === null) {
           this._lastPlaybackSpeed = this._frontendSettings.get('playback_speed');
@@ -488,9 +516,10 @@ export default class TimelineView extends React.Component {
              ? <div style={selectStyle}>
                <Select
                  data={_.sortBy(_.map(backendSettings.things_flat, (v, k) => [k, v]), [1])}
+                 multi={true}
                  width={selectWidth}
                  onSelect={this._onSelect}
-                 onClose={(e) => {this.setState({showSelect: false});}}
+                 onClose={() => {this.setState({showSelect: false});}}
                />
              </div>
              : <div />}
