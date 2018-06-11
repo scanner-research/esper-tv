@@ -21,6 +21,8 @@ export default class ClipView extends React.Component {
   _lastDisplayTime = -1
   _formattedSubs = null
   _curSub = null
+  _subDivs = null
+  _n = null
 
   constructor() {
     super();
@@ -141,6 +143,7 @@ export default class ClipView extends React.Component {
         this._lastDisplayTime = this.props.displayTime;
       }
 
+      let updateFps = 24;
       if (this._timeUpdateInterval) {
         clearInterval(this._timeUpdateInterval);
       }
@@ -151,14 +154,17 @@ export default class ClipView extends React.Component {
 
         // HACK FOR NOW: need to forcibly re-render every tick for subtitles to work properly
         this.forceUpdate();
-      }, 16);
+      }, 1000 / updateFps);
 
       // Scroll captions to current time
-      if (this._curSub !== null && this.state.subAutoScroll) {
+      if (this._curSub !== null && this.state.subAutoScroll && this._subContainer !== null) {
         let subDiv = this._subDivs[this._curSub];
         this._subContainer.scrollTop = this._subDivScroll(subDiv);
       }
     } else {
+      this._curSub = null;
+      this._subDivs = null;
+
       // If the video disappears after being shown (e.g. b/c the clip was de-expanded)
       // we have to catch the interval clear then too
       if (this._timeUpdateInterval) {
@@ -196,6 +202,11 @@ export default class ClipView extends React.Component {
     if (this._timeUpdateInterval) {
       clearInterval(this._timeUpdateInterval);
     }
+  }
+
+  width() {
+    console.assert(this._n !== null);
+    return this._n.clientWidth;
   }
 
   render() {
@@ -311,7 +322,8 @@ export default class ClipView extends React.Component {
 
           return <div className={`clip ${(this.props.expand ? 'expanded' : '')}`}
                       onMouseEnter={this._onMouseEnter}
-                      onMouseLeave={this._onMouseLeave}>
+                      onMouseLeave={this._onMouseLeave}
+                      ref={(n) => {this._n = n;}}>
             <div className='video-row' style={{height: small_height}}>
               <div className='media-container'>
                 {this.state.loadingVideo || this.state.showVideo

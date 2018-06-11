@@ -1,23 +1,40 @@
 import React from 'react';
-import Select2 from 'react-select2-wrapper';
+import ReactSelect from 'react-select';
 import keyboardManager from 'utils/KeyboardManager.jsx';
 
 export default class Select extends React.Component {
+  state = {
+    value: null
+  }
+
   componentDidMount() {
     keyboardManager.lock();
-    this._n.el.select2('open');
   }
 
   componentWillUnmount() {
     keyboardManager.unlock();
   }
-
   render() {
-    return <Select2
-             ref={(n) => {this._n = n;}}
-             data={this.props.data.map(([k, v]) => ({id: k, text: v}))}
-             options={{placeholder: 'Search', width: this.props.width, closeOnSelect: false}}
-             onSelect={(e) => {this.props.onSelect(e.target.value); e.preventDefault();}}
-             onClose={(e) => {this.props.onClose(e);}} />;
+    return <ReactSelect.Creatable
+             options={this.props.data.map(([k, v]) => ({value: k, label: v}))}
+             multi={this.props.multi}
+             placeholder={'Search...'}
+             style={{width: this.props.width}}
+             openOnFocus={true}
+             autoFocus={true}
+             value={this.state.value}
+             escapeClearsValue={false}
+             onInputKeyDown={(e) => {
+                 if (e.which == 27) { // ESC
+                   let v = this.state.value;
+                   if (v === null || v === []) {
+                     this.props.onClose();
+                   } else {
+                     this.props.onSelect(v);
+                   }
+                 }
+             }}
+             newOptionCreator={(opt) => { opt.valueKey = "-1"; return opt; }}
+             onChange={(value) => { this.setState({value: value}); }} />;
   }
 }

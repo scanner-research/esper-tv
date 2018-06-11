@@ -8,6 +8,7 @@ import Consumer from 'utils/Consumer.jsx';
 export let LABEL_MODES = Object.freeze({
   DEFAULT: 0,
   SINGLE_IDENTITY: 1,
+  TOPIC_SEGMENTS: 2
 });
 
 export let SELECT_MODES = Object.freeze({
@@ -20,8 +21,8 @@ let labelModeToString = (i) => {
     return "default";
   } else if (i == LABEL_MODES.SINGLE_IDENTITY) {
     return "single identity";
-  } else if (i == LABEL_MODES.SINGLE_IDENTITY_BULK) {
-    return "single identity (bulk)";
+  } else if (i == LABEL_MODES.TOPIC_SEGMENTS) {
+    return "topic segments";
   } else {
     throw "Invalid label mode " + i;
   }

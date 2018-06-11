@@ -36,10 +36,20 @@
                 float: left;
                 width: 120px;
                 margin-right: $spacing;
+                margin-bottom: $spacing;
+            }
+
+            .schema-class-fields {
+                overflow: auto;
+                height: 120px;
             }
 
             .schema-field {
                 cursor: pointer;
+            }
+
+            .panel-body {
+                padding: 5px 10px;
             }
         }
 

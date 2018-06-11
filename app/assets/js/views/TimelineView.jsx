@@ -8,6 +8,7 @@ import Consumer from 'utils/Consumer.jsx';
 import {FrontendSettingsContext, BackendSettingsContext, SearchContext} from './contexts.jsx';
 import Select from './Select.jsx';
 import {PALETTE} from 'utils/Color.jsx';
+import axios from 'axios';
 
 @observer
 class MarkerView extends React.Component {
@@ -49,6 +50,8 @@ class TrackView extends React.Component {
       return;
     }
 
+    e.preventDefault();
+
     let rect = boundingRect(this._g);
     let [x, y] = this._localCoords();
     if (!(0 <= x && x <= rect.width && 0 <= y && y <= rect.height)) {
@@ -67,6 +70,10 @@ class TrackView extends React.Component {
   _localCoords = (e) => {
     let rect = boundingRect(this._g);
     return [this._mouseX - rect.left, this._mouseY - rect.top];
+  }
+
+  _onDeleteLabel = (i) => {
+    this.props.track.things.splice(i, 1);
   }
 
   componentDidMount() {
@@ -104,7 +111,7 @@ class TrackView extends React.Component {
         if (track.identity !== undefined) {
           texts = [track.identity];
         } else if (track.things !== undefined) {
-          texts = track.things.map((id) => backendSettings.things['topic'][id]);
+          texts = track.things.map((id) => backendSettings.things_flat[id]);
         }
 
         return (
@@ -114,10 +121,16 @@ class TrackView extends React.Component {
              ? <g>
                <line x1={x1} y1={0} x2={x1} y2={h} stroke="black" />
                <line x1={x2} y1={0} x2={x2} y2={h} stroke="black" />
-               {texts.map((text, i) =>
-                 <text key={i} x={x1+2} y={h/2} textAnchor="start" alignmentBaseline="middle">
-                   {text}
-                 </text>)}
+               <foreignObject x={x1+2} y={0} width={1000} height={h}>
+                 <div className='track-label-container' xmlns="http://www.w3.org/1999/xhtml">
+                   {texts.map((text, i) =>
+                     <div key={i} className='track-label'>
+                       <span>{text}</span>
+                       <span className="oi oi-x" onClick={() => this._onDeleteLabel(i)}></span>
+                     </div>
+                   )}
+                 </div>
+               </foreignObject>
              </g>
              : <g />}
           </g>
@@ -137,7 +150,8 @@ export default class TimelineView extends React.Component {
     startY: -1,
     trackStart: -1,
     moused: false,
-    showSelect: false
+    showSelect: false,
+    clipWidth: null
   }
 
   _videoPlaying = false;
@@ -204,9 +218,7 @@ export default class TimelineView extends React.Component {
     }
   }
 
-  _onTrackKeyPress = (e, i) => {
-    let chr = String.fromCharCode(e.which);
-
+  _onTrackKeyPress = (chr, i) => {
     // Change track gender
     if (chr == 'g') {
       this._pushState();
@@ -220,6 +232,19 @@ export default class TimelineView extends React.Component {
       this._pushState();
       this.props.group.elements[i-1].max_frame = this.props.group.elements[i].max_frame;
       this.props.group.elements.splice(i, 1);
+    }
+
+    else if (chr == 'n') {
+      this._pushState();
+      let track = this.props.group.elements[i];
+      let new_track = _.cloneDeep(toJS(track));
+
+      let fps = this._video().fps;
+      let frame = Math.round(this.state.currentTime * fps);
+      track.max_frame = frame;
+      new_track.min_frame = frame;
+
+      this.props.group.elements.splice(i+1, 0, new_track);
     }
 
     // Delete track
@@ -241,8 +266,37 @@ export default class TimelineView extends React.Component {
     let curFrame = this.state.currentTime * fps;
     let curTrack = this.props.group.elements.map((clip, i) => [clip, i]).filter(([clip, _]) =>
       clip.min_frame <= curFrame && curFrame <= clip.max_frame)[0][1];
-    this.props.group.elements[curTrack].thing_id = value;
-    this.setState({showSelect: false});
+
+    // valueKey is set if sent as a new option, value is set otherwise
+    value = value.map(opt => ({k: parseInt(opt.valueKey || opt.value), v: opt.label}));
+    let toSave = value.filter(opt => opt.k == -1).map(opt => opt.v);
+    let promise = toSave.length > 0
+                ? axios.post('/api/newthings', {things: toSave}).then((response) => {
+                  console.log(response.data);
+                  if (!response.data.success) {
+                    alert(response.data.error);
+                    return [];
+                  }
+
+                  console.log(response.data);
+                  let newthings = response.data.newthings;
+                  newthings.forEach(thing => {
+                    this._backendSettings.things[thing.type][thing.id] = thing.name;
+                    this._backendSettings.things_flat[thing.id] = thing.name;
+                  });
+                  return newthings.map(thing => ({k: thing.id, v: thing.name}));
+                })
+                : Promise.resolve([]);
+
+    promise.then(newopts => {
+      let newvalues = value.filter(opt => opt.k != -1).concat(newopts);
+
+      let track = this.props.group.elements[curTrack];
+      if (!track.things) { track.things = []; }
+      newvalues.forEach(opt => {track.things.push(opt.k);});
+
+      this.setState({showSelect: false});
+    });
   }
 
   _onKeyPress = (e) => {
@@ -306,7 +360,7 @@ export default class TimelineView extends React.Component {
 
           // [---[+++]---]
           else if (clip.min_frame <= start && end <= clip.max_frame) {
-            let new_clip = _.clone(clip);
+            let new_clip = _.cloneDeep(clip);
             new_clip.min_frame = end;
             clip.max_frame = start;
             to_add.push(new_clip);
@@ -325,7 +379,9 @@ export default class TimelineView extends React.Component {
           video: elements[0].video,
           min_frame: start,
           max_frame: end,
-          gender_id: _.find(this._searchResult.genders, (l) => l.name == 'M').id
+          // TODO(wcrichto): how to define reasonable defaults when labeling different kinds of
+          // tracks?
+          //gender_id: _.find(this._searchResult.genders, (l) => l.name == 'M').id
         });
         this.props.group.elements = _.sortBy(elements, ['min_frame']);
 
@@ -346,9 +402,10 @@ export default class TimelineView extends React.Component {
       if (curTracks.length == 0) {
         console.warn('No tracks to process');
       } else if (curTracks.length > 1) {
-        console.error('Attempting to process multiple tracks');
+        console.error('Attempting to process multiple tracks', curTracks);
       } else {
-        this._onTrackKeyPress(e, curTracks[0][1]);
+        let chr = String.fromCharCode(e.which);
+        this._onTrackKeyPress(chr, curTracks[0][1]);
       }
     }
   }
@@ -372,12 +429,20 @@ export default class TimelineView extends React.Component {
     document.removeEventListener('keypress', this._onKeyPress);
   }
 
+  componentDidUpdate() {
+    let width = this._clip.width();
+    if (width != this.state.clipWidth) {
+      this.setState({clipWidth: width});
+    }
+  }
+
   // TODO(wcrichto): timeline disappears after deleting first track in the timeline
 
   render() {
     return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
         this._frontendSettings = frontendSettings;
         this._searchResult = searchResult;
+        this._backendSettings = backendSettings;
 
         if (this._lastPlaybackSpeed === null) {
           this._lastPlaybackSpeed = this._frontendSettings.get('playback_speed');
@@ -386,9 +451,9 @@ export default class TimelineView extends React.Component {
         let group = this.props.group;
         let expand = this.props.expand;
 
+        console.assert(group.elements.length > 0);
         let clip = {
-          video: group.elements[0].video,
-          min_frame: group.elements[0].min_frame,
+          video: group.elements[0].video,          min_frame: group.elements[0].min_frame,
           max_frame: group.elements[group.elements.length-1].max_frame
         };
 
@@ -397,7 +462,7 @@ export default class TimelineView extends React.Component {
         let vid_width = video.width * vid_height / video.height;
 
         let timeboxStyle = {
-          width: vid_width,
+          width: this.state.clipWidth !== null && expand ? this.state.clipWidth : vid_width,
           height: expand ? 60 : 20
         };
 
@@ -424,12 +489,13 @@ export default class TimelineView extends React.Component {
           zIndex: 1000
         };
 
-        return <div className='timeline' onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
+        return <div className={'timeline ' + (this.props.expand ? 'expanded' : '')}
+                    onMouseOver={this._containerOnMouseOver} onMouseOut={this._containerOnMouseOut}>
           <div className='column'>
             <ClipView clip={clip} onTimeUpdate={this._onTimeUpdate} showMeta={false}
                       expand={this.props.expand} displayTime={this.state.displayTime}
-                      onVideoPlay={this._onVideoPlay}
-                      onVideoStop={this._onVideoStop} />
+                      onVideoPlay={this._onVideoPlay} onVideoStop={this._onVideoStop}
+                      ref={(n) => {this._clip = n;}} />
             <svg className='time-container' style={timeboxStyle} onMouseDown={this._onMouseDown}
                  onMouseMove={this._onMouseMove}
                  onMouseUp={this._onMouseUp}
@@ -449,10 +515,11 @@ export default class TimelineView extends React.Component {
             {this.state.showSelect
              ? <div style={selectStyle}>
                <Select
-                 data={_.map(backendSettings.things['topic'], (v, k) => [k, v])}
+                 data={_.sortBy(_.map(backendSettings.things_flat, (v, k) => [k, v]), [1])}
+                 multi={true}
                  width={selectWidth}
                  onSelect={this._onSelect}
-                 onClose={(e) => {this.setState({showSelect: false});}}
+                 onClose={() => {this.setState({showSelect: false});}}
                />
              </div>
              : <div />}
