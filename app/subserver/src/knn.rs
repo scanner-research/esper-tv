@@ -12,7 +12,7 @@ use rand::{thread_rng, sample, Rng};
 use rustlearn::prelude::*;
 use rustlearn::svm::libsvm::svc::Hyperparameters;
 use rustlearn::svm::libsvm::svc::KernelType;
-
+use rkm::kmeans_lloyd;
 
 const FEATURE_DIM: usize = 128;
 
@@ -210,5 +210,22 @@ impl Features {
               .filter(|(_, s)| min_t <= *s && *s <= max_t)
               .map(|(i, a)| (*&self.ids[*i], *a))
               .collect()
+    }
+    
+    pub fn kmeans(&self, ids: &Vec<Id>, k: usize) -> Vec<(u64, usize)> {
+        let ids_and_features: Vec<(Id, &FeatureVec)> = ids.iter()
+            .map(|i| (i, self.ids.binary_search(&i)))
+            .filter(|(_, r)| r.is_ok())
+            .map(|(i, r)| (*i, &self.features[r.unwrap()]))
+            .collect();
+        let n_features = ids_and_features.len();
+        let mut data = ndarray::Array2::<f64>::zeros((n_features, FEATURE_DIM));
+        for i in 0..n_features {
+            for j in 0..FEATURE_DIM {
+                data[[i,j]] = ids_and_features[i].1[j] as f64;
+            }
+        }
+        let (_, clusters) = kmeans_lloyd(&data.view(), k);
+        clusters.iter().enumerate().map(|(i, c)| (ids_and_features[i].0, *c)).collect()
     }
 }

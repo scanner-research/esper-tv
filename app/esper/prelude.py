@@ -740,6 +740,16 @@ def face_svm(pos_ids, neg_ids=[], neg_samples=1000, pos_samples=500,
     return r.json()
 
 
+def face_kmeans(ids, k=25):
+    r = requests.post(
+        'http://localhost:8111/face_kmeans',
+        json={
+            'k': k,
+            'ids': ids,
+        })
+    return r.json()
+
+
 def face_features(self, ids):
     r = requests.post('http://localhost:8111/facefeatures', json={'ids': ids})
     return [np.array(a) for a in r.json()]

@@ -30,6 +30,12 @@ if not os.path.exists(RESULTS_DIR):
 
 GCS_MODEL_PREFIX = 'gs://esper/tvnews/face_identity_model'
 
+COLORS = ['SkyBlue', 'Red', 'Yellow', 'Orange', 'Purple']
+
+
+def get_color(i):
+    return COLORS[i % len(COLORS)]
+
 
 def random_hex_string(length):
     return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
@@ -62,6 +68,13 @@ class FaceIdentityModel(object):
     @property
     def face_ids_by_bucket(self):
         return self._face_ids_by_bucket
+    
+    def get_face_ids_above_threshold(self, precision_thresh):
+        selected_ids = []
+        for k in sorted(self.buckets):
+            if self.precision_by_bucket[k] >= precision_thresh:
+                selected_ids.extend(self.face_ids_by_bucket[k])
+        return selected_ids
     
     @property
     def buckets(self):
@@ -181,16 +194,31 @@ def commit_face_identities_to_db(model, person, labeler, min_threshold=0.001):
 
 class PrecisionModel(object):
     
-    def __init__(self, face_ids_by_bucket):
+    def __init__(self, face_ids_by_bucket, show_name=None):
+        """
+        Initialize a precision model. If show_name is passed, then only faces from that
+        show will be sampled and displayed to the user.
+        """
         sorted_buckets = sorted(face_ids_by_bucket.keys())
         lower_buckets = sorted_buckets[:int(len(sorted_buckets) / 2)]
         upper_buckets = sorted_buckets[len(lower_buckets):]
 
         def sample_buckets(buckets, n):
+            filter_ids = None
+            if show_name is not None:
+                filter_ids = set([x['id'] for x in Face.objects.filter(shot__video__show__name=show_name).values('id')])
+            
             idx_to_face_ids = []
             idx_to_bucket = []
             for k in buckets:
                 face_ids = face_ids_by_bucket[k]
+                if filter_ids is not None:
+                    face_ids_for_show = list(filter(lambda x: x in filter_ids, face_ids))
+                    if len(face_ids_for_show) > 0:
+                        face_ids = face_ids_for_show
+                    else:
+                        print(('Bucket {} would be empty using only faces from "{}". '
+                               'Using all faces for bucket instead.').format(k, show_name))
                 sample_ids = random.sample(face_ids, k=min(len(face_ids), n))
                 idx_to_face_ids.extend(sample_ids)
                 idx_to_bucket.extend([k] * len(sample_ids))
@@ -218,11 +246,11 @@ class PrecisionModel(object):
     def get_upper_count(self):
         return len(self.upper_coresp_buckets)
             
-    def get_lower_widget(self):
-        return esper_widget(self.lower_qs_result, crop_bboxes=True)
+    def get_lower_widget(self, crop=True):
+        return esper_widget(self.lower_qs_result, crop_bboxes=crop)
     
-    def get_upper_widget(self):
-        return esper_widget(self.upper_qs_result, crop_bboxes=True)
+    def get_upper_widget(self, crop=True):
+        return esper_widget(self.upper_qs_result, crop_bboxes=crop)
     
     def compute_precision_for_lower_buckets(self, selected_idxs):
         expected_count_by_bucket = Counter()
@@ -372,6 +400,7 @@ def plot_precision_and_cdf(model):
         y_prec.append(model.precision_by_bucket[k])
     plt.plot(x, y_prec, '-x', color='red', label='precision')
     
+    plt.title('Estimated precision and CDF curve for {}'.format(model.name))
     plt.xlabel('Distance threshold')
     plt.legend()
     
@@ -418,10 +447,7 @@ def show_gender_examples(model, precision_thresh=0.8, n=50):
     """
     Tiled examples for each gender pertaining to a labeled identity
     """
-    selected_ids = []
-    for k in sorted(model.buckets):
-        if model.precision_by_bucket[k] >= precision_thresh:
-            selected_ids.extend(model.face_ids_by_bucket[k])
+    selected_ids = model.get_face_ids_above_threshold(precision_thresh)
     
     results = []
     for gender in ['M', 'F', 'U']:
@@ -496,10 +522,7 @@ def show_faces_by_size(model, precision_thresh=0.8, n=5):
     """
     Show a widget with groups of faces by size
     """
-    selected_ids = []
-    for k in sorted(model.buckets):
-        if model.precision_by_bucket[k] >= precision_thresh:
-            selected_ids.extend(model.face_ids_by_bucket[k])
+    selected_ids = model.get_face_ids_above_threshold(precision_thresh)
             
     base_qs = Face.objects.filter(
         id__in=selected_ids,
@@ -600,33 +623,45 @@ def plot_histogram_of_screen_times_by_video(name, show_name,
     ])
     
 
-def plot_screentime_over_time(name, show_name, screen_time_by_video_id):
+def plot_screentime_over_time(names, show_name, screen_times_by_video_id):
     """
     Plot a scatterplot of screentime over time
+    
+    names is a list of names or a single name
+    screen_times_by_video_id is a dict of video_id to screen_time in seconds
+    or a list of such dicts
     """
-    histogram_dict = defaultdict(list)
-    for k, v in screen_time_by_video_id.items():
-        histogram_dict[int(v / 60) + 1].append(k)
-
-    videos_with_no_screen_time = Video.objects.filter(
+    
+    if not isinstance(names, list):
+        names = [names]
+        screen_times_by_video_id = [screen_times_by_video_id]
+    assert len(names) == len(screen_times_by_video_id)
+    
+    videos_with_faces = [
+        x['shot__video__id'] for x in 
+            Face.objects.filter(
+                shot__video__show__name=show_name
+            ).distinct(
+            'shot__video'
+            ).values('shot__video__id')
+        ]
+    videos_with_no_faces = Video.objects.filter(
         show__name=show_name
-    ).exclude(
-        id__in=[x for x in screen_time_by_video_id]
-    )
+    ).exclude(id__in=videos_with_faces)
     
-    videos_with_faces = [x['shot__video__id'] for x in 
-                         Face.objects.filter(
-                             shot__video__show__name=show_name
-                         ).distinct(
-                            'shot__video'
-                         ).values('shot__video__id')]
+    for i, (name, screen_time_by_video_id) in enumerate(zip(names, screen_times_by_video_id)):
+        histogram_dict = defaultdict(list)
+        for k, v in screen_time_by_video_id.items():
+            histogram_dict[int(v / 60) + 1].append(k)
 
-    videos_with_no_screen_time_and_no_faces = videos_with_no_screen_time.exclude(id__in=videos_with_faces)
-    videos_with_no_screen_time_but_with_faces = videos_with_no_screen_time.filter(id__in=videos_with_faces)
+        videos_with_no_screen_time = Video.objects.filter(
+            show__name=show_name
+        ).exclude(
+            id__in=[x for x in screen_time_by_video_id]
+        )
+        videos_with_no_screen_time_but_with_faces = \
+            videos_with_no_screen_time.filter(id__in=videos_with_faces)
     
-    histogram_dict[0] = [x.id for x in videos_with_no_screen_time_but_with_faces]
-    
-    def make_plot():
         videos = Video.objects.filter(
             id__in=[x for x in screen_time_by_video_id.keys()]
         ).order_by('time')
@@ -635,17 +670,19 @@ def plot_screentime_over_time(name, show_name, screen_time_by_video_id):
         for video in videos:
             x.append(video.time)
             y.append(screen_time_by_video_id[video.id] / 60.)    
-        plt.plot(x, y, '.', linewidth=1)
+        plt.scatter(x, y, s=1., label=name, color=get_color(i))
+        
+    # Plot xs for all videos with not faces
+    xe = [video.time for video in videos_with_no_faces]
+    ye = [0] * len(xe)
+    plt.plot(xe, ye, 'x', color='Black', label='Videos with no faces')
 
-        x2 = [x.time for x in videos_with_no_screen_time_and_no_faces]
-        y2 = [0] * len(x2)
-        plt.plot(x2, y2, 'rx')
-
-        plt.title('Screen time for {} on "{}" over time'.format(name, show_name))
-        plt.ylabel('Screentime (min)')
-        plt.xlabel('Date')
-        plt.show()
-    make_plot()
+    plt.legend()
+    plt.title('Screen time for {} on "{}" over time'.format(
+              ' & '.join(names), show_name))
+    plt.ylabel('Screentime (min)')
+    plt.xlabel('Date')
+    plt.show()
     
     
 def plot_distribution_of_appearance_times_by_video(model, show_name, max_minute=180):
@@ -764,17 +801,19 @@ def get_total_shot_time_by_show():
     return total_shot_time_by_show
 
 
-def get_screen_time_by_show(model):
+def get_screen_time_by_show(model, date_range=None):
     """
     Return the screentime by show name in a dict
     """
     def total_screen_time_by_bucket(args):
         bucket, precision, face_ids, major_shows = args
         if precision > 0:
-            query_result = Face.objects.filter(
+            qs = Face.objects.filter(
                 id__in=face_ids, shot__video__show__name__in=major_shows,
-                shot__in_commercial=False,
-            ).values(
+                shot__in_commercial=False)
+            if date_range is not None:
+                qs = qs.filter(shot__video__time__range=date_range)
+            query_result = qs.values(
                 'shot__video__show__name'
             ).annotate(
                 screen_time=Sum(
@@ -805,51 +844,148 @@ def get_screen_time_by_show(model):
     return [(k, screen_time_by_show[k], var_in_screen_time_by_show[k]) for k in screen_time_by_show.keys()]
 
 
-def plot_screen_time_by_show(name, screen_time_by_show):
+def plot_screen_time_by_show(names, screen_times_by_show):
     """
     Plot per show screentime
+    
+    Names is either a single name or a list of names.
+    Likewise, screen_times_by_show is either a single dict mapping
+    show name to screentime in seconds or a list of such dicts.
     """
-    def plot_bar_chart_by_show_raw(data):
+    if not isinstance(names, list):
+        names = [names]
+        screen_times_by_show = [screen_times_by_show]
+    assert len(names) == len(screen_times_by_show)
+    
+    def plot_bar_chart_by_show_raw(data_by_name):
         fig, ax1 = plt.subplots()
-
-        ys = [y for _, y, _ in data]
-        stds = [1.96 * (z ** 0.5) for _, _, z in data]
         
-        ind = np.arange(len(data))
-        width = 0.5
-        rect1 = ax1.bar(ind, ys, width,
-                        color='SkyBlue', yerr=stds, ecolor='red')
+        ind = np.arange(len(data_by_name[0]))
+        
+        full_width = 0.8
+        width = full_width / len(data_by_name)
+        for i, data in enumerate(data_by_name):
+            ys = [y for _, y, _ in data]
+            stds = [1.96 * (z ** 0.5) for _, _, z in data]
+            rect = ax1.bar(ind - full_width / 2 + i * width, ys, 
+                           width, color=get_color(i), yerr=stds, ecolor='black', 
+                           label=names[i])
+        
+        ax1.legend()
         ax1.set_ylim(ymin=0.)
         ax1.set_ylabel('Minutes', fontsize=14)
-        ax1.set_title('Minutes of non-commercial screen time by show for {}'.format(name))
+        ax1.set_title('Minutes of non-commercial screen time by show for {}'.format(
+                      ' & '.join(names)))
         ax1.set_xticks(ind)
         ax1.set_xlabel('Show name', fontsize=14)
         ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
         plt.show()
     
+    show_sort_order = { 
+        x[0] : i for i, x in enumerate(sorted(screen_times_by_show[0], key=lambda x: x[1]))
+    }
+    
     data_to_plot = []
-    for show, screen_time, variance in sorted(screen_time_by_show, 
-                                    key=lambda x: x[1]):
-        data_to_plot.append((show, screen_time / 60., variance / 3600.))
+    for name, screen_time_by_show in zip(names, screen_times_by_show):
+        single_show_data_to_plot = []
+        for show, screen_time, variance in sorted(screen_time_by_show, 
+                                                  key=lambda x: show_sort_order[x[0]]):
+            single_show_data_to_plot.append((show, screen_time / 60., variance / 3600.))
+        data_to_plot.append(single_show_data_to_plot)
     plot_bar_chart_by_show_raw(data_to_plot)
         
-    def plot_bar_chart_by_show_scaled(data):
+    def plot_bar_chart_by_show_scaled(data_by_name):
         fig, ax1 = plt.subplots()
 
-        ind = np.arange(len(data))
-        width = 0.5
-        rect1 = ax1.bar(ind, [y for _, y in data], width,
-                        color='SkyBlue')
+        ind = np.arange(len(data_by_name[0]))
+        full_width = 0.8
+        width = full_width / len(data_by_name)
+        
+        for i, data in enumerate(data_by_name):
+            stds = [1.96 * (z ** 0.5) for _, _, z in data]
+            rect = ax1.bar(ind - full_width / 2 + i * width, 
+                           [y for _, y, _ in data], width,
+                           yerr=stds, ecolor='black', color=get_color(i),
+                           label=names[i])
+        
+        ax1.set_ylim(ymin=0.)
         ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14)
-        ax1.set_title('Proportion of non-commercial screen time by show for {}'.format(name))
+        ax1.set_title('Proportion of non-commercial screen time by show for {}'.format(
+                      ' & '.join(names)))
+        ax1.legend()
         ax1.set_xticks(ind)
         ax1.set_xlabel('Show name', fontsize=14)
-        ax1.set_xticklabels([x for x, _ in data], rotation=45, ha='right')
+        ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
         plt.show()
-
+ 
+    show_sort_order = None
     data_to_plot = []
-    for show, screen_time, _ in sorted(screen_time_by_show, 
-                                    key=lambda x: x[1]):
-        data_to_plot.append((show,  screen_time / get_total_shot_time_by_show()[show]))
-    plot_bar_chart_by_show_scaled(list(sorted(data_to_plot, key=lambda x: x[1])))
+    for name, screen_time_by_show in zip(names, screen_times_by_show):
+        single_show_data_to_plot = []
+        for show, screen_time, variance in screen_time_by_show:
+            total_show_screen_time = get_total_shot_time_by_show()[show]
+            single_show_data_to_plot.append((
+                show, screen_time / total_show_screen_time, variance / (total_show_screen_time ** 2)
+            ))
+        if show_sort_order is None:
+            show_sort_order = { 
+                x[0] : i for i, x in enumerate(
+                    sorted(single_show_data_to_plot, key=lambda x: x[1]))
+            }
+        data_to_plot.append(list(sorted(
+            single_show_data_to_plot, key=lambda x: show_sort_order[x[0]]
+        )))
+    plot_bar_chart_by_show_scaled(data_to_plot)
     
+
+def get_person_in_shot_jaccard_similarity(models, show_name=None, date_range=None,
+                                          precision_thresh=0.8):
+    selected_faces_by_name = {}
+    for model in models:
+        selected_faces_by_name[model.name] = model.get_face_ids_above_threshold(precision_thresh)
+        
+    shot_ids_by_name = {}
+    for name, face_ids in selected_faces_by_name.items():
+        qs = Face.objects.filter(id__in=face_ids)
+        if date_range is not None:
+            qs = qs.filter(shot__video__time__range=date_range)
+        if show_name is not None:
+            qs = qs.filter(shot__video__show__name=show_name)
+        shot_ids_by_name[name] = set([
+            x['shot__id'] for x in qs.values('shot__id')
+        ])
+    
+    jaccard_sims = {}
+    for p1, v1 in shot_ids_by_name.items():
+        for p2, v2 in shot_ids_by_name.items():
+            if p2 >= p1:
+                continue
+            jaccard_sims[(p1, p2)] = len(v1 & v2) / len(v1 | v2) 
+            
+    return jaccard_sims
+     
+    
+def get_other_people_who_are_on_screen(model, precision_thresh=0.8, k=25, n_examples_per_cluster=10,
+                                       face_blurriness_threshold=10.):
+    selected_faces = model.get_face_ids_above_threshold(precision_thresh)
+    shot_ids = [x['shot__id'] for x in Face.objects.filter(id__in=selected_faces).values('shot__id')]
+    other_face_ids = [
+        x['id'] for x in 
+        Face.objects.filter(
+            shot__id__in=shot_ids, 
+            blurriness__gt=face_blurriness_threshold
+        ).exclude(id__in=selected_faces).values('id')
+    ]
+    clusters = defaultdict(list)
+    for (i, c) in face_kmeans(other_face_ids, k=k):
+        clusters[c].append(i)
+    
+    results = []
+    for _, ids in sorted(clusters.items(), key=lambda x: -len(x[1])):
+        results.append((
+            'Cluster with {} faces'.format(len(ids)), 
+            qs_to_result(Face.objects.filter(id__in=ids).distinct('shot__video'), 
+                         limit=n_examples_per_cluster)
+        ))
+
+    return esper_widget(group_results(results))

@@ -1,4 +1,4 @@
-#![feature(proc_macro, specialization, plugin)]
+#![feature(proc_macro, specialization, plugin, extern_prelude)]
 #![plugin(rocket_codegen)]
 
 extern crate serde;
@@ -16,6 +16,7 @@ extern crate byteorder;
 #[macro_use] extern crate nom;
 extern crate rand;
 extern crate rustlearn;
+extern crate rkm;
 
 use rocket::config::{Config, Environment};
 use glob::glob;
@@ -105,7 +106,7 @@ struct FaceSearchSVMInput {
     min_threshold: f32,
     max_threshold: f32,
     neg_samples: usize,
-    pos_samples: usize
+    pos_samples: usize,
 }
 
 #[post("/facesearch_svm", format="application/json", data="<input>")]
@@ -117,6 +118,17 @@ fn face_search_svm(input: Json<FaceSearchSVMInput>) -> Json<Vec<(u64,f32)>> {
 }
 
 #[derive(Serialize, Deserialize)]
+struct FaceKMeansInput {
+    ids: Vec<knn::Id>,
+    k: usize,
+}
+
+#[post("/face_kmeans", format="application/json", data="<input>")]
+fn face_kmeans(input: Json<FaceKMeansInput>) -> Json<Vec<(u64, usize)>> {
+    Json(FEATURES.kmeans(&input.ids, input.k))
+}
+
+#[derive(Serialize, Deserialize)]
 struct FaceFeaturesInput {
     ids: Vec<knn::Id>,
 }
@@ -125,11 +137,10 @@ struct FaceFeaturesInput {
 fn face_features(input: Json<FaceFeaturesInput>) -> Json<Vec<Vec<f32>>> {
     Json(FEATURES.features_for_id(&input.ids).into_iter().map(|v| v.to_vec()).collect())
 }
-
 fn main() {
     let config = Config::build(Environment::Development)
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search, face_search_svm, face_features]).launch();
+    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search, face_search_svm, face_features, face_kmeans]).launch();
 }
