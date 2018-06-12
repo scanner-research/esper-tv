@@ -5,11 +5,17 @@ import numpy as np
 import tempfile
 
 
+class CanonicalShow(models.Model):
+    name = base.CharField()
+    is_recurring = models.BooleanField(default=False)
+
+
 class Show(models.Model):
     name = base.CharField()
     hosts = models.ManyToManyField('Thing', blank=True)
+    canonical_show = models.ForeignKey(CanonicalShow)
 
-
+    
 class Channel(models.Model):
     name = base.CharField()
 

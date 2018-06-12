@@ -902,7 +902,7 @@ def face_search_for_other_people():
     selected_face_ids = [
         x['face__id'] for x in FaceIdentity.objects.filter(
             identity__name=name, probability__gt=precision_thresh
-        ).values('face__id')
+        ).values('face__id')[:100000] # size limit
     ]
     
     shot_ids = [
