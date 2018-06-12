@@ -3,10 +3,8 @@ use std::fs::File;
 use std::mem;
 use std::io::Read;
 use ndarray;
-use std::fmt::Debug;
 use std::io::Cursor;
 use byteorder::{ReadBytesExt, LittleEndian};
-use std::sync::Mutex;
 use block_timer::BlockTimer;
 use rand::{thread_rng, sample, Rng};
 use rustlearn::prelude::*;
@@ -56,7 +54,7 @@ impl Features {
 
             features
         }).collect();
-        
+
         println!("Feature count: {}", features.len());
 
         let mut file = File::open("/app/.cache/face_ids.bin").expect("cannot open");
@@ -72,16 +70,16 @@ impl Features {
 
     fn dists(&self, targets: &Vec<&FeatureVec>, non_targets: &Vec<&FeatureVec>, non_target_penalty: f32) -> Vec<(usize, f32)> {
         let mut dists: Vec<_> = self.features.par_iter().map(|f|
-            f32::max(0., 
+            f32::max(0.,
                 // Take the min distance to any target
                 targets.iter().map(
                     |t| (*t - f).mapv(|i| i.powi(2)).scalar_sum().sqrt()
-                ).fold(1./0., f32::min) 
-                - 
+                ).fold(1./0., f32::min)
+                -
                 // Subtract the min distance to any non-target
-                if non_targets.is_empty() { 
-                    0. 
-                } else { 
+                if non_targets.is_empty() {
+                    0.
+                } else {
                     non_target_penalty * non_targets.iter().map(
                         |g| (*g - f).mapv(|i| i.powi(2)).scalar_sum().sqrt()
                     ).fold(1./0., f32::min)
@@ -121,8 +119,8 @@ impl Features {
     pub fn features_for_id(&self, ids: &Vec<Id>) -> Vec<&FeatureVec> {
         ids.iter().map(|id| &self.features[self.ids.binary_search(&id).unwrap()]).collect()
     }
-    
-    pub fn svm(&self, pos_ids: &Vec<Id>, neg_ids: &Vec<Id>, n_neg_samples: usize, 
+
+    pub fn svm(&self, pos_ids: &Vec<Id>, neg_ids: &Vec<Id>, n_neg_samples: usize,
                n_pos_samples: usize, min_t: f32, max_t: f32) -> Vec<(u64,f32)> {
         let pos_features: Vec<&FeatureVec> = pos_ids.iter()
             .map(|i| self.ids.binary_search(&i))
@@ -134,14 +132,14 @@ impl Features {
             .filter(|r| r.is_ok())
             .map(|r| &self.features[r.unwrap()])
             .collect();
-        
+
         // Balance dataset by geting points close to positive examples
         let pos_sample_features: Vec<&FeatureVec> = self.knn(&Target::Ids(pos_ids.clone()), n_pos_samples, neg_ids, 0.25).iter()
             .map(|(i, _)| self.ids.binary_search(&i))
             .filter(|r| r.is_ok())
             .map(|r| &self.features[r.unwrap()])
             .collect();
-        
+
         // Use negative sampling to augment the negative set
         let mut rng = thread_rng();
         let neg_samples = sample(&mut rng, &self.ids, n_neg_samples);
@@ -150,12 +148,12 @@ impl Features {
             .filter(|r| r.is_ok())
             .map(|r| &self.features[r.unwrap()])
             .collect();
-        
+
         let n_pos = pos_features.len();
         let n_pos_samples = pos_sample_features.len();
         let n_neg = neg_features.len();
         let n_neg_samples = neg_sample_features.len();
-        
+
         let mut X = Array::zeros(n_pos + n_pos_samples + n_neg + n_neg_samples, FEATURE_DIM);
         let mut y = Array::ones(n_pos + n_pos_samples + n_neg + n_neg_samples, 1);
         for i in 0..n_pos {
@@ -180,7 +178,7 @@ impl Features {
                 X.set(i + n_pos + n_pos_samples + n_neg, j, neg_sample_features[i][j]);
             }
         }
-        
+
         // Shuffle the dataset
         let mut shuffled_idxs: Vec<usize> = Vec::with_capacity(X.rows());
         for i in 0..X.rows() {
@@ -189,13 +187,13 @@ impl Features {
         rng.shuffle(&mut shuffled_idxs);
         X = X.get_rows(&shuffled_idxs);
         y = y.get_rows(&shuffled_idxs);
-        
+
         let mut model = Hyperparameters::new(X.cols(), KernelType::Linear, 2)
                                             .C(0.3)
                                             .build();
 
         model.fit(&X, &y).expect("Failed to fit");
-        
+
         let mut labels: Vec<_> = self.features.par_iter().map(
             |f| {
                 let mut x = Array::zeros(1, FEATURE_DIM);

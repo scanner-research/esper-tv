@@ -611,6 +611,34 @@ def audio_labels():
     return qs_to_result(Speaker.objects.all(), group=True, limit=10000)
 
 
+@query("Topic labels")
+def all_topics():
+    from query.models import Segment
+    from esper.stdlib import qs_to_result
+    return qs_to_result(Segment.objects.filter(labeler__name='handlabeled-topic'), group=True, limit=10000)
+
+
+@query("Random videos w/o topic labels")
+def random_without_topics():
+    from query.models import Video, Thing
+    import random
+    t = Tag.objects.get(name='handlabeled-topic:labeled')
+    i = random.randint(0, Video.objects.aggregate(Max('id'))['id__max'])
+
+    videos = Video.objects.filter(id__gte=i).exclude(videotag__tag=t)
+    return {
+        'result':[{
+            'type': 'contiguous',
+            'elements': [{
+                'video': v.id,
+                'min_frame': 0,
+                'max_frame': v.num_frames - 1,
+                'things': []
+            }]
+        } for v in videos[:1000:10]]
+    }
+
+
 @query("Non-handlabeled random audio")
 def nonhandlabeled_random_audio():
     from query.models import Video, Speaker, Commercial
@@ -655,13 +683,13 @@ def caption_search():
     from esper.prelude import caption_search
     from query.models import Video
 
-    results = caption_search('DONALD TRUMP')
+    results = caption_search(['DONALD TRUMP'])
     videos = {v.id: v for v in Video.objects.all()}
 
     def convert_time(k, t):
         return int((t - 7) * videos[k].fps)
 
-    flattened = [(k, t1, t2) for k, l in results.items() for t1, t2 in l]
+    flattened = [(k, t1, t2) for r in results for k, l in r.items() for t1, t2 in l]
     random.shuffle(flattened)
     return simple_result([{
         'video': k,

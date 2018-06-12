@@ -10,10 +10,10 @@ extern crate rayon;
 extern crate srtparse;
 extern crate suffix;
 extern crate indicatif;
-#[macro_use] extern crate rocket;
+extern crate rocket;
 extern crate ndarray;
 extern crate byteorder;
-#[macro_use] extern crate nom;
+extern crate nom;
 extern crate rand;
 extern crate rustlearn;
 extern crate rkm;
@@ -23,7 +23,6 @@ use glob::glob;
 use std::collections::HashMap;
 use ndarray::Array;
 
-use block_timer::BlockTimer;
 use corpus::Corpus;
 use knn::{Features, Target};
 use progress::ProgressIterator;
@@ -67,6 +66,13 @@ fn sub_search(input: Json<SubSearchInput>) -> Json<Vec<HashMap<String, Vec<(f64,
 fn sub_count(input: Json<SubSearchInput>) -> Json<Vec<u64>> {
     Json(input.phrases.iter().progress().cloned().map(|phrase| CORPUS.count(phrase)).collect())
 }
+
+
+#[post("/mutualinfo", format="application/json", data="<input>")]
+fn mutual_info(input: Json<SubSearchInput>) -> Json<f64> {
+    Json(CORPUS.mutual_information(input.phrases[0].clone(), input.phrases[1].clone(), 10))
+}
+
 
 
 #[derive(Serialize, Deserialize)]
@@ -142,5 +148,5 @@ fn main() {
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, face_search, face_search_svm, face_features, face_kmeans]).launch();
+    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, mutual_info, face_search, face_search_svm, face_features, face_kmeans]).launch();
 }

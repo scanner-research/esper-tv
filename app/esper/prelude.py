@@ -693,6 +693,7 @@ def imshow(img):
 
 
 def caption_search(phrases):
+    from query.models import Video
     videos = {v.item_name(): v.id for v in Video.objects.all()}
     r = requests.post('http://localhost:8111/subsearch', json={'phrases': phrases})
 
@@ -704,6 +705,11 @@ def caption_search(phrases):
 
 def caption_count(phrases):
     r = requests.post('http://localhost:8111/subcount', json={'phrases': phrases})
+    return r.json()
+
+
+def mutual_info(p1, p2):
+    r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p1, p2]})
     return r.json()
 
 

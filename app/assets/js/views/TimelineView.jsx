@@ -50,13 +50,13 @@ class TrackView extends React.Component {
       return;
     }
 
-    e.preventDefault();
-
     let rect = boundingRect(this._g);
     let [x, y] = this._localCoords();
     if (!(0 <= x && x <= rect.width && 0 <= y && y <= rect.height)) {
       return;
     }
+
+    e.preventDefault();
 
     let chr = String.fromCharCode(e.which);
     this.props.onKeyPress(chr, this.props.i);
@@ -87,7 +87,8 @@ class TrackView extends React.Component {
   }
 
   render() {
-    return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]}>{(frontendSettings, backendSettings, searchResult) => {
+    // TODO: show topics on current track if out of sight
+    return <Consumer contexts={[FrontendSettingsContext, BackendSettingsContext, SearchContext]} >{(frontendSettings, backendSettings, searchResult) => {
         let {track, w, h, mw, mh, mf, video, ..._} = this.props;
         let start = track.min_frame / video.fps;
         let end = track.max_frame / video.fps;
@@ -243,6 +244,7 @@ export default class TimelineView extends React.Component {
       let frame = Math.round(this.state.currentTime * fps);
       track.max_frame = frame;
       new_track.min_frame = frame;
+      new_track.things = [];
 
       this.props.group.elements.splice(i+1, 0, new_track);
     }
@@ -481,7 +483,7 @@ export default class TimelineView extends React.Component {
           video: video,
         };
 
-        let selectWidth = 200;
+        let selectWidth = 300;
         let selectStyle = {
           left: timeboxStyle.width / 2 - selectWidth / 2,
           top: vid_height,

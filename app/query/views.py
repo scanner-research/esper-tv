@@ -248,6 +248,7 @@ def save_topic_segments(groups):
     segment_labeler, _ = Labeler.objects.get_or_create(name='handlabeled-topic')
     segments = []
     topics = []
+    videos = set()
     for group in groups:
         for e in group['elements']:
             segments.append(
@@ -257,6 +258,7 @@ def save_topic_segments(groups):
                     min_frame=e['min_frame'],
                     max_frame=e['max_frame']))
             topics.append(e['things'])
+            videos.add(e['video'])
 
     Segment.objects.bulk_create(segments)
 
@@ -266,6 +268,9 @@ def save_topic_segments(groups):
             topic_links.append(Segment.things.through(segment_id=seg.id, thing_id=t))
 
     Segment.things.through.objects.bulk_create(topic_links)
+
+    tag, _ = Tag.objects.get_or_create(name='handlabeled-topic:labeled')
+    VideoTag.objects.bulk_create([VideoTag(tag=tag, video_id=v) for v in videos])
 
 
 class LabelMode(enum.IntEnum):

@@ -252,7 +252,7 @@ def qs_to_result(result: QuerySet,
                     result['identity'] = t.identity_id
 
             if cls is Segment:
-                result['thing'] = t.thing.id
+                result['things'] = [thing.id for thing in t.things.all()]
 
             materialized_result.append(result)
         materialized_result.sort(key=itemgetter('video', 'min_frame'))
