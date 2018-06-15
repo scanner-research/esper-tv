@@ -46,7 +46,8 @@ class FaceIdentityModel(object):
     Standardized results from a run of the face identity model
     """
     
-    def __init__(self, name, face_ids_by_bucket, face_ids_to_score, precision_by_bucket, model_params):
+    def __init__(self, name, face_ids_by_bucket, face_ids_to_score, precision_by_bucket,
+                 model_params):
         self.name = name
         self._face_ids_to_score = face_ids_to_score
         self._face_ids_by_bucket = face_ids_by_bucket
@@ -206,7 +207,7 @@ class PrecisionModel(object):
         def sample_buckets(buckets, n):
             filter_ids = None
             if show_name is not None:
-                filter_ids = set([x['id'] for x in Face.objects.filter(shot__video__show__name=show_name).values('id')])
+                filter_ids = set([x['id'] for x in Face.objects.filter(shot__video__show__canonical_show__name=show_name).values('id')])
             
             idx_to_face_ids = []
             idx_to_bucket = []
@@ -556,7 +557,7 @@ def compute_screen_time_by_video(model, show_name):
                     x['shot__id'] for x in 
                     Face.objects.filter(id__in=face_ids).distinct('shot').values('shot__id')
                 ],
-                video__show__name=show_name, in_commercial=False,
+                video__show__canonical_show__name=show_name, in_commercial=False,
             ).values(
                 'video__id'
             ).annotate(
@@ -594,7 +595,7 @@ def plot_histogram_of_screen_times_by_video(name, show_name,
     
     videos_with_faces = [x['shot__video__id'] for x in 
                          Face.objects.filter(
-                             shot__video__show__name=show_name
+                             shot__video__show__canonical_show__name=show_name
                          ).distinct(
                             'shot__video'
                          ).values('shot__video__id')]
@@ -640,9 +641,9 @@ def plot_screentime_over_time(names, show_name, screen_times_by_video_id):
     videos_with_faces = [
         x['shot__video__id'] for x in 
             Face.objects.filter(
-                shot__video__show__name=show_name
+                shot__video__show__canonical_show__name=show_name
             ).distinct(
-            'shot__video'
+                'shot__video'
             ).values('shot__video__id')
         ]
     videos_with_no_faces = Video.objects.filter(
@@ -697,7 +698,7 @@ def plot_distribution_of_appearance_times_by_video(model, show_name, max_minute=
                     x['shot__id'] for x in 
                     Face.objects.filter(id__in=face_ids).distinct('shot').values('shot__id')
                 ],
-                video__show__name=show_name, 
+                video__show__canonical_show__name=show_name, 
                 in_commercial=False,
             ).annotate(
                 appearance_time=Cast(F('min_frame') / F('video__fps'), IntegerField())
@@ -749,7 +750,7 @@ def plot_distribution_of_identity_probabilities(model, show_name, bin_range=(20,
             face_ids = model.face_ids_by_bucket[k]
             filtered_face_ids.update([
                 x['id'] for x in Face.objects.filter(
-                    id__in=face_ids, shot__video__show__name=show_name
+                    id__in=face_ids, shot__video__show__canonical_show__name=show_name
                 ).values('id')
             ])
         
@@ -763,7 +764,7 @@ def plot_distribution_of_identity_probabilities(model, show_name, bin_range=(20,
     face_probs = np.interp([model.face_ids_to_score[x] for x in filtered_face_ids], f_x, f_y).tolist()
     
     if bin_range[0] == 0:
-        zero_prob_count = Face.objects.filter(shot__video__show__name=show_name).count() - len(face_probs)
+        zero_prob_count = Face.objects.filter(shot__video__show__canonical_show__name=show_name).count() - len(face_probs)
         if zero_prob_count > 0:
             face_probs.extend([0.] * zero_prob_count)
     
@@ -774,12 +775,22 @@ def plot_distribution_of_identity_probabilities(model, show_name, bin_range=(20,
     plt.show()
 
 
-major_shows = []
-with open('/app/major_shows.pkl', 'rb') as f:
-    major_shows_frame = pickle.load(f)
-    for show in major_shows_frame:
-        major_shows.append(str(show))
-        
+major_canonical_shows = [
+    x['show__canonical_show__name'] for x in
+    Video.objects.filter(
+        show__canonical_show__is_recurring=True
+    ).values(
+        'show__canonical_show__name'
+    ).annotate(
+        video_count=Count('id')
+    ).order_by(
+        '-video_count'
+    ).values(
+        'show__canonical_show__name'
+    )[:40]
+]
+
+
 # Cache this
 total_shot_time_by_show = None
 
@@ -788,15 +799,15 @@ def get_total_shot_time_by_show():
     global total_shot_time_by_show
     if total_shot_time_by_show is None:
         query_results = Shot.objects.filter(
-            video__show__name__in=major_shows, in_commercial=False,
+            video__show__canonical_show__name__in=major_canonical_shows, in_commercial=False,
         ).values(
-            'video__show__name'
+            'video__show__canonical_show__name'
         ).annotate(
             screen_time=Sum((F('max_frame') - F('min_frame')) / F('video__fps'),
                             output_field=FloatField())
         )
         total_shot_time_by_show = { 
-            x['video__show__name'] : x['screen_time'] for x in query_results 
+            x['video__show__canonical_show__name'] : x['screen_time'] for x in query_results 
         }
     return total_shot_time_by_show
 
@@ -806,15 +817,15 @@ def get_screen_time_by_show(model, date_range=None):
     Return the screentime by show name in a dict
     """
     def total_screen_time_by_bucket(args):
-        bucket, precision, face_ids, major_shows = args
+        bucket, precision, face_ids, major_canonical_shows = args
         if precision > 0:
             qs = Face.objects.filter(
-                id__in=face_ids, shot__video__show__name__in=major_shows,
+                id__in=face_ids, shot__video__show__canonical_show__name__in=major_canonical_shows,
                 shot__in_commercial=False)
             if date_range is not None:
                 qs = qs.filter(shot__video__time__range=date_range)
             query_result = qs.values(
-                'shot__video__show__name'
+                'shot__video__show__canonical_show__name'
             ).annotate(
                 screen_time=Sum(
                     (F('shot__max_frame') - F('shot__min_frame')) / F('shot__video__fps'), 
@@ -822,7 +833,7 @@ def get_screen_time_by_show(model, date_range=None):
                 )
             )
             return { 
-                x['shot__video__show__name'] : (
+                x['shot__video__show__canonical_show__name'] : (
                     precision * x['screen_time'], # value
                     (1. - precision) * precision * (x['screen_time'] ** 2) # variance
                 ) for x in query_result 
@@ -832,7 +843,7 @@ def get_screen_time_by_show(model, date_range=None):
     screen_time_by_show = defaultdict(float)
     var_in_screen_time_by_show = defaultdict(float)
     
-    args_list = [(k, model.precision_by_bucket[k], model.face_ids_by_bucket[k], major_shows)
+    args_list = [(k, model.precision_by_bucket[k], model.face_ids_by_bucket[k], major_canonical_shows)
                  for k in sorted(model.buckets)]
     results = par_for(total_screen_time_by_bucket, args_list)
     
@@ -938,8 +949,11 @@ def plot_screen_time_by_show(names, screen_times_by_show):
     plot_bar_chart_by_show_scaled(data_to_plot)
     
 
-def get_person_in_shot_jaccard_similarity(models, show_name=None, date_range=None,
+def get_person_in_shot_similarity(models, show_name=None, date_range=None,
                                           precision_thresh=0.8):
+    """
+    Returns a dict mapping pairs of (p1,p2) to a tuple of jaccard, (p1 & p2 | p1), (p1 & p2 | p2) 
+    """
     selected_faces_by_name = {}
     for model in models:
         selected_faces_by_name[model.name] = model.get_face_ids_above_threshold(precision_thresh)
@@ -950,19 +964,23 @@ def get_person_in_shot_jaccard_similarity(models, show_name=None, date_range=Non
         if date_range is not None:
             qs = qs.filter(shot__video__time__range=date_range)
         if show_name is not None:
-            qs = qs.filter(shot__video__show__name=show_name)
+            qs = qs.filter(shot__video__show__canonical_show__name=show_name)
         shot_ids_by_name[name] = set([
             x['shot__id'] for x in qs.values('shot__id')
         ])
     
-    jaccard_sims = {}
+    sims = {}
     for p1, v1 in shot_ids_by_name.items():
         for p2, v2 in shot_ids_by_name.items():
             if p2 >= p1:
                 continue
-            jaccard_sims[(p1, p2)] = len(v1 & v2) / len(v1 | v2) 
-            
-    return jaccard_sims
+            intersection = len(v1 & v2)
+            sims[(p1, p2)] = (
+                intersection / len(v1 | v2), 
+                intersection / len(v1), 
+                intersection / len(v2)
+            )
+    return sims
      
     
 def get_other_people_who_are_on_screen(model, precision_thresh=0.8, k=25, n_examples_per_cluster=10,

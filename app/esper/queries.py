@@ -891,7 +891,7 @@ def face_search_with_exclusion():
                             custom_order_by_id=face_ids,limit=len(face_ids))
 
     
-@query('Face search for other people who are on screen')
+@query('Other people who are on screen with X')
 def face_search_for_other_people():
     name = 'sean spicer'
     precision_thresh = 0.95

@@ -8,6 +8,7 @@ import tempfile
 class CanonicalShow(models.Model):
     name = base.CharField()
     is_recurring = models.BooleanField(default=False)
+    hosts = models.ManyToManyField('Thing', blank=True)
 
 
 class Show(models.Model):
