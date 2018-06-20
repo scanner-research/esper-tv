@@ -93,7 +93,7 @@ pub trait Indexed: Send + Sync {
         let word_index =
             meta.words.iter().enumerate().map(|(i, w)| (w.char_start as usize, i)).collect::<HashMap<_,_>>();
 
-        pos.into_iter().map(|i| word_index[&i]).collect::<Vec<_>>()
+        pos.into_iter().filter_map(|i| word_index.get(&i)).cloned().collect::<Vec<_>>()
     }
 }
 
@@ -117,22 +117,24 @@ impl Indexed for IndexedTable {
 }
 
 
-pub struct LinearSearch {
+pub struct WordSearch {
     text: String
 }
 
-impl Indexed for LinearSearch {
-    fn new(s: String) -> Self {
-        LinearSearch {
-            text: s
-        }
-    }
+impl Indexed for WordSearch {
+    fn new(s: String) -> Self { WordSearch { text: s } }
 
     fn positions_char(&self, query: &str) -> Vec<usize> {
-        self.text.match_indices(query).map(|(i, _)| i).collect::<Vec<_>>()
+        panic!()
+    }
+
+    fn positions_word(&self, query: &str, meta: &Document) -> Vec<usize> {
+        let parts = query.split(" ").collect::<Vec<_>>();
+        meta.words.windows(parts.len()).enumerate().filter(|(_, window)| {
+            parts.iter().zip(window.iter()).all(|(i, j)| i == &j.on_slice(&self.text))
+        }).map(|(i, _)| i).collect::<Vec<_>>()
     }
 }
-
 
 fn duration_to_float(d: Duration) -> f64 {
     f64::from(d.as_secs() as u32) + f64::from(d.subsec_nanos()) / 1.0e-9
@@ -158,8 +160,11 @@ impl<Index: Indexed + Send> Corpus<Index> {
             let doc: IndexedDocument<Index> = {
                 let meta = {
                     let mut meta = Document::new();
-                    let mut f = File::open(meta_path).expect("Meta file open failed");
-                    let mut bytes = CodedInputStream::new(&mut f);
+                    // NB(wcrichto): reading it all at once and passing entire bytestring to decoder
+                    // seems much faster than passing a file handle and letting decoder handle I/O.
+                    let mut s = fs::read(meta_path).expect("Meta file read failed");
+                    let mut s = s.as_slice();
+                    let mut bytes = CodedInputStream::new(&mut s);
                     meta.merge_from(&mut bytes).expect("Protobuf deserialize failed");
                     meta
                 };
@@ -182,7 +187,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
     fn find_with<T, F>(&self, s: String, f: F) -> HashMap<String, Vec<T>>
         where T: Send, F: (Fn(usize, &IndexedDocument<Index>) -> T) + Sync
     {
-        self.docs.iter().map(|(path, doc)| {
+        self.docs.par_iter().map(|(path, doc)| {
             let mut pos = doc.text_index.positions_word(&s, &doc.meta);
             pos.sort();
             (path.clone(), pos.into_iter().map(|i| f(i, doc)).collect::<Vec<_>>())
@@ -264,6 +269,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
         let colo_total = self.par_merge(&colo_counts, &|mut a, b| { a.merge(b, |x, y| x + y); a});
         let all_total = self.par_merge(&all_counts, &|mut a, b| { a.merge(b, |x, y| x + y); a});
 
+        let min_cooccur_threshold = 100;
         let min_occur_threshold = 1000;
         colo_total.keys().filter_map(|k| {
             let ab = *colo_total.get(k).expect("ab") as f64;
@@ -273,7 +279,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
             let corpus = corpus as f64;
             let score = f64::log10(ab * corpus / (a * b * span)) / f64::log10(2.0);
 
-            if b as i64 > min_occur_threshold {
+            if ab as i64 > min_cooccur_threshold && b as i64 > min_occur_threshold {
                 Some((k.to_string(), score))
             } else {
                 None
