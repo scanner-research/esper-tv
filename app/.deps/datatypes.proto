@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+message Document {
+  enum PartOfSpeech {
+    LRB = 0;
+    RRB = 1;
+    COMMA = 2;
+    COLON = 3;
+    PERIOD = 4;
+    SINGLEQUOTE = 5;
+    DOUBLEQUOTE = 6;
+    POUND = 7;
+    BACKTICK = 8;
+    DOLLAR = 9;
+    ADD = 10;
+    AFX = 11;
+    BES = 12;
+    CC = 13;
+    CD = 14;
+    DT = 15;
+    EX = 16;
+    FW = 17;
+    GW = 18;
+    HVS = 19;
+    HYPH = 20;
+    IN = 21;
+    JJ = 22;
+    JJR = 23;
+    JJS = 24;
+    LS = 25;
+    MD = 26;
+    NFP = 27;
+    NIL = 28;
+    NN = 29;
+    NNP = 30;
+    NNPS = 31;
+    NNS = 32;
+    PDT = 33;
+    POS = 34;
+    PRP = 35;
+    PRPD = 36;
+    RB = 37;
+    RBR = 38;
+    RBS = 39;
+    RP = 40;
+    SP = 41;
+    SYM = 42;
+    TO = 43;
+    UH = 44;
+    VB = 45;
+    VBD = 46;
+    VBG = 47;
+    VBN = 48;
+    VBP = 49;
+    VBZ = 50;
+    WDT = 51;
+    WP = 52;
+    WPD = 53;
+    WRB = 54;
+    XX = 55;
+  }
+
+  message Word {
+    uint32 char_start = 1;
+    uint32 char_end = 2;
+    float time_start = 3;
+    float time_end = 4;
+    PartOfSpeech pos = 5;
+    string lemma = 6;
+  }
+
+  repeated Word words = 1;
+}

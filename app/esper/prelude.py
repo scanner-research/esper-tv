@@ -708,8 +708,8 @@ def caption_count(phrases):
     return r.json()
 
 
-def mutual_info(p1, p2):
-    r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p1, p2]})
+def mutual_info(p):
+    r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p]})
     return r.json()
 
 

@@ -29,3 +29,4 @@ yapf*.py
 *.mkv
 *.mp4
 **/*.pkl
+**/*_pb2.py
