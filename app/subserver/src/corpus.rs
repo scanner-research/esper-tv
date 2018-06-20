@@ -176,10 +176,6 @@ impl<Index: Indexed + Send> Corpus<Index> {
             (path.clone(), Some(doc))
         }).filter(|(_, doc)| doc.is_some()).map(|(path, doc)| (path, doc.expect("Unreachable"))).collect();
 
-        for doc in docs.values().take(2) {
-            println!("{:#?}", doc.meta.words.iter().map(|word| (word.on_slice(&doc.text), word.pos)).collect::<Vec<_>>());
-        }
-
         Corpus { docs }
     }
 
