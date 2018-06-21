@@ -1,5 +1,83 @@
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::time::Instant;
 use indicatif::{ProgressBar, ProgressStyle};
 
+
+// Iterator function for taking Vec<(K, V)> -> Map<K, Vec<V>>
+pub trait CollectByKey {
+    type Key: Eq + Hash;
+    type Value;
+    fn collect_by_key(self) -> HashMap<Self::Key, Vec<Self::Value>>;
+}
+
+impl<Key, Value, T> CollectByKey for T where Key: Eq + Hash, T: Iterator<Item=(Key, Value)> {
+    type Key = Key;
+    type Value = Value;
+
+    fn collect_by_key(self) -> HashMap<Self::Key, Vec<Self::Value>> {
+        let mut map = HashMap::new();
+        for (k, v) in self {
+            let mut list = map.entry(k).or_insert_with(|| vec![]);
+            list.push(v);
+        }
+
+        map
+    }
+}
+
+// HashMap function for merging two hashmaps w/ custom conflict function
+pub trait Merge {
+    type Key;
+    type Value;
+
+    fn merge<F>(&mut self, other: HashMap<Self::Key, Self::Value>, f: F)
+        where F: Fn(&Self::Value, &Self::Value) -> Self::Value;
+}
+
+impl<Key, Value> Merge for HashMap<Key, Value> where Key: Hash + Eq {
+    type Key = Key;
+    type Value = Value;
+
+    fn merge<F>(&mut self, other: HashMap<Self::Key, Self::Value>, f: F)
+        where F: Fn(&Self::Value, &Self::Value) -> Self::Value
+    {
+        for (k, v) in other {
+            if self.contains_key(&k) {
+                let merged = f(self.get(&k).unwrap(), &v);
+                self.insert(k, merged);
+            } else {
+                self.insert(k, v);
+            }
+        }
+    }
+}
+
+
+// Lexically scoped timer
+pub struct BlockTimer {
+    name: String,
+    start: Instant
+}
+
+impl BlockTimer {
+    pub fn new<T: Into<String> + Clone>(name: T) -> BlockTimer {
+        println!("Starting: {}", name.clone().into());
+        BlockTimer {
+            name: name.into(),
+            start: Instant::now()
+        }
+    }
+}
+
+impl Drop for BlockTimer {
+    fn drop(&mut self) {
+        println!("Finished: {} in {}s", self.name, self.start.elapsed().as_secs());
+    }
+}
+
+
+// Progress bar for sequential and parallel iterators
 macro_rules! progress_iterator_trait {
     ($trait:ident , $struct:ident) => {
         pub trait $trait where Self: Sized {

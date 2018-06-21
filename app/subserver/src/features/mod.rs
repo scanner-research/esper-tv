@@ -5,7 +5,7 @@ use std::io::Read;
 use ndarray;
 use std::io::Cursor;
 use byteorder::{ReadBytesExt, LittleEndian};
-use block_timer::BlockTimer;
+use util::BlockTimer;
 use rand::{thread_rng, sample, Rng};
 use rustlearn::prelude::*;
 use rustlearn::svm::libsvm::svc::Hyperparameters;

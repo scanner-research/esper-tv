@@ -520,6 +520,7 @@ export default class TimelineView extends React.Component {
                  data={_.sortBy(_.map(backendSettings.things_flat, (v, k) => [k, v]), [1])}
                  multi={true}
                  width={selectWidth}
+                 creatable={true}
                  onSelect={this._onSelect}
                  onClose={() => {this.setState({showSelect: false});}}
                />

@@ -95,6 +95,7 @@ class BoxView extends React.Component {
 
     let box = this.props.box;
     let {width, height} = this.props;
+    let processed = true;
     if (chr == 'g') {
       let keys = _.sortBy(_.map(_.keys(this._searchResult.genders), (x) => parseInt(x)));
       box.gender_id = keys[(_.indexOf(keys, box.gender_id) + 1) % keys.length];
@@ -114,11 +115,19 @@ class BoxView extends React.Component {
       this.props.onSetTrack(this.props.i);
     } else if(chr == 'u') {
       this.props.onDeleteTrack(this.props.i);
+    } else {
+      processed = false;
+    }
+
+    // NOTE(wcrichto) 6-21-18: if you press 't' on a bbox, then seems like select is receiving 't' as input
+    // as well, so preventDefault should stop that from happening
+    if (processed) {
+      e.preventDefault();
     }
   }
 
-  _onSelect = (value) => {
-    this.props.box.identity_id = value;
+  _onSelect = (option) => {
+    this.props.box.identity_id = parseInt(option.value);
     this.setState({showSelect: false});
   }
 
@@ -204,6 +213,7 @@ class BoxView extends React.Component {
              ? <div style={selectStyle}>
                <Select
                  data={_.map(backendSettings.things['person'], (v, k) => [k, v])}
+                 multi={false}
                  width={this.props.expand ? 200 : 100}
                  onSelect={this._onSelect}
                  onClose={(e) => {this.setState({showSelect: false});}}

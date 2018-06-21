@@ -14,8 +14,10 @@ export default class Select extends React.Component {
   componentWillUnmount() {
     keyboardManager.unlock();
   }
+
   render() {
-    return <ReactSelect.Creatable
+    let SelectComponent = this.props.creatable ? ReactSelect.Creatable : ReactSelect;
+    return <SelectComponent
              options={this.props.data.map(([k, v]) => ({value: k, label: v}))}
              multi={this.props.multi}
              placeholder={'Search...'}
@@ -26,15 +28,25 @@ export default class Select extends React.Component {
              escapeClearsValue={false}
              onInputKeyDown={(e) => {
                  if (e.which == 27) { // ESC
-                   let v = this.state.value;
-                   if (v === null || v === []) {
-                     this.props.onClose();
+                   if (this.props.multi) {
+                     let v = this.state.value;
+                     if (v === null || v === []) {
+                       this.props.onClose();
+                     } else {
+                       this.props.onSelect(v);
+                     }
                    } else {
-                     this.props.onSelect(v);
+                     this.props.onClose()
                    }
                  }
              }}
              newOptionCreator={(opt) => { opt.valueKey = "-1"; return opt; }}
-             onChange={(value) => { this.setState({value: value}); }} />;
+             onChange={(value) => {
+                 if (this.props.multi) {
+                   this.setState({value: value});
+                 } else {
+                   this.props.onSelect(value);
+                 }
+             }} />;
   }
 }
