@@ -1,19 +1,14 @@
 use rayon::prelude::*;
 use std::time::Duration;
 use suffix::SuffixTable;
-use std::collections::{HashMap, BTreeSet, HashSet};
-use std::sync::{Mutex};
-use srtparse;
-use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::fs;
-use std::panic;
-use progress::{ParallelProgressIterator, ProgressIterator};
+use progress::{ParallelProgressIterator};
 use rayon;
 use std::hash::Hash;
 use datatypes::{Document, Document_Word as Word, Document_PartOfSpeech as POS};
 use protobuf::{Message, CodedInputStream};
-use std::fs::File;
 
 trait CollectByKey {
     type Key: Eq + Hash;
@@ -36,14 +31,17 @@ impl<Key, Value, T> CollectByKey for T where Key: Eq + Hash, T: Iterator<Item=(K
     }
 }
 
-trait WordIndex {
-    fn on_slice<'a: 'b, 'b>(&'a self, s: &'b str) -> &'b str;
-}
-
-impl WordIndex for Word {
+impl Word {
     fn on_slice<'a: 'b, 'b>(&'a self, s: &'b str) -> &'b str {
         &s[(self.char_start as usize) .. (self.char_end as usize)]
     }
+}
+
+fn ngrams(words: Vec<&str>, query: &str) -> Vec<usize> {
+    let parts = query.split(" ").collect::<Vec<_>>();
+    words.windows(parts.len()).enumerate().filter(|(_, window)| {
+        parts.iter().zip(window.iter()).all(|(i, j)| i == j)
+    }).map(|(i, _)| i).collect::<Vec<_>>()
 }
 
 trait Merge {
@@ -116,27 +114,23 @@ impl Indexed for IndexedTable {
     }
 }
 
-
-pub struct WordSearch {
+pub struct LinearSearch {
     text: String
 }
 
-impl Indexed for WordSearch {
-    fn new(s: String) -> Self { WordSearch { text: s } }
+impl Indexed for LinearSearch {
+    fn new(s: String) -> Self { LinearSearch { text: s } }
 
-    fn positions_char(&self, query: &str) -> Vec<usize> {
-        panic!()
+    fn positions_char(&self, _query: &str) -> Vec<usize> {
+        unreachable!()
     }
 
     fn positions_word(&self, query: &str, meta: &Document) -> Vec<usize> {
-        let parts = query.split(" ").collect::<Vec<_>>();
-        meta.words.windows(parts.len()).enumerate().filter(|(_, window)| {
-            parts.iter().zip(window.iter()).all(|(i, j)| i == &j.on_slice(&self.text))
-        }).map(|(i, _)| i).collect::<Vec<_>>()
+        ngrams(meta.words.iter().map(|w| w.on_slice(&self.text)).collect::<Vec<_>>(), query)
     }
 }
 
-fn duration_to_float(d: Duration) -> f64 {
+fn _duration_to_float(d: Duration) -> f64 {
     f64::from(d.as_secs() as u32) + f64::from(d.subsec_nanos()) / 1.0e-9
 }
 
@@ -162,6 +156,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                     let mut meta = Document::new();
                     // NB(wcrichto): reading it all at once and passing entire bytestring to decoder
                     // seems much faster than passing a file handle and letting decoder handle I/O.
+                    // I think? Need to do more benchmarks to be sure. Perf seems kind of random
                     let mut s = fs::read(meta_path).expect("Meta file read failed");
                     let mut s = s.as_slice();
                     let mut bytes = CodedInputStream::new(&mut s);
@@ -221,7 +216,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
         }
     }
 
-    fn unique_words(&self) {
+    fn _unique_words(&self) {
         let sets = self.docs.par_iter().progress_count(self.docs.len()).map(|(_, doc)| {
             doc.meta.words.iter()
                 .filter(|word| VALID_POS.contains(&word.pos))
@@ -233,19 +228,31 @@ impl<Index: Indexed + Send> Corpus<Index> {
         println!("{}", words.len());
     }
 
-    pub fn all_mutual_info(&self, s: impl Into<String>) -> HashMap<String, f64> {
+    pub fn all_mutual_info(&self, s: impl Into<String>) -> Vec<(String, f64)> {
         let s: String = s.into();
+        let max_ngram = 3;
         let span = 50;
+        let ngram_fmap = |ngram: &[Word]| -> Option<String> {
+            if ngram.iter().all(|w| VALID_POS.contains(&w.pos)) {
+                Some(ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" "))
+            } else {
+                None
+            }
+        };
         let (colo_counts, all_counts): (Vec<HashMap<_,_>>, Vec<HashMap<_,_>>) =
             self.docs.par_iter()
             .progress_count(self.docs.len())
             .map(|(_, doc)| {
                 let words = &doc.meta.words;
-                let word_indices = words.iter()
-                    .enumerate()
-                    .filter(|(_, word)| VALID_POS.contains(&word.pos))
-                    .map(|(i, word)| (word.lemma.as_str(), i))
-                    .collect_by_key();
+                let word_indices = (1..=max_ngram)
+                    .map(|n| {
+                        words.windows(n)
+                            .enumerate()
+                            .filter_map(|(i, ngram)| ngram_fmap(ngram).map(|s| (s, i)))
+                            .collect_by_key()
+                    }).collect::<Vec<_>>();
+                let word_indices = self.par_merge(
+                    &word_indices,  &|mut a, b| { a.merge(b, |x, _y| x.clone()); a });
 
                 let mut colo_count = HashMap::new();
 
@@ -254,9 +261,12 @@ impl<Index: Indexed + Send> Corpus<Index> {
                         let span = span as i64;
                         let idx = *idx as i64;
                         let (start, end) = ((idx-span/2).max(0) as usize, ((idx+span/2) as usize).min(words.len()-1));
-                        for word in (words.slice(start, end+1)).iter().filter(|word| VALID_POS.contains(&word.pos)) {
-                            let entry = colo_count.entry(word.lemma.as_str()).or_insert(0);
-                            *entry += 1;
+                        for n in 1..=max_ngram {
+                            let ngrams = words.slice(start, end+1).windows(n).filter_map(ngram_fmap);
+                            for s in ngrams {
+                                let entry = colo_count.entry(s).or_insert(0);
+                                *entry += 1;
+                            }
                         }
                     }
                 };
@@ -264,14 +274,15 @@ impl<Index: Indexed + Send> Corpus<Index> {
             })
             .collect::<Vec<_>>()
             .into_iter().unzip();
-        let corpus: i64 = self.docs.par_iter().map(|(_, doc)| doc.meta.words.len() as i64).sum();
+        let corpus: i64 =
+            self.docs.par_iter().map(|(_, doc)| (doc.meta.words.len() * max_ngram) as i64).sum();
 
         let colo_total = self.par_merge(&colo_counts, &|mut a, b| { a.merge(b, |x, y| x + y); a});
         let all_total = self.par_merge(&all_counts, &|mut a, b| { a.merge(b, |x, y| x + y); a});
 
         let min_cooccur_threshold = 100;
         let min_occur_threshold = 1000;
-        colo_total.keys().filter_map(|k| {
+        let mut counts = colo_total.keys().filter_map(|k| {
             let ab = *colo_total.get(k).expect("ab") as f64;
             let a = *all_total.get::<str>(&s).expect("a") as f64;
             let b = *all_total.get(k).expect("b") as f64;
@@ -279,11 +290,16 @@ impl<Index: Indexed + Send> Corpus<Index> {
             let corpus = corpus as f64;
             let score = f64::log10(ab * corpus / (a * b * span)) / f64::log10(2.0);
 
-            if ab as i64 > min_cooccur_threshold && b as i64 > min_occur_threshold {
+            if ab as i64 > min_cooccur_threshold &&
+                b as i64 > min_occur_threshold {
                 Some((k.to_string(), score))
             } else {
                 None
             }
-        }).collect::<HashMap<_,_>>()
+        }).collect::<Vec<_>>();
+
+        counts.sort_unstable_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+        counts.truncate(1000);
+        counts
     }
 }

@@ -154,45 +154,45 @@ impl Features {
         let n_neg = neg_features.len();
         let n_neg_samples = neg_sample_features.len();
 
-        let mut X = Array::zeros(n_pos + n_pos_samples + n_neg + n_neg_samples, FEATURE_DIM);
+        let mut x = Array::zeros(n_pos + n_pos_samples + n_neg + n_neg_samples, FEATURE_DIM);
         let mut y = Array::ones(n_pos + n_pos_samples + n_neg + n_neg_samples, 1);
         for i in 0..n_pos {
             y.set(i, 0, 0.);
             for j in 0..FEATURE_DIM {
-                X.set(i, j, pos_features[i][j]);
+                x.set(i, j, pos_features[i][j]);
             }
         }
         for i in 0..n_pos_samples {
             y.set(i + n_pos, 0, 0.);
             for j in 0..FEATURE_DIM {
-                X.set(i + n_pos, j, pos_sample_features[i][j]);
+                x.set(i + n_pos, j, pos_sample_features[i][j]);
             }
         }
         for i in 0..n_neg {
             for j in 0..FEATURE_DIM {
-                X.set(i + n_pos + n_pos_samples, j, neg_features[i][j]);
+                x.set(i + n_pos + n_pos_samples, j, neg_features[i][j]);
             }
         }
         for i in 0..n_neg_samples {
             for j in 0..FEATURE_DIM {
-                X.set(i + n_pos + n_pos_samples + n_neg, j, neg_sample_features[i][j]);
+                x.set(i + n_pos + n_pos_samples + n_neg, j, neg_sample_features[i][j]);
             }
         }
 
         // Shuffle the dataset
-        let mut shuffled_idxs: Vec<usize> = Vec::with_capacity(X.rows());
-        for i in 0..X.rows() {
+        let mut shuffled_idxs: Vec<usize> = Vec::with_capacity(x.rows());
+        for i in 0..x.rows() {
             shuffled_idxs.push(i as usize);
         }
         rng.shuffle(&mut shuffled_idxs);
-        X = X.get_rows(&shuffled_idxs);
+        x = x.get_rows(&shuffled_idxs);
         y = y.get_rows(&shuffled_idxs);
 
-        let mut model = Hyperparameters::new(X.cols(), KernelType::Linear, 2)
+        let mut model = Hyperparameters::new(x.cols(), KernelType::Linear, 2)
                                             .C(0.3)
                                             .build();
 
-        model.fit(&X, &y).expect("Failed to fit");
+        model.fit(&x, &y).expect("Failed to fit");
 
         let mut labels: Vec<_> = self.features.par_iter().map(
             |f| {
@@ -209,7 +209,7 @@ impl Features {
               .map(|(i, a)| (*&self.ids[*i], *a))
               .collect()
     }
-    
+
     pub fn kmeans(&self, ids: &Vec<Id>, k: usize) -> Vec<(u64, usize)> {
         let ids_and_features: Vec<(Id, &FeatureVec)> = ids.iter()
             .map(|i| (i, self.ids.binary_search(&i)))

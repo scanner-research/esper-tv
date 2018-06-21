@@ -6,7 +6,6 @@ authors = ["Will Crichton <wcrichto@cs.stanford.edu>"]
 [dependencies]
 glob = "0.2"
 rayon = "1.0"
-srtparse = "0.1.1"
 lazy_static = "1.0"
 suffix = "1.0"
 indicatif = "0.9.0"
