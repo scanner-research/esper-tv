@@ -16,7 +16,7 @@ class Show(models.Model):
     hosts = models.ManyToManyField('Thing', blank=True)
     canonical_show = models.ForeignKey(CanonicalShow)
 
-    
+
 class Channel(models.Model):
     name = base.CharField()
 
@@ -50,7 +50,7 @@ class Frame(base.Frame):
 
 class Labeler(base.Labeler):
     data_path = base.CharField(blank=True, null=True)
-    created = models.DateTimeField(auto_now_add=True, null=True, 
+    created = models.DateTimeField(auto_now_add=True, null=True,
                                    blank=True)
 
 
@@ -144,3 +144,8 @@ class FaceFeatures(base.Attribute, base.Features):
 
 class ScannerJob(models.Model):
     name = base.CharField()
+
+
+class Object(base.Noun, base.BoundingBox):
+    label = models.IntegerField()
+    probability = models.FloatField()

@@ -72,6 +72,10 @@ class Video(models.Model):
     def frame_time(self, frame):
         return frame / self.fps
 
+    def for_scannertools(self):
+        from scannertools import Video as STVideo
+        return STVideo(self.path)
+
     class Meta:
         abstract = True
 
@@ -128,7 +132,6 @@ class BoundingBox(models.Model):
     bbox_x2 = models.FloatField()
     bbox_y1 = models.FloatField()
     bbox_y2 = models.FloatField()
-    bbox_score = models.FloatField()
 
     def height(self):
         return self.bbox_y2 - self.bbox_y1
