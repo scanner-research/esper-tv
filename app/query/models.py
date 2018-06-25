@@ -111,6 +111,7 @@ class Face(base.Attribute, base.BoundingBox):
     background = models.BooleanField(default=False)
     is_host = models.BooleanField(default=False)
     blurriness = models.FloatField(null=True)
+    probability = models.FloatField(default=1.)
 
     class Meta:
         unique_together = ('labeler', 'person')
@@ -119,6 +120,7 @@ class Face(base.Attribute, base.BoundingBox):
 class FaceGender(base.Attribute):
     face = models.ForeignKey(Face)
     gender = models.ForeignKey(Gender)
+    probability = models.FloatField(default=1.)
 
     class Meta:
         unique_together = ('labeler', 'face')
