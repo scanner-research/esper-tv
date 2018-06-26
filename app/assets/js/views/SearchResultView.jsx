@@ -167,14 +167,18 @@ class GroupsView extends React.Component {
     return Math.floor((this._searchResult.result.length - 1)/ this._frontendSettings.get('results_per_page'));
   }
 
+  _nextPage = (e) => {
+    e.preventDefault();
+    this.setState({page: Math.min(this.state.page + 1, this._numPages())});
+  }
+
   _prevPage = (e) => {
     e.preventDefault();
     this.setState({page: Math.max(this.state.page - 1, 0)});
   }
 
-  _nextPage = (e) => {
-    e.preventDefault();
-    this.setState({page: Math.min(this.state.page + 1, this._numPages())});
+  componentDidMount() {
+    this._lastResult = this._searchResult;
   }
 
   componentDidUpdate() {
