@@ -13,7 +13,6 @@ import os
 import query.base_models as base_models
 import importlib
 import esper.queries as queries
-import esper.embed_google_images as embed_google_images
 from typing import Any, Dict, List, Union
 from django.db.models.query import QuerySet
 from django.db.models import F
@@ -22,7 +21,7 @@ import django.db.models as models
 from esper.prelude import collect, BUCKET
 from query.base_models import Track
 from query.models import \
-    Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType, Segment, Tag, Person
+    Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType, Segment, Tag, Person, Object
 import django.apps
 
 def access(obj: Any, path: str) -> Any:
