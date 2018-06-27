@@ -132,6 +132,11 @@ def handlabeled():
         FaceGender.objects.filter(labeler__name='handlabeled-gender').annotate(
             identity=F('face__faceidentity__identity')))
 
+@query("Cars")
+def cars():
+    from query.models import Object
+    from esper.stdlib import qs_to_result
+    return qs_to_result(Object.objects.filter(label=3, probability__gte=0.9))
 
 @query("Donald Trump")
 def donald_trump():
@@ -918,7 +923,7 @@ def face_search_with_exclusion():
         return qs_to_result(face_qs.filter(id__in=kept_ids, shot__in_commercial=False),
                             custom_order_by_id=face_ids,limit=len(face_ids))
 
-    
+
 @query('Other people who are on screen with X')
 def face_search_for_other_people():
     name = 'sean spicer'
@@ -926,36 +931,36 @@ def face_search_for_other_people():
     blurriness_thresh = 10.
     n_clusters = 100
     n_examples_per_cluster = 10
-    
+
     selected_face_ids = [
         x['face__id'] for x in FaceIdentity.objects.filter(
             identity__name=name, probability__gt=precision_thresh
         ).values('face__id')[:100000] # size limit
     ]
-    
+
     shot_ids = [
         x['shot__id'] for x in Face.objects.filter(
-            id__in=selected_face_ids                                                  
+            id__in=selected_face_ids
         ).distinct('shot').values('shot__id')
     ]
-    
+
     other_face_ids = [
-        x['id'] for x in 
+        x['id'] for x in
         Face.objects.filter(
-            shot__id__in=shot_ids, 
+            shot__id__in=shot_ids,
             blurriness__gt=blurriness_thresh
         ).exclude(id__in=selected_face_ids).values('id')
     ]
-    
+
     clusters = defaultdict(list)
     for (i, c) in face_kmeans(other_face_ids, k=n_clusters):
         clusters[c].append(i)
-    
+
     results = []
     for _, ids in sorted(clusters.items(), key=lambda x: -len(x[1])):
         results.append((
-            'Cluster with {} faces'.format(len(ids)), 
-            qs_to_result(Face.objects.filter(id__in=ids).distinct('shot__video'), 
+            'Cluster with {} faces'.format(len(ids)),
+            qs_to_result(Face.objects.filter(id__in=ids).distinct('shot__video'),
                          limit=n_examples_per_cluster)
         ))
     return group_results(results)

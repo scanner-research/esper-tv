@@ -42,18 +42,21 @@ def at_fps(qs: QuerySet, n: int = 1) -> QuerySet:
 
 
 def bbox_to_dict(f: Any) -> Dict:
-    return {
+    d = {
         'id': f.id,
         'type': 'bbox',
         'bbox_x1': f.bbox_x1,
         'bbox_x2': f.bbox_x2,
         'bbox_y1': f.bbox_y1,
         'bbox_y2': f.bbox_y2,
-        'bbox_score': f.bbox_score,
-        'background': f.background,
-        'labeler_id': f.labeler.id,
     }
 
+    if hasattr(f, 'background'):
+        d['background'] = f.background
+    elif hasattr(f, 'labeler'):
+        d['labeler_id'] = f.labeler.id
+
+    return d
 
 def gender_to_dict(f: Any) -> Dict:
     d = bbox_to_dict(f.face)
@@ -149,13 +152,15 @@ def qs_to_result(result: QuerySet,
                 'objects': []
             })
 
-    elif bases[0] is base_models.Attribute:
+    elif bases[0] is base_models.Attribute or bases[0] is base_models.Noun:
         if cls is FaceGender or cls is FaceIdentity:
             frame_path = 'face__person__frame'
             if cls is FaceGender:
                 result = result.select_related('face', 'gender')
             else:
                 result = result.select_related('face', 'identity')
+        elif cls is Object:
+            frame_path = 'frame'
         else:
             frame_path = 'person__frame'
         result = result.select_related(frame_path)
@@ -163,7 +168,7 @@ def qs_to_result(result: QuerySet,
         if not shuffle and deterministic_order:
             result = result.order_by(frame_path + '__video', frame_path + '__number')
 
-        if cls is Face:
+        if cls is Face or cls is Object:
             fn = bbox_to_dict
         elif cls is FaceGender:
             fn = gender_to_dict
@@ -343,13 +348,23 @@ def result_with_metadata(result):
     for group in result['result']:
         for obj in group['elements']:
             video_ids.add(obj['video'])
+
+            if 'min_time' in obj:
+                video = Video.objects.get(id=obj['video'])
+                obj['min_frame'] = int(obj['min_time'] * video.fps)
+
+                if 'max_time' in obj:
+                    obj['max_frame'] = int(obj['max_time'] * video.fps)
+
             frame_ids.add(obj['min_frame'])
             if 'max_frame' in obj:
                 frame_ids.add(obj['max_frame'])
 
             if 'objects' in obj:
                 for bbox in obj['objects']:
-                    labeler_ids.add(bbox['labeler_id'])
+                    if 'labeler_id' in bbox:
+                        labeler_ids.add(bbox['labeler_id'])
+
                     if 'gender_id' in bbox:
                         gender_ids.add(bbox['gender_id'])
 
