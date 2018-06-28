@@ -73,6 +73,11 @@ fn mutual_info(input: Json<SubSearchInput>) -> Json<Vec<(String, f64)>> {
     Json(CORPUS.all_mutual_info(input.phrases[0].clone()))
 }
 
+#[post("/findsegments", format="application/json", data="<input>")]
+fn find_segments(input: Json<SubSearchInput>) -> Json<Vec<(String, (f32, f32), i32)>> {
+    Json(CORPUS.find_segments(input.phrases.clone()))
+}
+
 
 #[derive(Serialize, Deserialize)]
 struct FaceSearchInput {
@@ -147,5 +152,5 @@ fn main() {
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, mutual_info, face_search, face_search_svm, face_features, face_kmeans]).launch();
+    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, mutual_info, find_segments, face_search, face_search_svm, face_features, face_kmeans]).launch();
 }

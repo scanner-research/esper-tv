@@ -42,4 +42,26 @@ http {
             proxy_pass http://app:8000;
         }
     }
+
+    server {
+        listen 8888;
+        server_name notebook;
+
+        include /etc/nginx/${ESPER_ENV}.conf;
+
+        location /django {
+            rewrite ^/django/(.*) /$1 break;
+            proxy_pass http://localhost:80;
+        }
+
+        location / {
+            proxy_pass http://app:8888;
+
+            # https://stackoverflow.com/questions/22665809/how-to-configure-ipython-behind-nginx-in-a-subpath/23912400#23912400
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Origin "";
+        }
+    }
 }

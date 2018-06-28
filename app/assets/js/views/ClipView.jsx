@@ -236,7 +236,17 @@ export default class ClipView extends React.Component {
             frontendSettings.get('show_middle_frame') && clip.max_frame
             ? Math.round((clip.max_frame + clip.min_frame) / 2)
             : clip.min_frame;
-          let path = `${window.location.protocol}//${window.location.hostname}/frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`;
+
+          let assert_url = (path) => {
+            if (window.IPython) {
+              return `/django/${path}`;
+            } else {
+              return path;
+            }
+          };
+
+          let thumbnail_path = assert_url(
+            `frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`);
 
           // Collect inline metadata to display
           let meta = [];
@@ -327,11 +337,11 @@ export default class ClipView extends React.Component {
             <div className='video-row' style={{height: small_height}}>
               <div className='media-container'>
                 {this.state.loadingVideo || this.state.showVideo
-                 ? <video controls ref={(n) => {this._video = n;}} style={vidStyle}>
-                   <source src={`/system_media/${video.path}`} />
+                 ? <video ref={(n) => {this._video = n;}} style={vidStyle}>
+                   <source src={assert_url(`/system_media/${video.path}`)} />
                    {video.srt_extension != ''
                     ? <track kind="subtitles"
-                             src={`/api/subtitles?video=${video.id}`}
+                             src={assert_url(`/api/subtitles?video=${video.id}`)}
                              srcLang="en" />
                     : <span />}
                  </video>
@@ -353,7 +363,7 @@ export default class ClipView extends React.Component {
                   onSetTrack={() => {}}
                   onDeleteTrack={() => {}}
                   onSelect={() => {}}
-                  path={path} />
+                  path={thumbnail_path} />
               </div>
               {show_subs && this.props.expand && this._video
                ? <div className='sub-container' style={subStyle}>

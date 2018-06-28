@@ -35,6 +35,7 @@ import itertools
 import shutil
 import tempfile
 import random
+import socket
 from contextlib import contextmanager
 from collections import defaultdict
 
@@ -215,38 +216,72 @@ def par_filter(f, l, **kwargs):
     return [x for x, b in zip(l, par_for(f, l, **kwargs)) if b]
 
 
-def make_scanner_db(kube=False, multiworker=False):
-    if kube:
-        ip = sp.check_output(
-            '''
-    kubectl get pods -l 'app=scanner-master' -o json | \
-    jq '.items[0].spec.nodeName' -r | \
-    xargs -I {} kubectl get nodes/{} -o json | \
-    jq '.status.addresses[] | select(.type == "ExternalIP") | .address' -r
-    ''',
-            shell=True).strip()
+class ScannerWrapper:
+    def __init__(self, kube=False, multiworker=False):
+        if kube:
+            ip = sp.check_output(
+                '''
+        kubectl get pods -l 'app=scanner-master' -o json | \
+        jq '.items[0].spec.nodeName' -r | \
+        xargs -I {} kubectl get nodes/{} -o json | \
+        jq '.status.addresses[] | select(.type == "ExternalIP") | .address' -r
+        ''',
+                shell=True).strip()
 
-        port = sp.check_output(
-            '''
-    kubectl get svc/scanner-master -o json | \
-    jq '.spec.ports[0].nodePort' -r
-    ''',
-            shell=True).strip()
+            port = sp.check_output(
+                '''
+        kubectl get svc/scanner-master -o json | \
+        jq '.spec.ports[0].nodePort' -r
+        ''',
+                shell=True).strip()
 
-        master = '{}:{}'.format(ip, port)
+            master = '{}:{}'.format(ip, port)
 
-        return Database(master=master, start_cluster=False)
+            self.db = Database(master=master, start_cluster=False)
 
-    else:
-        workers = ['localhost:{}'.format(5002 + i)
-                   for i in range(mp.cpu_count() // 8)] if multiworker else None
-        import scannerpy.libscanner as bindings
-        import scanner.metadata_pb2 as metadata_types
-        params = metadata_types.MachineParameters()
-        params.ParseFromString(bindings.default_machine_params())
-        params.num_load_workers = 2
-        params.num_save_workers = 2
-        return Database(machine_params=params.SerializeToString(), workers=workers)
+        else:
+            workers = ['localhost:{}'.format(5002 + i)
+                       for i in range(mp.cpu_count() // 8)] if multiworker else None
+            # import scannerpy.libscanner as bindings
+            # import scanner.metadata_pb2 as metadata_types
+            # params = metadata_types.MachineParameters()
+            # params.ParseFromString(bindings.default_machine_params())
+            # params.num_load_workers = 2
+            # params.num_save_workers = 2
+            self.db = Database(
+                #machine_params=params.SerializeToString(),
+                workers=workers)
+
+    def sql_config(self):
+        return self.db.protobufs.SQLConfig(
+            adapter='postgres',
+            hostaddr=socket.gethostbyname('db'),
+            port=5432,
+            dbname='esper',
+            user=os.environ['DJANGO_DB_USER'],
+            password=os.environ['DJANGO_DB_PASSWORD'])
+
+    def sql_sink(self, cls, insert=True):
+        from query.models import ScannerJob
+        return lambda input: self.db.sinks.SQL(
+            config=self.sql_config(),
+            input=input,
+            table=cls._meta.db_table,
+            job_table=ScannerJob._meta.db_table,
+            insert=insert)
+
+    # Remove videos that don't have a table or have already been processed by the pipeline
+    def filter_videos(self, videos, pipeline):
+        suffix = pipeline.job_suffix
+        assert suffix is not None
+
+        processed = set([
+            t['name'] for t in ScannerJob.objects.filter(name__contains=suffix).values('name')])
+
+        return [
+            v for v in videos if self._db.has_table(v.path) and not '{}_{}'.format(v.path, suffix) in processed
+        ]
+
 
 
 class Timer:
@@ -710,6 +745,11 @@ def caption_count(phrases):
 
 def mutual_info(p):
     r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p]})
+    return r.json()
+
+
+def find_segments(lexicon):
+    r = requests.post('http://localhost:8111/findsegments', json={'phrases': lexicon})
     return r.json()
 
 

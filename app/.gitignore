@@ -20,6 +20,7 @@ rust-scripts/build
 service-key.json
 npm-debug.log
 supervisord.conf
+video-analysis
 
 # File kinds
 db.bk.*

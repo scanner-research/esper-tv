@@ -45,8 +45,7 @@ RUN cat /tmp/common.sh >> /root/.bashrc
 
 ENV GLOG_minloglevel=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=${APPDIR}/service-key.json
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib:/usr/local/lib/python3.5/dist-packages/hwang
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
     ./scripts/jupyter-setup.sh && \

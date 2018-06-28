@@ -129,13 +129,44 @@ impl<Index: Indexed + Send> Corpus<Index> {
         println!("{}", words.len());
     }
 
+    fn ngram_to_str(&self, ngram: &[Word]) -> String {
+        ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" ")
+    }
+
+    pub fn find_segments(&self, lexicon: Vec<String>) -> Vec<(String, (f32, f32), i32)> {
+        let window_size = 500;
+        let max_ngram = 3;
+        let stride = 50;
+        let target_bag = lexicon.iter().map(|s| s.as_str()).collect::<HashSet<_>>();
+        let mut all_matches = self.docs.par_iter().progress_count(self.docs.len()).flat_map(|(path, doc)| {
+            let matches = doc.meta.words
+                .windows(window_size)
+                .step_by(stride)
+                .map(|window| {
+                    let count = (1..=max_ngram).map(|n| {
+                        window.windows(n).map(|ngram| {
+                            if target_bag.contains::<str>(&self.ngram_to_str(ngram)) { 1 } else { 0 }
+                        }).sum::<i32>()
+                    }).sum::<i32>();
+                    ((window.first().unwrap().time_start, window.last().unwrap().time_end), count)
+                }).collect::<Vec<_>>();
+
+            // TODO(wcrichto): condense overlapping segments
+
+            matches.into_iter().map(|(i, n)| (path.clone(), i, n)).collect::<Vec<_>>()
+        }).collect::<Vec<_>>();
+        all_matches.sort_unstable_by(|(_, _, n1), (_, _, n2)| n2.cmp(n1));
+        all_matches.truncate(100);
+        all_matches
+    }
+
     pub fn all_mutual_info(&self, s: impl Into<String>) -> Vec<(String, f64)> {
         let s: String = s.into();
         let max_ngram = 3;
         let span: i64 = 50;
         let ngram_fmap = |ngram: &[Word]| -> Option<String> {
             if ngram.iter().all(|w| VALID_POS.contains(&w.pos)) {
-                Some(ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" "))
+                Some(self.ngram_to_str(ngram))
             } else {
                 None
             }
