@@ -52,9 +52,8 @@ class SchemaView extends React.Component {
               this.examples[full_name] = response.data['result'];
             }
             this.setState({showExamples: true});
-          }).bind(this))
-          .catch((error) => console.error(error.response))
-          .then((() => {
+          }).bind(this), (error) => console.error(error.response))
+          .finally((() => {
             this.setState({loadingExamples: false});
           }));
       }
@@ -78,7 +77,7 @@ class SchemaView extends React.Component {
         </div>
         {this.state.loadingExamples
          ? <img className='spinner' />
-         : <div />}
+         : null}
         {this.state.showExamples
          ? <Rb.Panel className='schema-example'>
            <div className='schema-example-name'>{this.exampleField}</div>
@@ -90,7 +89,7 @@ class SchemaView extends React.Component {
               : <div>Field cannot be displayed (not serializable, likely binary data).</div>}
            </div>
          </Rb.Panel>
-         : <div />}
+         : null}
       </div>
     );
   }
@@ -118,12 +117,11 @@ export default class SearchInputView extends React.Component {
         } else {
           this.setState({error: response.data.error});
         }
-      })
-      .catch((error) => {
+      }, (error) => {
         console.error(error);
         this.setState({error: error.toString()});
       })
-      .then(() => {
+      .finally(() => {
         this.setState({searching: false});
       });
   }
@@ -172,7 +170,7 @@ export default class SearchInputView extends React.Component {
         </Rb.Button>
         {this.state.searching
          ? <img className='spinner' />
-         : <div />}
+         : null}
         {this.state.showExampleQueries
          ? <Rb.Panel className='example-queries'>
            <strong>Example queries</strong><br />
@@ -187,13 +185,13 @@ export default class SearchInputView extends React.Component {
               </span>);
            })}
            </Rb.Panel>
-         : <div />}
-        {this.state.showSchema ? <SchemaView /> : <div />}
+         : null}
+        {this.state.showSchema ? <SchemaView /> : null}
         {this.state.error !== null
         ? <Rb.Alert bsStyle="danger">
           <pre>{this.state.error}</pre>
         </Rb.Alert>
-         : <div />}
+         : null}
       </Rb.Form>
     );
   }

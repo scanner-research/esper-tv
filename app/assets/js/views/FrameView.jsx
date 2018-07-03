@@ -201,7 +201,7 @@ class BoxView extends React.Component {
              ? <div className='bbox-label' style={labelStyle}>
                {modifyLabel(backendSettings.things['person'][box.identity_id])}
              </div>
-             : <div />}
+             : null}
             <div onMouseOver={this._onMouseOver}
                  onMouseOut={this._onMouseOut}
                  onMouseUp={this._onMouseUp}
@@ -219,7 +219,7 @@ class BoxView extends React.Component {
                  onClose={(e) => {this.setState({showSelect: false});}}
                />
              </div>
-             : <div />}
+             : null}
           </div>);
       }}</Consumer>);
   }
@@ -362,12 +362,12 @@ class ProgressiveImage extends React.Component {
     return (
       <div>
         {this.state.loaded
-         ? <div />
+         ? null
          : <Spinner />}
         <img src={this.props.src} draggable={false} onLoad={this._onLoad} onError={this._onError} style={imgStyle} />
         {crop !== null
          ? <div style={cropStyle} />
-         : <div />}
+         : null}
       </div>
     );
   }
@@ -584,7 +584,7 @@ export class FrameView extends React.Component {
                   {this.state.showDraw && this.state.startX != -1 && keyboardManager.modifiers.has('shift')
                    ? <BoxView box={this._makeBox()} width={this.props.small_width}
                               height={this.props.small_height} />
-                   : <div />}
+                   : null}
                   {this.props.bboxes.map((box, i) => {
                      if (box.type == 'bbox') {
                        return <BoxView box={box} key={i} i={i} width={this.props.small_width}
@@ -600,7 +600,7 @@ export class FrameView extends React.Component {
                                         height={this.props.small_height} expand={this.props.expand} />;
                      }})}
                 </div>
-                : <div />}
+                : null}
                <ProgressiveImage
                  src={this.props.path}
                  width={this.props.full_width}

@@ -525,7 +525,7 @@ export default class TimelineView extends React.Component {
                  onClose={() => {this.setState({showSelect: false});}}
                />
              </div>
-             : <div />}
+             : null}
           </div>
         </div>;
     }}</Consumer>

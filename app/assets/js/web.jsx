@@ -64,7 +64,7 @@ export default class App extends React.Component {
                ? (this.state.searchResult.result.length > 0
                 ? <SearchResultView jupyter={null} settings={{}} />
                 : <div>No results matching query.</div>)
-               : <div />}
+               : null}
             </Provider>
           </div>
         </div>

@@ -4,44 +4,33 @@ import {FrameView} from './FrameView.jsx';
 import Spinner from './Spinner.jsx';
 import manager from 'utils/KeyboardManager.jsx';
 import {FrontendSettingsContext, SearchContext} from './contexts.jsx';
+import VideoPlayer from './VideoPlayer.jsx';
 import Consumer from 'utils/Consumer.jsx';
 import _ from 'lodash';
+
+const VideoState = Object.freeze({
+  Off: Symbol('Off'),
+  Loading: Symbol('Loading'),
+  Showing: Symbol('Showing')
+});
 
 @observer
 export default class ClipView extends React.Component {
   state = {
-    showVideo: false,
-    loadingVideo: false,
+    videoState: VideoState.Off,
     loopVideo: false,
-    subAutoScroll: true
+    subAutoScroll: true,
+    displayTime: null
   }
 
   fullScreen = false
-  frames = []
+  _currentTime = null
+  _textTrack = null
   _lastDisplayTime = -1
   _formattedSubs = null
   _curSub = null
   _subDivs = null
   _n = null
-
-  constructor() {
-    super();
-    document.addEventListener('webkitfullscreenchange', this._onFullScreen);
-  }
-
-  _onFullScreen = () => {
-    this.fullScreen = !this.fullScreen;
-
-    if (this.fullScreen && this.state.showVideo) {
-      this._video.currentTime = this._toSeconds(this.props.clip.min_frame);
-      this._video.pause();
-      setTimeout(() => {
-        if (this._video) {
-          this._video.play();
-        }
-      }, 1000);
-    }
-  }
 
   _onKeyPress = (e) => {
     if (manager.locked()) {
@@ -51,14 +40,12 @@ export default class ClipView extends React.Component {
     let chr = String.fromCharCode(e.which);
     if (chr == 'p') {
       this.setState({
-        showVideo: false,
-        loadingVideo: true,
+        videoState: VideoState.Loading,
         loopVideo: false
       });
     } else if (chr == 'l') {
       this.setState({
-        showVideo: false,
-        loadingVideo: true,
+        videoState: VideoState.Loading,
         loopVideo: true
       });
     } else if (chr == ' ') {
@@ -83,43 +70,12 @@ export default class ClipView extends React.Component {
     document.removeEventListener('keypress', this._onKeyPress);
 
     if (!this.props.expand) {
-      if (this._video) {
-        this._video.removeEventListener('seeked', this._onSeeked);
-        this._video.removeEventListener('loadeddata', this._onLoadedData);
-        this._video.removeEventListener('timeupdate', this._onTimeUpdate);
-        this._video = null;
-        this.frames = [];
-      }
-      this.setState({showVideo: false, loadingVideo: false});
+      this.setState({videoState: VideoState.Off});
     }
-  }
-
-  _toSeconds = (frame) => {
-    return frame / this._videoMeta().fps;
-  }
-
-  _fromSeconds = (sec) => {
-    return Math.floor(sec * this._videoMeta().fps);
-  }
-
-  _onSeeked = () => {
-    this.setState({showVideo: true, loadingVideo: false});
   }
 
   _onLoadedData = () => {
-    this._video.currentTime = this._toSeconds(this.props.clip.min_frame);
-    if (this._video.textTracks.length > 0) {
-      this._video.textTracks[0].mode = 'showing';
-    }
-    this._video.play();
-  }
-
-  _onTimeUpdate = () => {
-    if (this.state.loopVideo &&
-        this.props.clip.max_frame !== undefined &&
-        this._video.currentTime >= this._toSeconds(this.props.clip.max_frame)) {
-      this._video.currentTime = this._toSeconds(this.props.clip.min_frame);
-    }
+    this.setState({videoState: VideoState.Showing});
   }
 
   _subDivScroll = (subDiv) => {
@@ -127,31 +83,12 @@ export default class ClipView extends React.Component {
   }
 
   componentDidUpdate() {
-    if (this._video) {
-      this._video.addEventListener('seeked', this._onSeeked);
-      this._video.addEventListener('loadeddata', this._onLoadedData);
-      this._video.addEventListener('timeupdate', this._onTimeUpdate);
-
-      if (this.props.onVideoPlay) {
-        this._video.addEventListener('playing', this.props.onVideoPlay);
-        this._video.addEventListener('pause', this.props.onVideoStop);
-        this._video.addEventListener('ended', this.props.onVideoStop);
-      }
-
-      if (this.props.displayTime !== undefined && this._lastDisplayTime != this.props.displayTime) {
-        this._video.currentTime = this.props.displayTime;
-        this._lastDisplayTime = this.props.displayTime;
-      }
-
+    if (this.state.videoState == VideoState.Showing) {
       let updateFps = 24;
       if (this._timeUpdateInterval) {
         clearInterval(this._timeUpdateInterval);
       }
       this._timeUpdateInterval = setInterval(() => {
-        if (this.props.onTimeUpdate) {
-          this.props.onTimeUpdate(this._video.currentTime);
-        }
-
         // HACK FOR NOW: need to forcibly re-render every tick for subtitles to work properly
         this.forceUpdate();
       }, 1000 / updateFps);
@@ -194,11 +131,23 @@ export default class ClipView extends React.Component {
 
     i = Math.min(i, _.size(this._subDivs) - 1);
 
-    this._video.currentTime = this._formattedSubs[i].start;
+    this.setState({displayTime: this._formattedSubs[i].start});
+  }
+
+  _onTextTrackChange = (_e, player) => {
+    let tracks = player.textTracks();
+    if (tracks.length > 0) {
+      this._textTrack = tracks[0];
+    }
+  }
+
+  _onTimeUpdate = (_e, player) => {
+    this._currentTime = player.currentTime();
   }
 
   componentWillUnmount() {
     document.removeEventListener('keypress', this._onKeyPress);
+
     if (this._timeUpdateInterval) {
       clearInterval(this._timeUpdateInterval);
     }
@@ -217,19 +166,9 @@ export default class ClipView extends React.Component {
           let video = this._videoMeta();
           let show_subs = frontendSettings.get('subtitle_sidebar');
 
-          // Set playback rate of the video
-          if (this._video) {
-            this._video.playbackRate = frontendSettings.get('playback_speed');
-          }
-
           // Figure out how big the thumbnail should be
           let small_height = this.props.expand ? video.height : 100 * frontendSettings.get('thumbnail_size');
           let small_width = video.width * small_height / video.height;
-          let vidStyle = this.state.showVideo ? {
-            zIndex: 2,
-            width: small_width,
-            height: small_height
-          } : {};
 
           // Determine which video frame to display
           let display_frame =
@@ -237,7 +176,7 @@ export default class ClipView extends React.Component {
             ? Math.round((clip.max_frame + clip.min_frame) / 2)
             : clip.min_frame;
 
-          let assert_url = (path) => {
+          let asset_url = (path) => {
             if (window.IPython) {
               return `/django/${path}`;
             } else {
@@ -245,7 +184,7 @@ export default class ClipView extends React.Component {
             }
           };
 
-          let thumbnail_path = assert_url(
+          let thumbnail_path = asset_url(
             `frameserver/fetch?path=${encodeURIComponent(video.path)}&frame=${display_frame}`);
 
           // Collect inline metadata to display
@@ -281,10 +220,11 @@ export default class ClipView extends React.Component {
           };
 
           let SubtitleView = () => {
-            if (this._video.textTracks.length == 0) {
+            if (!this._textTrack) {
               return <span>Loading track...</span>
             }
-            let subs = this._video.textTracks[0].cues;
+
+            let subs = this._textTrack.cues;
             if (!subs || subs.length == 0) {
               return <span>Loading subtitles...</span>
             }
@@ -319,7 +259,7 @@ export default class ClipView extends React.Component {
             });
 
             let i = 0;
-            while (i < this._formattedSubs.length && this._formattedSubs[i].start <= this._video.currentTime) { i++; }
+            while (i < this._formattedSubs.length && this._formattedSubs[i].start <= this._currentTime) { i++; }
 
             this._curSub = Math.max(i - 1, 0);
             this._subDivs = {};
@@ -335,21 +275,30 @@ export default class ClipView extends React.Component {
                       onMouseLeave={this._onMouseLeave}
                       ref={(n) => {this._n = n;}}>
             <div className='video-row' style={{height: small_height}}>
-              <div className='media-container'>
-                {this.state.loadingVideo || this.state.showVideo
-                 ? <video ref={(n) => {this._video = n;}} style={vidStyle}>
-                   <source src={assert_url(`/system_media/${video.path}`)} />
-                   {video.srt_extension != ''
-                    ? <track kind="subtitles"
-                             src={assert_url(`/api/subtitles?video=${video.id}`)}
-                             srcLang="en" />
-                    : <span />}
-                 </video>
-                 : <div />}
-                {this.state.loadingVideo
+              <div className='media-container' data-vjs-player>
+                {this.state.videoState == VideoState.Loading || this.state.videoState == VideoState.Showing
+                 ? <div style={{display: this.state.videoState == VideoState.Showing ? 'block' : 'none'}}>
+                   <VideoPlayer
+                     video={asset_url(`/system_media/${video.path}`)}
+                     captions={video.srt_extension != '' ? asset_url(`/api/subtitles?video=${video.id}`) : null}
+                     onLoadedData={this._onLoadedData}
+                     onTextTrackChange={this._onTextTrackChange}
+                     onTimeUpdate={this._onTimeUpdate}
+                     onPlay={this.props.onVideoPlay}
+                     onPause={this.props.onVideoPause}
+                     onStop={this.props.onVideoStop}
+                     width={small_width}
+                     height={small_height}
+                     track={this.props.clip}
+                     playbackRate={frontendSettings.get('playback_speed')}
+                     displayTime={this.state.displayTime || this.props.displayTime} />
+                 </div>
+                 : null}
+                {this.state.videoState == VideoState.Loading
                  ? <div className='loading-video'><Spinner /></div>
-                 : <div />}
-                <FrameView
+                 : null}
+                {this.state.videoState == VideoState.Loading || this.state.videoState == VideoState.Off
+                 ? <FrameView
                   bboxes={clip.objects || []}
                   small_width={small_width}
                   small_height={small_height}
@@ -364,8 +313,9 @@ export default class ClipView extends React.Component {
                   onDeleteTrack={() => {}}
                   onSelect={() => {}}
                   path={thumbnail_path} />
+                 : null}
               </div>
-              {show_subs && this.props.expand && this._video
+              {show_subs && this.props.expand && this.state.videoState == VideoState.Showing
                ? <div className='sub-container' style={subStyle}>
                  <button className='sub-autoscroll' onClick={() => {
                      this.setState({subAutoScroll: !this.state.subAutoScroll});
@@ -378,7 +328,7 @@ export default class ClipView extends React.Component {
                    <SubtitleView />
                  </div>
                </div>
-               : <div />}
+               : null}
             </div>
             {(this.props.expand || frontendSettings.get('show_inline_metadata')) && this.props.showMeta
              ?
@@ -394,7 +344,7 @@ export default class ClipView extends React.Component {
                    </tr>)}
                </tbody>
              </table>
-             : <div />}
+             : null}
           </div>
       }}</Consumer>
     );

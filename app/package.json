@@ -48,6 +48,8 @@
     "react-select": "^1.2.1",
     "sass-loader": "^6.0.5",
     "url-loader": "^0.5.8",
+    "video.js": "^7.0.3",
+    "videojs-markers": "^1.0.1",
     "webpack": "^2.5.1",
     "webpack-bundle-tracker": "^0.2.0"
   }

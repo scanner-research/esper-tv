@@ -99,8 +99,7 @@ class GroupsView extends React.Component {
               selected: new Set()
             });
           }
-        }).bind(this))
-        .catch((error) => {
+        }).bind(this), (error) => {
           console.error(error);
           alert(error);
         })
@@ -276,7 +275,7 @@ class GroupView extends React.Component {
       <FrontendSettingsContext.Consumer>{frontendSettings =>
         <div className={'group ' + this.props.colorClass} onMouseOver={this._onMouseOver}
              onMouseOut={this._onMouseOut}>
-          {this.props.colorClass != '' ? <div className={'select-overlay ' + this.props.colorClass} /> : <div />}
+          {this.props.colorClass != '' ? <div className={'select-overlay ' + this.props.colorClass} /> : null}
           {frontendSettings.get('timeline_view') && group.type == 'contiguous'
            ? <TimelineView group={group} expand={this.state.expand}  />
            : <div className={group.type}>
@@ -379,10 +378,10 @@ export default class SearchResultView extends React.Component {
     return (
       <FrontendSettingsContext.Provider value={this._settings}>
         <div className='search-results'>
-          {hasJupyter ? <JupyterButton /> : <div />}
+          {hasJupyter ? <JupyterButton /> : null}
           <SidebarView {...this.props} />
           <GroupsView {...this.props} />
-          {hasJupyter ? <JupyterButton /> : <div />}
+          {hasJupyter ? <JupyterButton /> : null}
         </div>
       </FrontendSettingsContext.Provider>
     )
