@@ -3,8 +3,8 @@ from esper.prelude import *
 from esper.spark import *
 from esper.validation import *
 import pyspark.sql.functions as func
-from pyspark.sql.types import BooleanType, IntegerType, StringType
-from collections import defaultdict
+from pyspark.sql.types import BooleanType, IntegerType, StringType, DoubleType
+from collections import defaultdict, Counter
 import datetime
 import calendar
 
@@ -13,7 +13,19 @@ spark = SparkWrapper()
 
 
 def get_shows():
-    return spark.load('query_show').alias('shows')
+    shows = spark.load('query_show').alias('shows')
+    
+    show_hosts = spark.load('query_show_hosts')
+    show_id_to_host_count = Counter()
+    for e in show_hosts.collect():
+        show_id_to_host_count[e.show_id] += 1
+        
+    def num_hosts_helper(show_id):
+        return int(show_id_to_host_count[show_id])
+        
+    myudf = func.udf(num_hosts_helper, IntegerType())
+    shows = shows.withColumn('num_hosts', myudf('id'))
+    return shows
 
 
 def get_videos():
@@ -188,7 +200,53 @@ def get_segments():
     return segments
 
 
-def get_faces():
+def _annotate_host_probability(faces, threshold=0.3):
+    face_identities = spark.load('query_faceidentity').alias('face_identity')
+    face_identities = face_identities.where(face_identities.probability > threshold)
+    
+    faces = get_faces(annotate_host_probability=False).alias('faces')
+    faces = faces.where(faces.in_commercial == False)
+    
+    face_identities = face_identities.join(
+        faces, face_identities.face_id == faces.id
+    ).select(
+        'face_identity.face_id',
+        'face_identity.identity_id',
+        'face_identity.labeler_id',
+        'face_identity.probability',
+        'faces.show_id', 
+        'faces.canonical_show_id',
+        'faces.channel_id',
+    )
+    
+    show_id_to_host_ids = defaultdict(set)
+    show_hosts = spark.load('query_show_hosts')
+    for e in show_hosts.collect():
+        show_id_to_host_ids[e.show_id].add(e.thing_id)
+        
+    def is_host_helper(identity_id, show_id):
+        return identity_id in show_id_to_host_ids[show_id]
+    
+    myfilterudf = func.udf(is_host_helper, BooleanType())
+    host_identities = face_identities.filter(myfilterudf('identity_id', 'show_id'))
+    
+    face_id_to_host_prob = defaultdict(float)
+    for host in host_identities.collect():
+        # If the face has multiple labels that indicate a host, take the highest probability one
+        # This might happen if we mannually labeled a number of Wolf Blitzers while using the
+        # partially-supervised approach to label the others
+        if face_id_to_host_prob[host.face_id] < host.probability:
+            face_id_to_host_prob[host.face_id] = host.probability
+            
+    def host_probability_helper(face_id):
+        return face_id_to_host_prob[face_id]
+    
+    myhostprobudf = func.udf(host_probability_helper, DoubleType())
+    faces = faces.withColumn('host_probability', myhostprobudf('id'))
+    return faces
+
+
+def get_faces(annotate_host_probability=True):
     faces = spark.load('query_face').alias('faces')
     
     shots = get_shots().alias('shots')
@@ -209,6 +267,9 @@ def get_faces():
     faces = faces.withColumn('height', faces.bbox_y2 - faces.bbox_y1)
     faces = faces.withColumn('width', faces.bbox_x2 - faces.bbox_x1)
     faces = faces.withColumn('area', faces.height * faces.width)
+    
+    if annotate_host_probability:
+        faces = _annotate_host_probability(faces)
     
     return faces
     
@@ -234,7 +295,8 @@ def get_face_genders():
         'faces.in_commercial',
         'faces.hour',
         'faces.week_day',
-        'faces.is_host'
+        'faces.is_host',
+        'faces.host_probability'
     )
     
     return face_genders
@@ -261,7 +323,8 @@ def get_face_identities():
         'faces.in_commercial',
         'faces.hour',
         'faces.week_day',
-        'faces.is_host'
+        'faces.is_host',
+        'faces.host_probability'
     )
     
     return face_identities
