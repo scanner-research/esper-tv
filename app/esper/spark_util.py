@@ -23,8 +23,8 @@ def get_shows():
     def num_hosts_helper(show_id):
         return int(show_id_to_host_count[show_id])
         
-    myudf = func.udf(num_hosts_helper, IntegerType())
-    shows = shows.withColumn('num_hosts', myudf('id'))
+    my_udf = func.udf(num_hosts_helper, IntegerType())
+    shows = shows.withColumn('num_hosts', my_udf('id'))
     return shows
 
 
@@ -51,8 +51,8 @@ def get_videos():
         weekday = datetime.date(year, month, day)
         return weekday.isoweekday()
         
-    myudf = func.udf(week_day_helper, IntegerType())
-    videos = videos.withColumn('week_day', myudf('time'))
+    my_udf = func.udf(week_day_helper, IntegerType())
+    videos = videos.withColumn('week_day', my_udf('time'))
     
     return videos
 
@@ -68,9 +68,9 @@ def _annotate_hour(df):
         start_hour, fps = video_id_to_hour_fps[video_id]
         hour_offset = (min_frame / fps) / 3600.
         return int(start_hour + hour_offset) % 24
-    myudf = func.udf(hour_helper, IntegerType())
+    my_udf = func.udf(hour_helper, IntegerType())
     df = df.withColumn(
-        'hour', myudf('video_id', 'min_frame')
+        'hour', my_udf('video_id', 'min_frame')
     )
     return df
         
@@ -142,9 +142,9 @@ def _annotate_in_commercial(df):
                     return True
         return False
     
-    myudf = func.udf(in_commercial_helper, BooleanType())
+    my_udf = func.udf(in_commercial_helper, BooleanType())
     df = df.withColumn(
-        'in_commercial', myudf('video_id', 'min_frame', 'max_frame')
+        'in_commercial', my_udf('video_id', 'min_frame', 'max_frame')
     )
     return df
 
@@ -227,8 +227,8 @@ def _annotate_host_probability(faces, threshold=0.3):
     def is_host_helper(identity_id, show_id):
         return identity_id in show_id_to_host_ids[show_id]
     
-    myfilterudf = func.udf(is_host_helper, BooleanType())
-    host_identities = face_identities.filter(myfilterudf('identity_id', 'show_id'))
+    host_filter_udf = func.udf(is_host_helper, BooleanType())
+    host_identities = face_identities.filter(host_filter_udf('identity_id', 'show_id'))
     
     face_id_to_host_prob = defaultdict(float)
     for host in host_identities.collect():
@@ -241,8 +241,8 @@ def _annotate_host_probability(faces, threshold=0.3):
     def host_probability_helper(face_id):
         return face_id_to_host_prob[face_id]
     
-    myhostprobudf = func.udf(host_probability_helper, DoubleType())
-    faces = faces.withColumn('host_probability', myhostprobudf('id'))
+    host_prob_udf = func.udf(host_probability_helper, DoubleType())
+    faces = faces.withColumn('host_probability', host_prob_udf('id'))
     return faces
 
 
