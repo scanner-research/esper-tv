@@ -3,8 +3,10 @@ from esper.prelude import *
 from esper.spark import *
 from esper.validation import *
 import pyspark.sql.functions as func
-from pyspark.sql.types import BooleanType, IntegerType
+from pyspark.sql.types import BooleanType, IntegerType, StringType
 from collections import defaultdict
+import datetime
+import calendar
 
 
 spark = SparkWrapper()
@@ -31,6 +33,15 @@ def get_videos():
     videos = videos.withColumn(
         'duration', videos.num_frames / videos.fps
     )
+    
+    def week_day_helper(time):
+        year, month, day = (int(x) for x in time.split(' ')[0].split('-'))    
+        weekday = datetime.date(year, month, day)
+        return weekday.isoweekday()
+        
+    myudf = func.udf(week_day_helper, IntegerType())
+    videos = videos.withColumn('week_day', myudf('time'))
+    
     return videos
 
 
@@ -65,7 +76,8 @@ def get_commercials():
         'videos.canonical_show_id',
         'videos.channel_id',
         'videos.month',
-        'videos.year'
+        'videos.year',
+        'videos.week_day'
     )
     
     commercials = commercials.withColumn(
@@ -88,7 +100,8 @@ def get_shots():
         'videos.canonical_show_id',
         'videos.channel_id',
         'videos.month',
-        'videos.year'
+        'videos.year',
+        'videos.week_day'
     )
     
     shots = shots.withColumn(
@@ -136,12 +149,20 @@ def get_speakers():
         'videos.show_id', 
         'videos.canonical_show_id',
         'videos.channel_id',
+        'videos.week_day'
     )
     
     speakers = speakers.withColumn(
         'duration', (speakers.max_frame - speakers.min_frame) / speakers.fps
     )
+    
+    # TODO: annotate has_host field properly
+    speakers = speakers.withColumn(
+        'has_host', func.lit(False)
+    )
+    
     speakers = _annotate_in_commercial(speakers)
+    speakers = _annotate_hour(speakers)
     return speakers
 
 
@@ -157,6 +178,7 @@ def get_segments():
         'videos.show_id', 
         'videos.canonical_show_id',
         'videos.channel_id',
+        'videos.week_day'
     )
     
     segments = segments.withColumn(
@@ -174,11 +196,14 @@ def get_faces():
         shots, faces.shot_id == shots.id
     ).select(
         'faces.*',
-        'shots.show_id', 
+        'shots.show_id',
+        'shots.video_id',
         'shots.canonical_show_id',
         'shots.channel_id',
         'shots.duration',
-        'shots.in_commercial'
+        'shots.in_commercial',
+        'shots.hour',
+        'shots.week_day'
     )
     
     faces = faces.withColumn('height', faces.bbox_y2 - faces.bbox_y1)
@@ -200,11 +225,16 @@ def get_face_genders():
         'faces.width',
         'faces.area',
         'faces.blurriness',
+        'faces.shot_id',
+        'faces.video_id',
         'faces.show_id', 
         'faces.canonical_show_id',
         'faces.channel_id',
         'faces.duration',
-        'faces.in_commercial'
+        'faces.in_commercial',
+        'faces.hour',
+        'faces.week_day',
+        'faces.is_host'
     )
     
     return face_genders
@@ -222,11 +252,16 @@ def get_face_identities():
         'faces.width',
         'faces.area',
         'faces.blurriness',
+        'faces.shot_id',
+        'faces.video_id',
         'faces.show_id', 
         'faces.canonical_show_id',
         'faces.channel_id',
         'faces.duration',
-        'faces.in_commercial'
+        'faces.in_commercial',
+        'faces.hour',
+        'faces.week_day',
+        'faces.is_host'
     )
     
     return face_identities
