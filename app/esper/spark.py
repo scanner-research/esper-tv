@@ -61,6 +61,8 @@ class SparkWrapper:
         return df.approxQuantile(col, [0.5], 0.001)[0]
 
     def load(self, key):
+        if not isinstance(key, str):
+            key = key._meta.db_table
         key = '{}/{}'.format(SPARK_DATA_PREFIX, key)
         return self.spark.read.load(key)
 
