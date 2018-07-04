@@ -54,7 +54,7 @@ services:
       - ./app:/app
       - ./nginx:/tmp
     depends_on: [app, frameserver]
-    ports: ["{nginx_port}:{nginx_port}"]
+    ports: ["{nginx_port}:{nginx_port}", "{ipython_port}:{ipython_port}"]
     environment: ["PORT={nginx_port}"]
 
   frameserver:
@@ -76,7 +76,7 @@ services:
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ./service-key.json:/app/service-key.json
-    ports: ["8000", "{ipython_port}:{ipython_port}"]
+    ports: ["8000", "{ipython_port}"]
     environment:
       - IPYTHON_PORT={ipython_port}
       - JUPYTER_PASSWORD=esperjupyter
