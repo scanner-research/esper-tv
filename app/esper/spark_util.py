@@ -89,7 +89,8 @@ def get_commercials():
         'videos.channel_id',
         'videos.month',
         'videos.year',
-        'videos.week_day'
+        'videos.week_day',
+        'videos.time'
     )
     
     commercials = commercials.withColumn(
@@ -113,7 +114,8 @@ def get_shots():
         'videos.channel_id',
         'videos.month',
         'videos.year',
-        'videos.week_day'
+        'videos.week_day',
+        'videos.time'
     )
     
     shots = shots.withColumn(
@@ -161,7 +163,8 @@ def get_speakers():
         'videos.show_id', 
         'videos.canonical_show_id',
         'videos.channel_id',
-        'videos.week_day'
+        'videos.week_day',
+        'videos.time'
     )
     
     speakers = speakers.withColumn(
@@ -190,7 +193,8 @@ def get_segments():
         'videos.show_id', 
         'videos.canonical_show_id',
         'videos.channel_id',
-        'videos.week_day'
+        'videos.week_day',
+        'videos.time'
     )
     
     segments = segments.withColumn(
@@ -216,7 +220,7 @@ def _annotate_host_probability(faces, threshold=0.3):
         'face_identity.probability',
         'faces.show_id', 
         'faces.canonical_show_id',
-        'faces.channel_id',
+        'faces.channel_id'
     )
     
     show_id_to_host_ids = defaultdict(set)
@@ -261,7 +265,8 @@ def get_faces(annotate_host_probability=True):
         'shots.duration',
         'shots.in_commercial',
         'shots.hour',
-        'shots.week_day'
+        'shots.week_day',
+        'shots.time'
     )
     
     faces = faces.withColumn('height', faces.bbox_y2 - faces.bbox_y1)
@@ -295,6 +300,7 @@ def get_face_genders():
         'faces.in_commercial',
         'faces.hour',
         'faces.week_day',
+        'faces.time',
         'faces.is_host',
         'faces.host_probability'
     )
@@ -323,6 +329,7 @@ def get_face_identities():
         'faces.in_commercial',
         'faces.hour',
         'faces.week_day',
+        'faces.time',
         'faces.is_host',
         'faces.host_probability'
     )

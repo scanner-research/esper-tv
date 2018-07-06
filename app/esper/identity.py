@@ -15,6 +15,7 @@ import concurrent.futures
 import tempfile
 import random
 import string
+from datetime import timedelta
 
 from subprocess import check_call
 from esper import embed_google_images
@@ -571,9 +572,9 @@ def show_faces_by_size(model, precision_thresh=0.8, n=5):
     return esper_widget(group_results(results))
     
 
-def compute_screen_time_by_video(model, show_name):
+def get_screen_time_by_video(model, show_name):
     """
-    Return a dictionary from video id to seconds for single show
+    Return a dictionary from video id to timedeltas for single show
     """
     def screen_time_by_video_per_bucket(args):
         bucket, precision, face_ids, show_name = args
@@ -601,7 +602,12 @@ def compute_screen_time_by_video(model, show_name):
     for x in results:
         for k, v in x.items():
             screen_time_by_video_id[k] += v
-    return screen_time_by_video_id
+    
+    return { k : timedelta(seconds=v) for k, v in screen_time_by_video_id.items() } 
+
+
+def compute_screen_time_by_video(model, show_name):
+    raise NotImplementedError('Renamed to get_screen_time_by_video')
 
 
 def plot_histogram_of_screen_times_by_video(name, show_name,
@@ -611,7 +617,7 @@ def plot_histogram_of_screen_times_by_video(name, show_name,
     """
     histogram_dict = defaultdict(list)
     for k, v in screen_time_by_video_id.items():
-        histogram_dict[int(secondsToMinutes(v)) + 1].append(k)
+        histogram_dict[int(secondsToMinutes(v.total_seconds())) + 1].append(k)
 
     videos_with_no_screen_time = Video.objects.filter(
         show__name=show_name
@@ -619,12 +625,14 @@ def plot_histogram_of_screen_times_by_video(name, show_name,
         id__in=[x for x in screen_time_by_video_id]
     )
     
-    videos_with_faces = [x['shot__video__id'] for x in 
-                         Face.objects.filter(
-                             shot__video__show__canonical_show__name=show_name
-                         ).distinct(
-                            'shot__video'
-                         ).values('shot__video__id')]
+    videos_with_faces = [
+        x['shot__video__id'] for x in 
+        Face.objects.filter(
+         shot__video__show__canonical_show__name=show_name
+        ).distinct(
+        'shot__video'
+        ).values('shot__video__id')
+    ]
 
     videos_with_no_screen_time_and_no_faces = videos_with_no_screen_time.exclude(id__in=videos_with_faces)
     videos_with_no_screen_time_but_with_faces = videos_with_no_screen_time.filter(id__in=videos_with_faces)
@@ -679,7 +687,7 @@ def plot_screentime_over_time(names, show_name, screen_times_by_video_id):
     for i, (name, screen_time_by_video_id) in enumerate(zip(names, screen_times_by_video_id)):
         histogram_dict = defaultdict(list)
         for k, v in screen_time_by_video_id.items():
-            histogram_dict[int(secondsToMinutes(v)) + 1].append(k)
+            histogram_dict[int(secondsToMinutes(v.total_seconds())) + 1].append(k)
 
         videos_with_no_screen_time = Video.objects.filter(
             show__name=show_name
@@ -696,7 +704,7 @@ def plot_screentime_over_time(names, show_name, screen_times_by_video_id):
         y = []
         for video in videos:
             x.append(video.time)
-            y.append(secondsToMinutes(screen_time_by_video_id[video.id]))    
+            y.append(secondsToMinutes(screen_time_by_video_id[video.id].total_seconds()))    
         plt.scatter(x, y, s=1., label=name, color=get_color(i))
         
     # Plot xs for all videos with not faces
@@ -833,7 +841,7 @@ def get_total_shot_time_by_show():
                             output_field=FloatField())
         )
         total_shot_time_by_show = { 
-            x['video__show__canonical_show__name'] : x['screen_time'] for x in query_results 
+            x['video__show__canonical_show__name'] : timedelta(seconds=x['screen_time']) for x in query_results 
         }
     return total_shot_time_by_show
 
@@ -853,15 +861,19 @@ def get_screen_time_by_show(model, date_range=None):
             query_result = qs.values(
                 'shot__video__show__canonical_show__name'
             ).annotate(
-                screen_time=Sum(
+                sum_screen_time=Sum(
                     (F('shot__max_frame') - F('shot__min_frame')) / F('shot__video__fps'), 
+                    output_field=FloatField()
+                ),
+                sum_screen_time_sq=Sum(
+                    ((F('shot__max_frame') - F('shot__min_frame')) / F('shot__video__fps')) ** 2,
                     output_field=FloatField()
                 )
             )
             return { 
                 x['shot__video__show__canonical_show__name'] : (
-                    precision * x['screen_time'], # value
-                    (1. - precision) * precision * (x['screen_time'] ** 2) # variance
+                    precision * x['sum_screen_time'], # value
+                    (1. - precision) * precision * x['sum_screen_time_sq'] # variance
                 ) for x in query_result 
             } 
         else:
@@ -878,7 +890,10 @@ def get_screen_time_by_show(model, date_range=None):
             screen_time_by_show[k] += v[0]
             var_in_screen_time_by_show[k] += v[1]
 
-    return [(k, screen_time_by_show[k], var_in_screen_time_by_show[k]) for k in screen_time_by_show.keys()]
+    return {
+        k : (timedelta(seconds=v), var_in_screen_time_by_show[k])
+        for k, v in screen_time_by_show.items()
+    }
 
 
 def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_proportion=True):
@@ -894,188 +909,200 @@ def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_pr
         screen_times_by_show = [screen_times_by_show]
     assert len(names) == len(screen_times_by_show)
     
-    def plot_bar_chart_by_show_raw(data_by_name):
-        fig, ax1 = plt.subplots()
-        
-        ind = np.arange(len(data_by_name[0]))
-        
-        full_width = 0.8
-        width = full_width / len(data_by_name)
-        for i, data in enumerate(data_by_name):
-            ys = [y for _, y, _ in data]
-            stds = [1.96 * (z ** 0.5) for _, _, z in data]
-            rect = ax1.bar(ind - full_width / 2 + i * width, ys, 
-                           width, color=get_color(i), yerr=stds, ecolor='black', 
-                           label=names[i])
-        
-        ax1.legend()
-        ax1.set_ylim(ymin=0.)
-        ax1.set_ylabel('Minutes', fontsize=14)
-        ax1.set_title('Minutes of non-commercial screen time by show for {}'.format(
-                      ' & '.join(names)))
-        ax1.set_xticks(ind)
-        ax1.set_xlabel('Show name', fontsize=14)
-        ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
-        plt.show()
-    
-    show_sort_order = { 
-        x[0] : i for i, x in enumerate(sorted(screen_times_by_show[0], key=lambda x: x[1]))
-    }
-    
-    data_to_plot = []
-    for name, screen_time_by_show in zip(names, screen_times_by_show):
-        single_show_data_to_plot = []
-        for show, screen_time, variance in sorted(screen_time_by_show, 
-                                                  key=lambda x: show_sort_order[x[0]]):
-            single_show_data_to_plot.append((show, secondsToMinutes(screen_time), variance / 3600.))
-        data_to_plot.append(single_show_data_to_plot)
     if plot_raw:
+        def plot_bar_chart_by_show_raw(data_by_name):
+            fig, ax1 = plt.subplots()
+
+            ind = np.arange(len(data_by_name[0]))
+
+            full_width = 0.8
+            width = full_width / len(data_by_name)
+            for i, data in enumerate(data_by_name):
+                ys = [y for _, y, _ in data]
+                stds = [1.96 * (z ** 0.5) for _, _, z in data]
+                rect = ax1.bar(ind - full_width / 2 + i * width, ys, 
+                               width, color=get_color(i), yerr=stds, ecolor='black', 
+                               label=names[i])
+
+            ax1.legend()
+            ax1.set_ylim(ymin=0.)
+            ax1.set_ylabel('Minutes', fontsize=14)
+            ax1.set_title('Minutes of non-commercial screen time by show for {}'.format(
+                          ' & '.join(names)))
+            ax1.set_xticks(ind)
+            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
+            plt.show()
+
+        show_sort_order = { 
+            x[0] : i for i, x in enumerate(
+                sorted(screen_times_by_show[0].items(), 
+                       key=lambda x: x[1][0].total_seconds()))
+        }
+
+        data_to_plot = []
+        for name, screen_time_by_show in zip(names, screen_times_by_show):
+            single_show_data_to_plot = []
+            for show, (screen_time, variance) in sorted(screen_time_by_show.items(), 
+                                                      key=lambda x: show_sort_order[x[0]]):
+                single_show_data_to_plot.append((
+                    show, secondsToMinutes(screen_time.total_seconds()), variance / 3600.
+                ))
+            data_to_plot.append(single_show_data_to_plot)
         plot_bar_chart_by_show_raw(data_to_plot)
         
-    def plot_bar_chart_by_show_scaled(data_by_name):
-        fig, ax1 = plt.subplots()
-
-        ind = np.arange(len(data_by_name[0]))
-        full_width = 0.8
-        width = full_width / len(data_by_name)
-        
-        for i, data in enumerate(data_by_name):
-            stds = [1.96 * (z ** 0.5) for _, _, z in data]
-            rect = ax1.bar(ind - full_width / 2 + i * width, 
-                           [y for _, y, _ in data], width,
-                           yerr=stds, ecolor='black', color=get_color(i),
-                           label=names[i])
-        
-        ax1.set_ylim(ymin=0.)
-        ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14)
-        ax1.set_title('Proportion of non-commercial screen time by show for {}'.format(
-                      ' & '.join(names)))
-        ax1.legend()
-        ax1.set_xticks(ind)
-        ax1.set_xlabel('Show name', fontsize=14)
-        ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
-        plt.show()
- 
-    show_sort_order = None
-    data_to_plot = []
-    for name, screen_time_by_show in zip(names, screen_times_by_show):
-        single_show_data_to_plot = []
-        for show, screen_time, variance in screen_time_by_show:
-            total_show_screen_time = get_total_shot_time_by_show()[show]
-            single_show_data_to_plot.append((
-                show, screen_time / total_show_screen_time, variance / (total_show_screen_time ** 2)
-            ))
-        if show_sort_order is None:
-            show_sort_order = { 
-                x[0] : i for i, x in enumerate(
-                    sorted(single_show_data_to_plot, key=lambda x: x[1]))
-            }
-        data_to_plot.append(list(sorted(
-            single_show_data_to_plot, key=lambda x: show_sort_order[x[0]]
-        )))
     if plot_proportion:
+        def plot_bar_chart_by_show_scaled(data_by_name):
+            fig, ax1 = plt.subplots()
+
+            ind = np.arange(len(data_by_name[0]))
+            full_width = 0.8
+            width = full_width / len(data_by_name)
+
+            for i, data in enumerate(data_by_name):
+                stds = [1.96 * (z ** 0.5) for _, _, z in data]
+                rect = ax1.bar(ind - full_width / 2 + i * width, 
+                               [y for _, y, _ in data], width,
+                               yerr=stds, ecolor='black', color=get_color(i),
+                               label=names[i])
+
+            ax1.set_ylim(ymin=0.)
+            ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14)
+            ax1.set_title('Proportion of non-commercial screen time by show for {}'.format(
+                          ' & '.join(names)))
+            ax1.legend()
+            ax1.set_xticks(ind)
+            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
+            plt.show()
+
+        show_sort_order = None
+        data_to_plot = []
+        for name, screen_time_by_show in zip(names, screen_times_by_show):
+            single_show_data_to_plot = []
+            for show, (screen_time, variance) in screen_time_by_show.items():
+                total_show_screen_time = get_total_shot_time_by_show()[show].total_seconds()
+                single_show_data_to_plot.append((
+                    show, screen_time.total_seconds() / total_show_screen_time, 
+                    variance / (total_show_screen_time ** 2)
+                ))
+            if show_sort_order is None:
+                show_sort_order = { 
+                    x[0] : i for i, x in enumerate(
+                        sorted(single_show_data_to_plot, key=lambda x: x[1]))
+                }
+            data_to_plot.append(list(sorted(
+                single_show_data_to_plot, key=lambda x: show_sort_order[x[0]]
+            )))
         plot_bar_chart_by_show_scaled(data_to_plot)
     
     
 def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show, other_name,
-                                       other_units, plot_raw=True, plot_proportion=True):
+                                       other_units, plot_raw=True, plot_proportion=True,
+                                       sort_by_other=False):
+    """
+    Plot the screen time for a single person along side another metric. 
     
-    def plot_bar_chart_by_show_raw(screen_time_data):
-        fig, ax1 = plt.subplots()
-        
-        ind = np.arange(len(screen_time_data))
-        
-        full_width = 0.8
-        width = full_width / 2
-        
-        ys = [y for _, y, _ in screen_time_data]
-        stds = [1.96 * (z ** 0.5) for _, _, z in screen_time_data]
-        rect1 = ax1.bar(ind - width, ys, 
-                        width, color=get_color(0), yerr=stds, ecolor='black', 
-                        label='Screen time')
-        
-        ax1.set_ylim(ymin=0.)
-        ax1.set_ylabel('Minutes', fontsize=14, color=get_color(0))
-        ax1.set_title('Minutes of non-commercial screen time and {} by show for {}'.format(
-                      other_name.lower(), name))
-        ax1.set_xticks(ind)
-        ax1.set_xlabel('Show name', fontsize=14)
-        ax1.set_xticklabels([x for x, _, _ in screen_time_data], rotation=45, ha='right')
-        
-        ax2 = ax1.twinx()
-        ax2.set_ylabel(other_units,  color=get_color(1))
-        ys_other = [other_by_show[x] for x, _, _ in screen_time_data]
-        rect2 = ax2.bar(ind, ys_other, width,
-                       color=get_color(1), label=other_name)
-        fig.legend()
-        fig.tight_layout()
-        
-        plt.show()
-    
-    show_sort_order = { 
-        x[0] : i for i, x in enumerate(sorted(screen_time_by_show, key=lambda x: x[1]))
-    }
-    
-    screen_time_data_to_plot = []
-    for show, screen_time, variance in sorted(screen_time_by_show, 
-                                              key=lambda x: show_sort_order[x[0]]):
-        screen_time_data_to_plot.append((show, secondsToMinutes(screen_time), variance / 3600.))
+    screen_time_by_show is a list of tuples of the form (show_name, time_delta, variance_seconds)
+    other_by_show is a dict where keys are show_names
+    """
     if plot_raw:
+        def plot_bar_chart_by_show_raw(screen_time_data):
+            fig, ax1 = plt.subplots()
+
+            ind = np.arange(len(screen_time_data))
+
+            full_width = 0.8
+            width = full_width / 2
+
+            ys = [y for _, y, _ in screen_time_data]
+            stds = [1.96 * (z ** 0.5) for _, _, z in screen_time_data]
+            rect1 = ax1.bar(ind - width, ys, 
+                            width, color=get_color(0), yerr=stds, ecolor='black', 
+                            label='Screen time')
+
+            ax1.set_ylim(ymin=0.)
+            ax1.set_ylabel('Minutes', fontsize=14, color=get_color(0))
+            ax1.set_title('Minutes of non-commercial screen time and {} by show for {}'.format(
+                          other_name.lower(), name))
+            ax1.set_xticks(ind)
+            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xticklabels([x for x, _, _ in screen_time_data], rotation=45, ha='right')
+
+            ax2 = ax1.twinx()
+            ax2.set_ylabel(other_units,  color=get_color(1))
+            ys_other = [other_by_show[x] for x, _, _ in screen_time_data]
+            rect2 = ax2.bar(ind, ys_other, width,
+                           color=get_color(1), label=other_name)
+            fig.legend()
+            fig.tight_layout()
+
+            plt.show()
+
+        show_sort_order = { 
+            x[0] : i for i, x in enumerate(
+                sorted(screen_time_by_show.items(), 
+                       key=lambda x: x[1][0].total_seconds() if not sort_by_other else other_by_show[x[0]])
+            )
+        }
+
+        screen_time_data_to_plot = []
+        for show, (screen_time, variance) in sorted(screen_time_by_show.items(), 
+                                                    key=lambda x: show_sort_order[x[0]]):
+            screen_time_data_to_plot.append((
+                show, secondsToMinutes(screen_time.total_seconds()), variance / 3600.
+            ))
         plot_bar_chart_by_show_raw(screen_time_data_to_plot)
-        
-    video_count = {
-        x['show__canonical_show__name'] : x['count'] for x in 
-        Video.objects.all().values(
-            'show__canonical_show'
-        ).annotate(count=Count('id')).values(
-            'show__canonical_show__name', 'count'
-        )
-    }  
     
-    def plot_bar_chart_by_show_scaled(screen_time_data):
-        fig, ax1 = plt.subplots()
-
-        ind = np.arange(len(screen_time_data))
-        full_width = 0.8
-        width = full_width / 2
-        
-        ys = [y for _, y, _ in screen_time_data]
-        stds = [1.96 * (z ** 0.5) for _, _, z in screen_time_data]
-        rect1 = ax1.bar(ind - width, ys, 
-                        width, color=get_color(0), yerr=stds, ecolor='black', 
-                        label='Proportion of screen time')
-        
-        ax1.set_ylim(ymin=0.)
-        ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14, color=get_color(0))
-        ax1.set_title('Proportion of non-commercial screen time and '
-                      'normalized {} by show for {}'.format(other_name.lower(), name))
-        
-        ax1.set_xticks(ind)
-        ax1.set_xlabel('Show name', fontsize=14)
-        ax1.set_xticklabels([x for x, _, _ in screen_time_data], rotation=45, ha='right')
-
-        ax2 = ax1.twinx()
-        ax2.set_ylabel('{} normalized by number of hours'.format(other_units), color=get_color(1))
-        ys_other = [other_by_show[x] / get_total_shot_time_by_show()[x] / 60 for x, _, _ in screen_time_data]
-        rect2 = ax2.bar(ind, ys_other, width,
-                        color=get_color(1), label=other_name)
-        fig.legend()
-        fig.tight_layout()
-        plt.show()
-        
-    screen_time_data_to_plot = []
-    for show, screen_time, variance in screen_time_by_show:
-        total_show_screen_time = get_total_shot_time_by_show()[show]
-        screen_time_data_to_plot.append((
-            show, screen_time / total_show_screen_time, variance / (total_show_screen_time ** 2)
-        ))
-    screen_time_data_to_plot.sort(key=lambda x: x[1])
     if plot_proportion:
+        normalized_other_by_show = {
+            k : v / secondsToMinutes(get_total_shot_time_by_show()[k].total_seconds()) / 60 # hours
+            for k, v in other_by_show.items() if k in screen_time_by_show.keys()
+        }
+        
+        def plot_bar_chart_by_show_scaled(screen_time_data):
+            fig, ax1 = plt.subplots()
+
+            ind = np.arange(len(screen_time_data))
+            full_width = 0.8
+            width = full_width / 2
+
+            ys = [y for _, y, _ in screen_time_data]
+            stds = [1.96 * (z ** 0.5) for _, _, z in screen_time_data]
+            rect1 = ax1.bar(ind - width, ys, 
+                            width, color=get_color(0), yerr=stds, ecolor='black', 
+                            label='Proportion of screen time')
+
+            ax1.set_ylim(ymin=0.)
+            ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14, color=get_color(0))
+            ax1.set_title('Proportion of non-commercial screen time and '
+                          'normalized {} by show for {}'.format(other_name.lower(), name))
+
+            ax1.set_xticks(ind)
+            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xticklabels([x for x, _, _ in screen_time_data], rotation=45, ha='right')
+
+            ax2 = ax1.twinx()
+            ax2.set_ylabel('{} normalized by number of hours'.format(other_units), color=get_color(1))
+            ys_other = [normalized_other_by_show[x] for x, _, _ in screen_time_data]
+            rect2 = ax2.bar(ind, ys_other, width,
+                            color=get_color(1), label=other_name)
+            fig.legend()
+            fig.tight_layout()
+            plt.show()
+
+        screen_time_data_to_plot = []
+        for show, (screen_time, variance) in screen_time_by_show.items():
+            total_show_screen_time = get_total_shot_time_by_show()[show].total_seconds()
+            screen_time_data_to_plot.append((
+                show, screen_time.total_seconds() / total_show_screen_time, variance / (total_show_screen_time ** 2)
+            ))
+        screen_time_data_to_plot.sort(key=lambda x: x[1] if not sort_by_other else normalized_other_by_show[x[0]])
         plot_bar_chart_by_show_scaled(screen_time_data_to_plot)
 
 
 def get_person_in_shot_similarity(models, show_name=None, date_range=None,
-                                          precision_thresh=0.8):
+                                  precision_thresh=0.8):
     """
     Returns a dict mapping pairs of (p1,p2) to a tuple of jaccard, (p1 & p2 | p1), (p1 & p2 | p2) 
     """
@@ -1090,9 +1117,9 @@ def get_person_in_shot_similarity(models, show_name=None, date_range=None,
             qs = qs.filter(shot__video__time__range=date_range)
         if show_name is not None:
             qs = qs.filter(shot__video__show__canonical_show__name=show_name)
-        shot_ids_by_name[name] = set([
+        shot_ids_by_name[name] = {
             x['shot__id'] for x in qs.values('shot__id')
-        ])
+        }
     
     sims = {}
     for p1, v1 in shot_ids_by_name.items():
