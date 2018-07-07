@@ -47,6 +47,8 @@ http {
         listen 8888;
         server_name notebook;
 
+        client_max_body_size 100M;
+
         include /etc/nginx/${ESPER_ENV}.conf;
 
         location /django {
