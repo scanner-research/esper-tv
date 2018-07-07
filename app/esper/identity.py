@@ -31,7 +31,7 @@ if not os.path.exists(RESULTS_DIR):
 
 GCS_MODEL_PREFIX = 'gs://esper/tvnews/face_identity_model'
 
-COLORS = ['SkyBlue', 'Red', 'Yellow', 'Orange', 'Purple']
+COLORS = ['LightCoral', 'SkyBlue', 'SandyBrown', 'Violet', 'Goldenrod', 'GreenYellow']
 
 NUM_MAJOR_CANONICAL_SHOWS = 40
 
@@ -666,6 +666,7 @@ def plot_screentime_over_time(names, show_name, screen_times_by_video_id):
     screen_times_by_video_id is a dict of video_id to screen_time in seconds
     or a list of such dicts
     """
+    # TODO: fix xlim on time ranged plots
     
     if not isinstance(names, list):
         names = [names]
@@ -1074,7 +1075,7 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
                             label='Proportion of screen time')
 
             ax1.set_ylim(ymin=0.)
-            ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14, color=get_color(0))
+            ax1.set_ylabel('Proportion of show\'s total runtime', fontsize=14, color=get_color(0))
             ax1.set_title('Proportion of non-commercial screen time and '
                           'normalized {} by show for {}'.format(other_name.lower(), name))
 
@@ -1100,6 +1101,78 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
         screen_time_data_to_plot.sort(key=lambda x: x[1] if not sort_by_other else normalized_other_by_show[x[0]])
         plot_bar_chart_by_show_scaled(screen_time_data_to_plot)
 
+        
+def plot_difference_in_screen_time_by_show(names, screen_times_by_show, color=get_color(0), plot_proportion=True,
+                                           plot_ratio=True):
+    assert len(names) == 2
+    assert len(screen_times_by_show) == 2
+    
+    if plot_proportion:
+        def plot_bar_chart_by_show_scaled(data):
+            fig, ax1 = plt.subplots()
+
+            ind = np.arange(len(data))
+            width = 0.8
+
+            stds = [1.96 * (z ** 0.5) for _, _, z in data]
+            rect = ax1.bar(ind - width / 2, 
+                           [y for _, y, _ in data], width,
+                           yerr=stds, ecolor='black', color=color,
+                           label='screentime({}) - screentime({})'.format(*names))
+
+            ax1.set_ylabel('Difference in proportion of show\'s total runtime', fontsize=14)
+            ax1.set_title('Difference in proportion of non-commercial screen time by show for {}'.format(
+                          ' & '.join(names)))
+            ax1.legend()
+            ax1.set_xticks(ind)
+            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
+            plt.show()
+
+        data_to_plot = []
+        for show in screen_times_by_show[0]:
+            total_show_time = get_total_shot_time_by_show()[show].total_seconds()
+            data_to_plot.append((
+                show, 
+                (screen_times_by_show[0][show][0].total_seconds() - screen_times_by_show[1][show][0].total_seconds()) 
+                / total_show_time, 
+                (screen_times_by_show[0][show][1] + screen_times_by_show[1][show][1])
+                / (total_show_time ** 2)
+            ))
+        data_to_plot.sort(key=lambda x: x[1])
+        plot_bar_chart_by_show_scaled(data_to_plot)
+    
+    if plot_ratio:
+        def plot_bar_chart_by_show_scaled(data):
+            fig, ax1 = plt.subplots()
+
+            ind = np.arange(len(data))
+            width = 0.8
+            rect = ax1.bar(ind - width / 2, 
+                           [y for _, y in data], width,
+                           color=color,
+                           label='screentime({}) / screentime({})'.format(*names))
+
+            ax1.set_ylabel('Ratio of screentime', fontsize=14)
+            ax1.set_title('Ratio of non-commercial screen time by show for {}'.format(
+                          ' & '.join(names)))
+            ax1.legend()
+            ax1.set_xticks(ind)
+            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xticklabels([x for x, _ in data], rotation=45, ha='right')
+            plt.show()
+
+        data_to_plot = []
+        for show in screen_times_by_show[0]:
+            total_show_time = get_total_shot_time_by_show()[show].total_seconds()
+            data_to_plot.append((
+                show, 
+                screen_times_by_show[0][show][0].total_seconds() / 
+                screen_times_by_show[1][show][0].total_seconds()
+            ))
+        data_to_plot.sort(key=lambda x: x[1])
+        plot_bar_chart_by_show_scaled(data_to_plot)
+        
 
 def get_person_in_shot_similarity(models, show_name=None, date_range=None,
                                   precision_thresh=0.8):
