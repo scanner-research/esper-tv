@@ -749,7 +749,7 @@ def mutual_info(p):
 
 
 def find_segments(lexicon):
-    r = requests.post('http://localhost:8111/findsegments', json={'phrases': lexicon})
+    r = requests.post('http://localhost:8111/findsegments', json={'lexicon': lexicon})
     return r.json()
 
 

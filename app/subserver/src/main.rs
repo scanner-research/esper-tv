@@ -18,6 +18,7 @@ extern crate rustlearn;
 extern crate rkm;
 extern crate protobuf;
 extern crate rocket_contrib;
+extern crate flame;
 
 mod util;
 mod text;
@@ -73,9 +74,15 @@ fn mutual_info(input: Json<SubSearchInput>) -> Json<Vec<(String, f64)>> {
     Json(CORPUS.all_mutual_info(input.phrases[0].clone()))
 }
 
+
+#[derive(Serialize, Deserialize)]
+struct FindSegmentsInput {
+    lexicon: Vec<(String, f64)>
+}
+
 #[post("/findsegments", format="application/json", data="<input>")]
-fn find_segments(input: Json<SubSearchInput>) -> Json<Vec<(String, (f32, f32), i32)>> {
-    Json(CORPUS.find_segments(input.phrases.clone()))
+fn find_segments(input: Json<FindSegmentsInput>) -> Json<Vec<(String, (f32, f32), f64, HashMap<String, usize>)>> {
+    Json(CORPUS.find_segments(input.lexicon.clone()))
 }
 
 

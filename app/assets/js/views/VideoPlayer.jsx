@@ -30,26 +30,28 @@ export default class VideoPlayer extends React.Component {
     let track = this.props.track;
     if (track) {
       this._player.currentTime(this._toSeconds(track.min_frame));
-      console.log(          {time: this._toSeconds(track.min_frame), text: "start"});
-      this._player.markers({
-        markerStyle: {
-          'width':'8px',
-          'background-color': 'red'
-        },
-        markers: [
-          {time: this._toSeconds(track.min_frame), text: "start"},
-          {time: this._toSeconds(track.max_frame), text: "end"}
-        ]
-      });
+
+      if (track.max_frame) {
+        this._player.markers({
+          markerStyle: {
+            'width':'8px',
+            'background-color': 'red'
+          },
+          markers: [
+            {time: this._toSeconds(track.min_frame), text: "start"},
+            {time: this._toSeconds(track.max_frame), text: "end"}
+          ]
+        });
+      }
     }
   }
 
   _onTimeUpdate = () => {
     // Wrap around if playing in a loop
     if (this.props.loop &&
-        this.props.clip.max_frame !== undefined &&
-        this._player.currentTime() >= this._toSeconds(this.props.clip.max_frame)) {
-      this._player.currentTime(this._toSeconds(this.props.clip.min_frame));
+        this.props.track.max_frame !== undefined &&
+        this._player.currentTime() >= this._toSeconds(this.props.track.max_frame)) {
+      this._player.currentTime(this._toSeconds(this.props.track.min_frame));
     }
   }
 

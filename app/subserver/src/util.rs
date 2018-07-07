@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::time::Instant;
 use indicatif::{ProgressBar, ProgressStyle};
+use flame;
 
 
 // Iterator function for taking Vec<(K, V)> -> Map<K, Vec<V>>
@@ -225,4 +226,18 @@ impl<S: Send, T: ParallelIterator<Item=S>> ParallelIterator for ParProgress<T> {
         let consumer1 = ProgressConsumer::new(consumer, self.progress.clone());
         self.it.drive_unindexed(consumer1)
     }
+}
+
+
+
+#[allow(dead_code)]
+pub struct FlameThreadGuard;
+
+#[allow(dead_code)]
+impl FlameThreadGuard {
+    pub fn new() -> FlameThreadGuard { FlameThreadGuard }
+}
+
+impl Drop for FlameThreadGuard {
+    fn drop(&mut self) { flame::commit_thread() }
 }

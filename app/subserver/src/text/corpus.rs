@@ -38,8 +38,10 @@ static VALID_POS: &'static [POS] = {
 
 impl<Index: Indexed + Send> Corpus<Index> {
     pub fn new(paths: Vec<String>) -> Corpus<Index> {
-        // For each subtitle file, load the corresponding flattened transcript and metadata
-        let docs: HashMap<_, _> = paths.par_iter().progress_count(paths.len()).map(|path| {
+        // For each subtitle file, load the corresponding flattened transcript and
+        let path_iter = paths.par_iter();
+        // let path_iter = paths.par_iter().take(1000);
+        let docs: HashMap<_, _> = path_iter.progress_count(paths.len()).map(|path| {
             let item_name = path.split("/").last().unwrap().split(".").next().unwrap();
             let meta_path = format!("{}/meta/{}.bin", SUB_CACHE_DIR, item_name);
             let flat_path = format!("{}/flat/{}.txt", SUB_CACHE_DIR, item_name);
@@ -133,30 +135,102 @@ impl<Index: Indexed + Send> Corpus<Index> {
         ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" ")
     }
 
-    pub fn find_segments(&self, lexicon: Vec<String>) -> Vec<(String, (f32, f32), i32)> {
+    pub fn find_segments(&self, lexicon: Vec<(String, f64)>) -> Vec<(String, (f32, f32), f64, HashMap<String, usize>)> {
         let window_size = 500;
         let max_ngram = 3;
         let stride = 50;
-        let target_bag = lexicon.iter().map(|s| s.as_str()).collect::<HashSet<_>>();
+        let target_scores = lexicon.iter().map(|(s, score)| (s.as_str(), score)).collect::<HashMap<_, _>>();
+
+        #[derive(Clone)]
+        struct Segment {
+            time_start: f32,
+            time_end: f32,
+            count: f64,
+            words: HashMap<String, usize>
+        }
+
+        // For each document:
         let mut all_matches = self.docs.par_iter().progress_count(self.docs.len()).flat_map(|(path, doc)| {
+            // For each segment window, convolve with lexicon to produce segment score
             let matches = doc.meta.words
                 .windows(window_size)
                 .step_by(stride)
                 .map(|window| {
-                    let count = (1..=max_ngram).map(|n| {
+                    let (words, counts): (Vec<_>, Vec<_>) = (1..=max_ngram).flat_map(|n| {
                         window.windows(n).map(|ngram| {
-                            if target_bag.contains::<str>(&self.ngram_to_str(ngram)) { 1 } else { 0 }
-                        }).sum::<i32>()
-                    }).sum::<i32>();
-                    ((window.first().unwrap().time_start, window.last().unwrap().time_end), count)
+                            let ngram_str = self.ngram_to_str(ngram);
+                            match target_scores.get::<str>(&ngram_str) {
+                                Some(n) => (Some(ngram_str), **n),
+                                None => (None, 0.0)
+                            }
+                        }).collect::<Vec<_>>()
+                    }).unzip();
+
+                    let mut word_count = HashMap::new();
+                    for word in words {
+                        if let Some(s) = word {
+                            *word_count.entry(s).or_insert(0) += 1
+                        }
+                    }
+
+                    Segment {
+                        time_start: window.first().unwrap().time_start,
+                        time_end: window.last().unwrap().time_end,
+                        count: counts.into_iter().sum::<f64>(),
+                        words: word_count
+                    }
                 }).collect::<Vec<_>>();
 
-            // TODO(wcrichto): condense overlapping segments
+            // Filter segments less than an small absolute threshold
+            let min_score_threshold = 50.0;
+            let mut matches = matches.into_iter().filter(|seg| seg.count > min_score_threshold).collect::<Vec<_>>();
 
-            matches.into_iter().map(|(i, n)| (path.clone(), i, n)).collect::<Vec<_>>()
+            // Merge overlapping segments
+            if matches.len() == 0 {
+                vec![]
+            } else {
+                let collapse_segs = |segs: &Vec<Segment>| -> Segment {
+                    Segment {
+                        time_start: segs.first().unwrap().time_start,
+                        time_end: segs.last().unwrap().time_end,
+                        count: segs.iter().map(|seg| seg.count).sum::<f64>() / (segs.len() as f64),
+                        words: panic!()
+                    }
+                };
+
+                // Turn off overlap merging for now
+                let reduced_segs = if false {
+                    let first = matches.remove(0);
+                    let (mut reduced_segs, last) = matches.into_iter().fold(
+                        (vec![], vec![first]), |(mut acc, mut last_segs), cur_seg| {
+                            let overlaps = {
+                                let last_seg = last_segs.last().unwrap();
+                                last_seg.time_end >= cur_seg.time_start &&
+                                    last_seg.time_start <= cur_seg.time_end
+                            };
+
+                            if overlaps {
+                                last_segs.push(cur_seg);
+                                (acc, last_segs)
+                            } else {
+                                acc.push(collapse_segs(&last_segs));
+                                (acc, vec![cur_seg])
+                            }
+                        });
+                    reduced_segs.push(collapse_segs(&last));
+                    reduced_segs
+                } else {
+                    matches
+                };
+
+                reduced_segs.into_iter().map(|seg| (path.clone(), (seg.time_start, seg.time_end), seg.count, seg.words))
+                    .collect::<Vec<_>>()
+            }
+
         }).collect::<Vec<_>>();
-        all_matches.sort_unstable_by(|(_, _, n1), (_, _, n2)| n2.cmp(n1));
-        all_matches.truncate(100);
+
+        // Return top k segments
+        all_matches.sort_unstable_by(|(_, _, n1, _), (_, _, n2, _)| n2.partial_cmp(n1).unwrap());
         all_matches
     }
 
@@ -171,24 +245,30 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 None
             }
         };
+
+        // Compute colocation and total counts for all words in corpus
         let (colo_counts, all_counts): (Vec<HashMap<_,_>>, Vec<HashMap<_,_>>) =
             self.docs.par_iter()
             .progress_count(self.docs.len())
             .map(|(_, doc)| {
                 let words = &doc.meta.words;
-                let word_indices = (1..=max_ngram)
+                let word_indices_nested = (1..=max_ngram)
                     .map(|n| {
                         words.windows(n)
                             .enumerate()
                             .filter_map(|(i, ngram)| ngram_fmap(ngram).map(|s| (s, i)))
                             .collect_by_key()
                     }).collect::<Vec<_>>();
+
+                // word_indices maps {string => list of indices where the string occurs in doc}
                 let word_indices = self.par_merge(
-                    &word_indices,  &|mut a, b| { a.merge(b, |x, _y| x.clone()); a });
+                    &word_indices_nested,  &|mut a, b| { a.merge(b, |x, _y| x.clone()); a });
 
                 let mut colo_count = HashMap::new();
 
                 if let Some(idxs) = word_indices.get::<str>(&s) {
+                    // for each occurrence of the target word, increment the colocation count of
+                    // every n-gram in a window around the target
                     for idx in idxs.iter() {
                         let idx = *idx as i64;
                         let (start, end) = ((idx-span/2).max(0) as usize, ((idx+span/2) as usize).min(words.len()-1));
@@ -205,21 +285,28 @@ impl<Index: Indexed + Send> Corpus<Index> {
             })
             .collect::<Vec<_>>()
             .into_iter().unzip();
-        let corpus: i64 =
+
+        let corpus_size: i64 =
             self.docs.par_iter().map(|(_, doc)| (doc.meta.words.len()) as i64).sum();
 
+        // colo_total is {string => co-occurrence of string with target}
+        // all_total is {string => total occurrence of string in corpus}
         let colo_total = self.par_merge(&colo_counts, &|mut a, b| { a.merge(b, |x, y| x + y); a});
         let all_total = self.par_merge(&all_counts, &|mut a, b| { a.merge(b, |x, y| x + y); a});
 
         let min_cooccur_threshold = 100;
         let min_occur_threshold = 1000;
+
         let mut counts = colo_total.keys().collect::<Vec<_>>().par_iter().filter_map(|k| {
             let ab = *colo_total.get::<str>(k).expect("ab") as f64;
             let a = *all_total.get::<str>(&s).expect("a") as f64;
             let b = *all_total.get::<str>(k).expect("b") as f64;
             let span = span as f64;
-            let corpus = corpus as f64;
-            let score = f64::log10(ab * corpus / (a * b * span)) / f64::log10(2.0);
+            let corpus_size = corpus_size as f64;
+
+            // Mutual information formula from:
+            // http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0062343
+            let score = f64::log10(ab * corpus_size / (a * b * span)) / f64::log10(2.0);
 
             if ab as i64 > min_cooccur_threshold &&
                 b as i64 > min_occur_threshold {
@@ -229,8 +316,8 @@ impl<Index: Indexed + Send> Corpus<Index> {
             }
         }).collect::<Vec<_>>();
 
+        let min_score_threshold = 3.0;
         counts.sort_unstable_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
-        counts.truncate(1000);
-        counts
+        counts.into_iter().filter(|(_, score)| *score > min_score_threshold).collect::<Vec<_>>()
     }
 }

@@ -5,7 +5,7 @@ use std::io::Read;
 use ndarray;
 use std::io::Cursor;
 use byteorder::{ReadBytesExt, LittleEndian};
-use util::BlockTimer;
+use util::{BlockTimer, ParallelProgressIterator};
 use rand::{thread_rng, sample, Rng};
 use rustlearn::prelude::*;
 use rustlearn::svm::libsvm::svc::Hyperparameters;
@@ -36,7 +36,7 @@ impl Features {
         let feature_length = FEATURE_DIM;
         let num_bytes = feature_length * mem::size_of::<f32>();
 
-        let features: Vec<_> = (0..8).collect::<Vec<_>>().par_iter().flat_map(|i| {
+        let features: Vec<_> = (0..8).collect::<Vec<_>>().par_iter().progress_count(8).flat_map(|i| {
             let path = format!("/app/.cache/all_embs_flat_{}.bin", i);
             let mut file = File::open(path).expect("cannot open");
             let mut bytebuf = Vec::new();
