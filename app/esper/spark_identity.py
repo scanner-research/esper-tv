@@ -1,7 +1,7 @@
 from esper.stdlib import *
 from esper.prelude import *
 from query.models import *
-from esper.identity import major_canonical_shows
+from esper.major_canonical_shows import MAJOR_CANONICAL_SHOWS
 
 import pyspark.sql.functions as func
 from pyspark.sql.types import BooleanType, IntegerType, StringType, DoubleType
@@ -90,7 +90,7 @@ def get_screen_time_by_canonical_show_spark(name, face_identities_df, date_range
         k : v for k, v in get_screen_time_with_spark(
             name, 'canonical_show_id', face_identities_df,
             resolve_id_to_name=True, date_range=date_range
-        ).items() if k in major_canonical_shows
+        ).items() if k in MAJOR_CANONICAL_SHOWS
     }
 
 
@@ -119,15 +119,16 @@ def get_person_in_shot_similarity_spark(names, face_identities_df,
             ).select('shot_id').collect()
         }
     
-    sims = {}
+    sims = []
     for p1, v1 in shot_ids_by_name.items():
         for p2, v2 in shot_ids_by_name.items():
             if p2 >= p1:
                 continue
             intersection = len(v1 & v2)
-            sims[(p1, p2)] = (
+            sims.append((
+                p1, p2,
                 intersection / len(v1 | v2), 
                 intersection / len(v1), 
                 intersection / len(v2)
-            )
-    return sims
+            ))
+    return DataFrame(sims, columns=['Person 1', 'Person 2', 'Jaccard Sim', '(P1&P2)|P1', '(P1&P2)|P2'])

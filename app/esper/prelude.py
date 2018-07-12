@@ -3,7 +3,7 @@ from storehouse import StorageConfig, StorageBackend
 from query.base_models import Track, BoundingBox
 from django.db import connections, connection
 from django.db.models.query import QuerySet
-from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func
+from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func, FloatField, ExpressionWrapper
 from django.db.models.functions import Cast, Extract
 from django.utils import timezone
 from django_bulk_update.manager import BulkUpdateManager
@@ -36,6 +36,7 @@ import shutil
 import tempfile
 import random
 import socket
+from pathlib import Path
 from contextlib import contextmanager
 from collections import defaultdict
 
@@ -748,9 +749,93 @@ def mutual_info(p):
     return r.json()
 
 
-def find_segments(lexicon):
-    r = requests.post('http://localhost:8111/findsegments', json={'lexicon': lexicon})
-    return r.json()
+def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
+                  exclude_commercials=True):
+    from query.models import Commercial, Video
+    
+    r = requests.post(
+        'http://localhost:8111/findsegments', 
+        json={
+            'lexicon': lexicon, 
+            'merge_overlaps': merge_overlaps,
+            'threshold': threshold,
+            'window_size': window_size
+        }
+    )
+    
+    path_stem_to_video_id = {
+        Path(x['path']).stem : x['id']
+        for x in Video.objects.all().values('id', 'path')
+    }
+    def sub_path_to_video_id(sub_path):
+        return path_stem_to_video_id[Path(sub_path).stem.split('.')[0]]
+    
+    def exclude_com_helper(orig_segments):
+        commercials_by_video_id = defaultdict(list)
+        for x in Commercial.objects.all().annotate(
+                     start=ExpressionWrapper(F('min_frame') / F('video__fps'), FloatField()),
+                     end=ExpressionWrapper(F('max_frame') / F('video__fps'), FloatField())
+                 ).values('video__id', 'start', 'end').order_by('video__id', 'start'):
+            commercials_by_video_id[x['video__id']].append((x['start'], x['end']))
+
+        segments = []
+        for video_id, sub_path, (start, end), count, words in orig_segments:
+            if start >= end:
+                print('Warning: segment from {} starts after end ({}, {})'.format(
+                      sub_path, start, end))
+                continue
+                
+            segment_time = end - start
+            segment_com_time = 0.
+            segment_fragments = []
+            
+            # commercials are sorted by start time
+            for com_start, com_end in commercials_by_video_id[video_id]:
+                assert com_end >= com_start
+                
+                if com_start < start:
+                    if com_end < start:
+                        pass
+                    else:
+                        if com_end <= end: 
+                            # commercial overlaps start
+                            segment_com_time += com_end - start
+                            start = com_end
+                        else:
+                            # rest of the segment is a commercial
+                            segment_com_time += end - start
+                            break
+                            
+                else:
+                    if com_start <= end:
+                        # start up to commercial is not a commercial
+                        assert start <= end
+                        segment_fragments.append((video_id, sub_path, (start, com_start), count, words))
+
+                        if com_end <= end:
+                            # the segment contains a commercial
+                            segment_com_time += com_end - com_start
+                            start = com_end
+                        else:
+                            # rest of the segment is commercial
+                            segment_com_time += end - com_start
+                            break
+                        
+                    else:
+                        # commerical starts after the end
+                        assert start <= end
+                        segment_fragments.append((video_id, sub_path, (start, end), count, words))
+                        break
+            else:
+                # remainder of the video is commercial
+                assert start <= end
+                segment_fragments.append((video_id, sub_path, (start, end), count, words))
+                
+            segments.extend(segment_fragments)
+        return segments
+    
+    segments = [(sub_path_to_video_id(x[0]), *x) for x in r.json()]
+    return segments if not exclude_commercials else exclude_com_helper(segments)
 
 
 def face_knn(target=None, targets=None, ids=None, k=None,

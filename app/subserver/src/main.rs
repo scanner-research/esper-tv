@@ -77,12 +77,15 @@ fn mutual_info(input: Json<SubSearchInput>) -> Json<Vec<(String, f64)>> {
 
 #[derive(Serialize, Deserialize)]
 struct FindSegmentsInput {
-    lexicon: Vec<(String, f64)>
+    lexicon: Vec<(String, f64)>,
+    threshold: f64,
+    window_size: usize,
+    merge_overlaps: bool 
 }
 
 #[post("/findsegments", format="application/json", data="<input>")]
 fn find_segments(input: Json<FindSegmentsInput>) -> Json<Vec<(String, (f32, f32), f64, HashMap<String, usize>)>> {
-    Json(CORPUS.find_segments(input.lexicon.clone()))
+    Json(CORPUS.find_segments(input.lexicon.clone(), input.window_size, input.threshold, input.merge_overlaps))
 }
 
 

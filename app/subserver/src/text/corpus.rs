@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use std::time::Duration;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::fs;
 use rayon;
@@ -135,8 +136,9 @@ impl<Index: Indexed + Send> Corpus<Index> {
         ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" ")
     }
 
-    pub fn find_segments(&self, lexicon: Vec<(String, f64)>) -> Vec<(String, (f32, f32), f64, HashMap<String, usize>)> {
-        let window_size = 500;
+    pub fn find_segments(&self, lexicon: Vec<(String, f64)>, window_size: usize, min_score_threshold: f64, 
+                         merge_overlaps: bool) -> Vec<(String, (f32, f32), f64, HashMap<String, usize>)> 
+    {
         let max_ngram = 3;
         let stride = 50;
         let target_scores = lexicon.iter().map(|(s, score)| (s.as_str(), score)).collect::<HashMap<_, _>>();
@@ -182,7 +184,6 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 }).collect::<Vec<_>>();
 
             // Filter segments less than an small absolute threshold
-            let min_score_threshold = 50.0;
             let mut matches = matches.into_iter().filter(|seg| seg.count > min_score_threshold).collect::<Vec<_>>();
 
             // Merge overlapping segments
@@ -190,16 +191,33 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 vec![]
             } else {
                 let collapse_segs = |segs: &Vec<Segment>| -> Segment {
+                    let mut words: HashMap<String, usize> = HashMap::new();
+                    
+                    // TODO: do this in a more reasonable way. This takes the max.
+                    for seg in segs {
+                        for (key, val) in &seg.words {
+                            match words.entry(key.to_string()) {
+                                Entry::Occupied(o) => {
+                                    if *o.get() < *val {
+                                        *o.into_mut() = *val;
+                                    };
+                                },
+                                Entry::Vacant(v) => {
+                                    v.insert(*val);
+                                }
+                            };
+                        }
+                    }
+                    
                     Segment {
                         time_start: segs.first().unwrap().time_start,
                         time_end: segs.last().unwrap().time_end,
                         count: segs.iter().map(|seg| seg.count).sum::<f64>() / (segs.len() as f64),
-                        words: panic!()
+                        words: words
                     }
                 };
 
-                // Turn off overlap merging for now
-                let reduced_segs = if false {
+                let reduced_segs = if merge_overlaps {
                     let first = matches.remove(0);
                     let (mut reduced_segs, last) = matches.into_iter().fold(
                         (vec![], vec![first]), |(mut acc, mut last_segs), cur_seg| {

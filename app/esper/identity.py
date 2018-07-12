@@ -1,6 +1,6 @@
 from esper.prelude import *
 from esper.stdlib import *
-from esper.ingest import ingest_pose
+from esper.major_canonical_shows import *
 from query.models import *
 
 try:
@@ -16,6 +16,7 @@ import tempfile
 import random
 import string
 from datetime import timedelta
+from pandas import DataFrame
 
 from subprocess import check_call
 from esper import embed_google_images
@@ -33,7 +34,9 @@ GCS_MODEL_PREFIX = 'gs://esper/tvnews/face_identity_model'
 
 COLORS = ['LightCoral', 'SkyBlue', 'SandyBrown', 'Violet', 'Goldenrod', 'GreenYellow']
 
-NUM_MAJOR_CANONICAL_SHOWS = 40
+
+def get_color(i):
+    return COLORS[i % len(COLORS)]
 
 
 def minutesToSeconds(x):
@@ -42,10 +45,6 @@ def minutesToSeconds(x):
 
 def secondsToMinutes(x):
     return x / 60
-
-
-def get_color(i):
-    return COLORS[i % len(COLORS)]
 
 
 def random_hex_string(length):
@@ -530,10 +529,10 @@ def plot_histogram_of_face_sizes(model, max_bucket=35):
         width = 0.5
         rect1 = ax1.bar(ind, [y for _, y in data], width,
                         color='SkyBlue')
-        ax1.set_ylabel('Count', fontsize=14)
+        ax1.set_ylabel('Count')
         ax1.set_title('Distribution of {} face sizes across non-commercial videos'.format(model.name))
         ax1.set_xticks(ind)
-        ax1.set_xlabel('Area (%)', fontsize=14)
+        ax1.set_xlabel('Area (%)')
         
         xlabels = [str(x) for x in ind]
         xlabels[-1] = '>= {}'.format(xlabels[-1])
@@ -646,10 +645,10 @@ def plot_histogram_of_screen_times_by_video(name, show_name,
         width = 0.5
         rect1 = ax1.bar(ind, [y for _, y in data], width,
                         color='SkyBlue')
-        ax1.set_ylabel('Video count', fontsize=14)
+        ax1.set_ylabel('Video count')
         ax1.set_title('Histogram of {} screen time across videos for "{}"'.format(name, show_name))
         ax1.set_xticks(ind)
-        ax1.set_xlabel('Minutes', fontsize=14)
+        ax1.set_xlabel('Minutes')
         ax1.set_xticklabels(ind)
         plt.show()
     
@@ -763,10 +762,10 @@ def plot_distribution_of_appearance_times_by_video(model, show_name, max_minute=
         width = 0.5
         rect1 = ax1.bar(ind, [y for _, y in data], width,
                         color='SkyBlue')
-        ax1.set_ylabel('Count', fontsize=14)
+        ax1.set_ylabel('Count')
         ax1.set_title('Distribution of {} appearance times across videos for "{}"'.format(model.name, show_name))
         ax1.set_xticks(ind)
-        ax1.set_xlabel('Minute in show', fontsize=14)
+        ax1.set_xlabel('Minute in show')
         ax1.set_xticklabels([str(i) if i % 5 == 0 else '' for i in ind])
         plt.show()
     
@@ -810,43 +809,6 @@ def plot_distribution_of_identity_probabilities(model, show_name, bin_range=(20,
     plt.show()
 
 
-major_canonical_shows = [
-    x['show__canonical_show__name'] for x in
-    Video.objects.filter(
-        show__canonical_show__is_recurring=True
-    ).values(
-        'show__canonical_show__name'
-    ).annotate(
-        video_count=Count('id')
-    ).order_by(
-        '-video_count'
-    ).values(
-        'show__canonical_show__name'
-    )[:NUM_MAJOR_CANONICAL_SHOWS]
-]
-
-
-# Cache this
-total_shot_time_by_show = None
-
-
-def get_total_shot_time_by_show():
-    global total_shot_time_by_show
-    if total_shot_time_by_show is None:
-        query_results = Shot.objects.filter(
-            video__show__canonical_show__name__in=major_canonical_shows, in_commercial=False,
-        ).values(
-            'video__show__canonical_show__name'
-        ).annotate(
-            screen_time=Sum((F('max_frame') - F('min_frame')) / F('video__fps'),
-                            output_field=FloatField())
-        )
-        total_shot_time_by_show = { 
-            x['video__show__canonical_show__name'] : timedelta(seconds=x['screen_time']) for x in query_results 
-        }
-    return total_shot_time_by_show
-
-
 def get_screen_time_by_show(model, date_range=None):
     """
     Return the screentime by show name in a dict
@@ -882,7 +844,7 @@ def get_screen_time_by_show(model, date_range=None):
     screen_time_by_show = defaultdict(float)
     var_in_screen_time_by_show = defaultdict(float)
     
-    args_list = [(k, model.precision_by_bucket[k], model.face_ids_by_bucket[k], major_canonical_shows)
+    args_list = [(k, model.precision_by_bucket[k], model.face_ids_by_bucket[k], MAJOR_CANONICAL_SHOWS)
                  for k in sorted(model.buckets)]
     results = par_for(total_screen_time_by_bucket, args_list)
     
@@ -897,7 +859,7 @@ def get_screen_time_by_show(model, date_range=None):
     }
 
 
-def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_proportion=True):
+def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_runtime=True):
     """
     Plot per show screentime
     
@@ -910,7 +872,7 @@ def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_pr
         screen_times_by_show = [screen_times_by_show]
     assert len(names) == len(screen_times_by_show)
     
-    if plot_raw:
+    if normalize_by_total_runtime:
         def plot_bar_chart_by_show_raw(data_by_name):
             fig, ax1 = plt.subplots()
 
@@ -927,11 +889,11 @@ def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_pr
 
             ax1.legend()
             ax1.set_ylim(ymin=0.)
-            ax1.set_ylabel('Minutes', fontsize=14)
+            ax1.set_ylabel('Minutes')
             ax1.set_title('Minutes of non-commercial screen time by show for {}'.format(
                           ' & '.join(names)))
             ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xlabel('Show name')
             ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
             plt.show()
 
@@ -952,7 +914,7 @@ def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_pr
             data_to_plot.append(single_show_data_to_plot)
         plot_bar_chart_by_show_raw(data_to_plot)
         
-    if plot_proportion:
+    else:
         def plot_bar_chart_by_show_scaled(data_by_name):
             fig, ax1 = plt.subplots()
 
@@ -968,12 +930,12 @@ def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_pr
                                label=names[i])
 
             ax1.set_ylim(ymin=0.)
-            ax1.set_ylabel('Proportion of Show\'s Total Runtime', fontsize=14)
+            ax1.set_ylabel('Proportion of Show\'s Total Runtime')
             ax1.set_title('Proportion of non-commercial screen time by show for {}'.format(
                           ' & '.join(names)))
             ax1.legend()
             ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xlabel('Show name')
             ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
             plt.show()
 
@@ -999,7 +961,7 @@ def plot_screen_time_by_show(names, screen_times_by_show, plot_raw=True, plot_pr
     
     
 def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show, other_name,
-                                       other_units, plot_raw=True, plot_proportion=True,
+                                       other_units, normalize_by_total_runtime=True, 
                                        sort_by_other=False):
     """
     Plot the screen time for a single person along side another metric. 
@@ -1007,7 +969,7 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
     screen_time_by_show is a list of tuples of the form (show_name, time_delta, variance_seconds)
     other_by_show is a dict where keys are show_names
     """
-    if plot_raw:
+    if not normalize_by_total_runtime:
         def plot_bar_chart_by_show_raw(screen_time_data):
             fig, ax1 = plt.subplots()
 
@@ -1023,11 +985,11 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
                             label='Screen time')
 
             ax1.set_ylim(ymin=0.)
-            ax1.set_ylabel('Minutes', fontsize=14, color=get_color(0))
+            ax1.set_ylabel('Minutes', color=get_color(0))
             ax1.set_title('Minutes of non-commercial screen time and {} by show for {}'.format(
                           other_name.lower(), name))
             ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xlabel('Show name')
             ax1.set_xticklabels([x for x, _, _ in screen_time_data], rotation=45, ha='right')
 
             ax2 = ax1.twinx()
@@ -1054,8 +1016,8 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
                 show, secondsToMinutes(screen_time.total_seconds()), variance / 3600.
             ))
         plot_bar_chart_by_show_raw(screen_time_data_to_plot)
-    
-    if plot_proportion:
+        
+    else:
         normalized_other_by_show = {
             k : v / secondsToMinutes(get_total_shot_time_by_show()[k].total_seconds()) / 60 # hours
             for k, v in other_by_show.items() if k in screen_time_by_show.keys()
@@ -1075,12 +1037,12 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
                             label='Proportion of screen time')
 
             ax1.set_ylim(ymin=0.)
-            ax1.set_ylabel('Proportion of show\'s total runtime', fontsize=14, color=get_color(0))
+            ax1.set_ylabel('Proportion of show\'s total runtime', color=get_color(0))
             ax1.set_title('Proportion of non-commercial screen time and '
                           'normalized {} by show for {}'.format(other_name.lower(), name))
 
             ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xlabel('Show name')
             ax1.set_xticklabels([x for x, _, _ in screen_time_data], rotation=45, ha='right')
 
             ax2 = ax1.twinx()
@@ -1120,12 +1082,12 @@ def plot_difference_in_screen_time_by_show(names, screen_times_by_show, color=ge
                            yerr=stds, ecolor='black', color=color,
                            label='screentime({}) - screentime({})'.format(*names))
 
-            ax1.set_ylabel('Difference in proportion of show\'s total runtime', fontsize=14)
+            ax1.set_ylabel('Difference in proportion of show\'s total runtime')
             ax1.set_title('Difference in proportion of non-commercial screen time by show for {}'.format(
                           ' & '.join(names)))
             ax1.legend()
             ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xlabel('Show name')
             ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
             plt.show()
 
@@ -1153,12 +1115,12 @@ def plot_difference_in_screen_time_by_show(names, screen_times_by_show, color=ge
                            color=color,
                            label='screentime({}) / screentime({})'.format(*names))
 
-            ax1.set_ylabel('Ratio of screentime', fontsize=14)
+            ax1.set_ylabel('Ratio of screentime')
             ax1.set_title('Ratio of non-commercial screen time by show for {}'.format(
                           ' & '.join(names)))
             ax1.legend()
             ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name', fontsize=14)
+            ax1.set_xlabel('Show name')
             ax1.set_xticklabels([x for x, _ in data], rotation=45, ha='right')
             plt.show()
 
@@ -1194,18 +1156,19 @@ def get_person_in_shot_similarity(models, show_name=None, date_range=None,
             x['shot__id'] for x in qs.values('shot__id')
         }
     
-    sims = {}
+    sims = []
     for p1, v1 in shot_ids_by_name.items():
         for p2, v2 in shot_ids_by_name.items():
             if p2 >= p1:
                 continue
             intersection = len(v1 & v2)
-            sims[(p1, p2)] = (
+            sims.append((
+                p1, p2,
                 intersection / len(v1 | v2), 
                 intersection / len(v1), 
                 intersection / len(v2)
-            )
-    return sims
+            ))
+    return DataFrame(sims, columns=['Person 1', 'Person 2', 'Jaccard Sim', '(P1&P2)|P1', '(P1&P2)|P2'])
      
     
 def get_other_people_who_are_on_screen(model, precision_thresh=0.8, k=25, n_examples_per_cluster=10,
@@ -1234,6 +1197,7 @@ def get_other_people_who_are_on_screen(model, precision_thresh=0.8, k=25, n_exam
     return esper_widget(group_results(results))
 
 
+# TODO: move this to some place more appropriate
 def get_caption_mentions_by_show(phrases, show_count=False):
     result = caption_search(phrases)[0]
     show_to_mentions = defaultdict(int)
