@@ -158,7 +158,8 @@ def save_frame_labels(groups):
             all_people.append(Person(frame=frame))
 
             face_params = {
-                'bbox_score': 1.0,
+                # TODO: this became something else at some point. It interferes with saving labels.
+                # 'bbox_score': 1.0,
                 'labeler': face_labeler,
                 'person_id': None,
                 'shot_id': None,
