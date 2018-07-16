@@ -149,8 +149,8 @@ def get_overlap_between_topics(topics, window_size=100, threshold=50):
                 t1_secs / seconds_in_hour,
                 t2_secs / seconds_in_hour,
                 t1_and_t2_secs / seconds_in_hour, 
-                t1_and_t2_secs / t1_secs, 
-                t1_and_t2_secs / t2_secs
+                t1_and_t2_secs / (t1_secs + 1e-9), 
+                t1_and_t2_secs / (t2_secs + 1e-9)
             ))
             
     return DataFrame(results, columns=[
@@ -180,7 +180,8 @@ def get_topic_time_by_show(segments, date_range=None):
     return { k : timedelta(seconds=topic_time_by_show[k]) for k in MAJOR_CANONICAL_SHOWS }
 
 
-def plot_topic_time_by_show(topics, topic_times_by_show, normalize_by_total_runtime=True):
+def plot_topic_time_by_show(topics, topic_times_by_show, normalize_by_total_runtime=True, 
+                            sort_idx=0):
     if not isinstance(topics, list):
         topics = [topics]
         topic_times_by_show = [topic_times_by_show]
@@ -211,7 +212,7 @@ def plot_topic_time_by_show(topics, topic_times_by_show, normalize_by_total_runt
 
         show_sort_order = { 
             x[0] : i for i, x in enumerate(
-                sorted(topic_times_by_show[0].items(), 
+                sorted(topic_times_by_show[sort_idx].items(), 
                        key=lambda x: x[1].total_seconds()))
         }
 
@@ -227,6 +228,9 @@ def plot_topic_time_by_show(topics, topic_times_by_show, normalize_by_total_runt
         plot_bar_chart_by_show_raw(data_to_plot)
         
     else:
+        if sort_idx != 0:
+            raise NotImplementedError('Cannot set sort_idx on normalized graphs yet')
+        
         def plot_bar_chart_by_show_scaled(data_by_topic):
             fig, ax1 = plt.subplots()
 
@@ -269,7 +273,8 @@ def plot_topic_time_by_show(topics, topic_times_by_show, normalize_by_total_runt
         plot_bar_chart_by_show_scaled(data_to_plot)
         
 
-def plot_topic_by_show_over_time(topic, segments, years=range(2015, 2018), quarters=False):
+def plot_topic_by_show_over_time(topic, segments, years=range(2015, 2018), quarters=False,
+                                 sort_idx=0):
     if quarters:
         for year in years:
             topic_times_by_show = []
@@ -294,7 +299,8 @@ def plot_topic_by_show_over_time(topic, segments, years=range(2015, 2018), quart
 
             print('Coverage of {} in {}'.format(topic, year))
             plot_topic_time_by_show(series_names, topic_times_by_show, 
-                                    normalize_by_total_runtime=False)
+                                    normalize_by_total_runtime=False, 
+                                    sort_idx=sort_idx)
             
     else:
         topic_times_by_show = []
@@ -307,4 +313,5 @@ def plot_topic_by_show_over_time(topic, segments, years=range(2015, 2018), quart
             ))
             series_names.append('{} ({})'.format(topic, year))
         plot_topic_time_by_show(series_names, topic_times_by_show, 
-                                normalize_by_total_runtime=False)
+                                normalize_by_total_runtime=False,
+                                sort_idx=sort_idx)
