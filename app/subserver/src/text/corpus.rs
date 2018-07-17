@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use std::time::Duration;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::fs;
@@ -9,6 +9,12 @@ use datatypes::{Document, Document_Word as Word, Document_PartOfSpeech as POS};
 use protobuf::{Message, CodedInputStream};
 use util::{CollectByKey, Merge, ParallelProgressIterator};
 use text::index::Indexed;
+
+// use std::collections::HashMap;
+// pub type Map<K, V> = HashMap<K, V>;
+
+use fnv::FnvHashMap;
+pub type Map<K, V> = FnvHashMap<K, V>;
 
 impl Word {
     pub fn on_slice<'a: 'b, 'b>(&'a self, s: &'b str) -> &'b str {
@@ -24,7 +30,7 @@ struct IndexedDocument<Index> {
 }
 
 pub struct Corpus<Index> {
-    docs: HashMap<String, IndexedDocument<Index>>
+    docs: Map<String, IndexedDocument<Index>>
 }
 
 fn _duration_to_float(d: Duration) -> f64 {
@@ -41,8 +47,8 @@ impl<Index: Indexed + Send> Corpus<Index> {
     pub fn new(paths: Vec<String>) -> Corpus<Index> {
         // For each subtitle file, load the corresponding flattened transcript and
         let path_iter = paths.par_iter();
-        // let path_iter = paths.par_iter().take(1000);
-        let docs: HashMap<_, _> = path_iter.progress_count(paths.len()).map(|path| {
+        //let path_iter = paths.par_iter().take(10000);
+        let docs: Map<_, _> = path_iter.progress_count(paths.len()).map(|path| {
             let item_name = path.split("/").last().unwrap().split(".").next().unwrap();
             let meta_path = format!("{}/meta/{}.bin", SUB_CACHE_DIR, item_name);
             let flat_path = format!("{}/flat/{}.txt", SUB_CACHE_DIR, item_name);
@@ -83,7 +89,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
         Corpus { docs }
     }
 
-    fn find_with<T, F>(&self, s: String, f: F) -> HashMap<String, Vec<T>>
+    fn find_with<T, F>(&self, s: String, f: F) -> Map<String, Vec<T>>
         where T: Send, F: (Fn(usize, &IndexedDocument<Index>) -> T) + Sync
     {
         self.docs.par_iter().map(|(path, doc)| {
@@ -93,7 +99,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
         }).filter(|(_, v)| v.len() > 0).collect()
     }
 
-    pub fn find<T: Into<String>>(&self, s: T) -> HashMap<String, Vec<(f64, f64)>> {
+    pub fn find<T: Into<String>>(&self, s: T) -> Map<String, Vec<(f64, f64)>> {
         let s: String = s.into();
         self.find_with(s, |i, doc| {
             let word = &doc.meta.words[i];
@@ -136,19 +142,19 @@ impl<Index: Indexed + Send> Corpus<Index> {
         ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" ")
     }
 
-    pub fn find_segments(&self, lexicon: Vec<(String, f64)>, window_size: usize, min_score_threshold: f64, 
-                         merge_overlaps: bool) -> Vec<(String, (f32, f32), f64, HashMap<String, usize>)> 
+    pub fn find_segments(&self, lexicon: Vec<(String, f64)>, window_size: usize, min_score_threshold: f64,
+                         merge_overlaps: bool) -> Vec<(String, (f32, f32), f64, Map<String, usize>)>
     {
         let max_ngram = 3;
         let stride = 50;
-        let target_scores = lexicon.iter().map(|(s, score)| (s.as_str(), score)).collect::<HashMap<_, _>>();
+        let target_scores = lexicon.iter().map(|(s, score)| (s.as_str(), score)).collect::<Map<_, _>>();
 
         #[derive(Clone)]
         struct Segment {
             time_start: f32,
             time_end: f32,
             count: f64,
-            words: HashMap<String, usize>
+            words: Map<String, usize>
         }
 
         // For each document:
@@ -168,7 +174,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                         }).collect::<Vec<_>>()
                     }).unzip();
 
-                    let mut word_count = HashMap::new();
+                    let mut word_count = Map::default();
                     for word in words {
                         if let Some(s) = word {
                             *word_count.entry(s).or_insert(0) += 1
@@ -191,8 +197,8 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 vec![]
             } else {
                 let collapse_segs = |segs: &Vec<Segment>| -> Segment {
-                    let mut words: HashMap<String, usize> = HashMap::new();
-                    
+                    let mut words: Map<String, usize> = Map::default();
+
                     // TODO: do this in a more reasonable way. This takes the max.
                     for seg in segs {
                         for (key, val) in &seg.words {
@@ -208,7 +214,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                             };
                         }
                     }
-                    
+
                     Segment {
                         time_start: segs.first().unwrap().time_start,
                         time_end: segs.last().unwrap().time_end,
@@ -265,7 +271,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
         };
 
         // Compute colocation and total counts for all words in corpus
-        let (colo_counts, all_counts): (Vec<HashMap<_,_>>, Vec<HashMap<_,_>>) =
+        let (colo_counts, all_counts): (Vec<Map<_,_>>, Vec<Map<_,_>>) =
             self.docs.par_iter()
             .progress_count(self.docs.len())
             .map(|(_, doc)| {
@@ -282,7 +288,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 let word_indices = self.par_merge(
                     &word_indices_nested,  &|mut a, b| { a.merge(b, |x, _y| x.clone()); a });
 
-                let mut colo_count = HashMap::new();
+                let mut colo_count = Map::default();
 
                 if let Some(idxs) = word_indices.get::<str>(&s) {
                     // for each occurrence of the target word, increment the colocation count of
@@ -299,7 +305,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                         }
                     }
                 };
-                (colo_count, word_indices.into_iter().map(|(k, v)| (k, v.len())).collect::<HashMap<_,_>>())
+                (colo_count, word_indices.into_iter().map(|(k, v)| (k, v.len())).collect::<Map<_,_>>())
             })
             .collect::<Vec<_>>()
             .into_iter().unzip();

@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::time::Instant;
 use indicatif::{ProgressBar, ProgressStyle};
 use flame;
-
+use fnv::FnvHashMap;
 
 // Iterator function for taking Vec<(K, V)> -> Map<K, Vec<V>>
 pub trait CollectByKey {
@@ -32,28 +32,34 @@ pub trait Merge {
     type Key;
     type Value;
 
-    fn merge<F>(&mut self, other: HashMap<Self::Key, Self::Value>, f: F)
+    fn merge<F>(&mut self, other: Self, f: F)
         where F: Fn(&Self::Value, &Self::Value) -> Self::Value;
 }
 
-impl<Key, Value> Merge for HashMap<Key, Value> where Key: Hash + Eq {
-    type Key = Key;
-    type Value = Value;
+macro_rules! map_impl {
+    ($ty:tt) => {
+        impl<Key, Value> Merge for $ty<Key, Value> where Key: Hash + Eq {
+            type Key = Key;
+            type Value = Value;
 
-    fn merge<F>(&mut self, other: HashMap<Self::Key, Self::Value>, f: F)
-        where F: Fn(&Self::Value, &Self::Value) -> Self::Value
-    {
-        for (k, v) in other {
-            if self.contains_key(&k) {
-                let merged = f(self.get(&k).unwrap(), &v);
-                self.insert(k, merged);
-            } else {
-                self.insert(k, v);
+            fn merge<F>(&mut self, other: $ty<Self::Key, Self::Value>, f: F)
+                where F: Fn(&Self::Value, &Self::Value) -> Self::Value
+            {
+                for (k, v) in other {
+                    if self.contains_key(&k) {
+                        let merged = f(self.get(&k).unwrap(), &v);
+                        self.insert(k, merged);
+                    } else {
+                        self.insert(k, v);
+                    }
+                }
             }
         }
     }
 }
 
+map_impl!{HashMap}
+map_impl!{FnvHashMap}
 
 // Lexically scoped timer
 pub struct BlockTimer {
