@@ -22,7 +22,7 @@ class VideoRow(object):
     def __init__(
         self, 
         video, # Video ORM object
-        shots=None, # [Shot]
+        shots=None, # [Shot] Pass these manually if you are worried about database performance
         
         # Shot -> Float (between [0, 1])
         shot_value_fn=lambda x: min(1.0, (x.max_frame - x.min_frame) / 240), # Default: shot length
@@ -92,7 +92,9 @@ def plot_video_timelines(
                 width,
                 height,
                 fc=shot_color_map[shot_info.display_label],
+                label=shot_info.display_label if shot_info.display_label not in defined_labels else None
             )
+            defined_labels.add(shot_info.display_label)
             ax.add_patch(rect)
         
         # Plot shot boundaries
@@ -118,7 +120,7 @@ def plot_video_timelines(
                     linewidth=4,
                     label=label if label not in defined_labels else None
                 )
-            defined_labels.add(label)
+                defined_labels.add(label)
             vert_ofs += 0.075
             
         # Plot discrete labels
@@ -141,6 +143,6 @@ def plot_video_timelines(
     if max_length:
         plt.xlim([0, max([x.length.total_seconds() for x in video_rows])])
     plt.xlabel('video time (s)')
-    plt.legend(loc=1)
+    plt.legend(loc=1, frameon=True, edgecolor='Black', facecolor='White', framealpha=0.7)
     plt.show()
     
