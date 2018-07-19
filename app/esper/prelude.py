@@ -784,6 +784,10 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                 print('Warning: segment from {} starts after end ({}, {})'.format(
                       sub_path, start, end))
                 continue
+            if start < 0:
+#                 print('Warning: segment from {} has negative start time ({}, {})'.format(
+#                       sub_path, start, end))
+                start = 0.
                 
             segment_time = end - start
             segment_com_time = 0.
