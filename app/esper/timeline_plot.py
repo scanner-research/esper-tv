@@ -25,6 +25,14 @@ VideoSegment = namedtuple('Shot', [
 ])
 
 
+def parse_video_filename(filename):
+    tokens = filename.split('_')
+    channel = tokens[0][:-1]
+    date = tokens[1][:4] + '-' + tokens[1][4:6] + '-' + tokens[1][6:] + ':' + tokens[2][:2]
+    show = ' '.join(tokens[3:])
+    return '[{} {}] {}'.format(channel, date, show) 
+
+
 class VideoRow(object):
     
     def __init__(
@@ -42,7 +50,7 @@ class VideoRow(object):
         interval_labels=defaultdict(list), # { Key : [(timedelta, timedelta), ...] }
         discrete_labels=defaultdict(list) # { Key : [timedelta, ...] }
     ):
-        self.name = video.path.split('/')[-1].split('.')[0]
+        self.name = parse_video_filename(video.path.split('/')[-1].split('.')[0])
         
         fps = video.fps
         self.length = timedelta(seconds=video.num_frames / fps)
@@ -75,7 +83,8 @@ def plot_video_timelines(
     },
     interval_label_color_map={},
     discrete_label_shape_map={},
-    max_length=None # timedelta for video length
+    max_length=None, # timedelta for video length
+    out_file=None    # save to a file (e.g., a pdf)
 ):
     fig = plt.figure()
     fig.set_size_inches(14, 2 * len(video_rows))
@@ -134,7 +143,7 @@ def plot_video_timelines(
                     [td.total_seconds() for td in interval], 
                     (i - vert_ofs, i- vert_ofs), 
                     interval_label_color_map[label], 
-                    linewidth=4,
+                    linewidth=2,
                     label=label if label not in defined_labels else None
                 )
                 defined_labels.add(label)
@@ -145,6 +154,7 @@ def plot_video_timelines(
             plt.scatter(
                 [td.total_seconds() for td in offsets], 
                 [i - vert_ofs] * len(offsets),
+                s=2,
                 c='Black',
                 marker=discrete_label_shape_map[label],
                 label=label if label not in defined_labels else None
@@ -170,6 +180,8 @@ def plot_video_timelines(
     plt.xticks(range(0, int(max_length), 3600))
     
     plt.xlabel('video time (s)')
-    plt.legend(loc=1, frameon=True, edgecolor='Black', facecolor='White', framealpha=0.7)
+    plt.legend(loc=0, frameon=True, edgecolor='Black', facecolor='White', framealpha=0.7)
+    if out_file is not None:
+        plt.save_fig(out_file)
     plt.show()
     

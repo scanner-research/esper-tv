@@ -750,7 +750,7 @@ def mutual_info(p):
 
 
 def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
-                  exclude_commercials=True):
+                  exclude_commercials=True, silent_mode=True):
     from query.models import Commercial, Video
     
     r = requests.post(
@@ -777,16 +777,19 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                      end=ExpressionWrapper(F('max_frame') / F('video__fps'), FloatField())
                  ).values('video__id', 'start', 'end').order_by('video__id', 'start'):
             commercials_by_video_id[x['video__id']].append((x['start'], x['end']))
-
+            
         segments = []
         for video_id, sub_path, (start, end), count, words in orig_segments:
             if start >= end:
-                print('Warning: segment from {} starts after end ({}, {})'.format(
-                      sub_path, start, end))
+                if not silent_mode:
+                    print('Warning: segment from {} starts after end ({}, {})'.format(
+                          sub_path, start, end))
                 continue
-            if start < 0:
-#                 print('Warning: segment from {} has negative start time ({}, {})'.format(
-#                       sub_path, start, end))
+                
+            if start <= 0:
+                if not silent_mode:
+                    print('Warning: segment from {} starts before 0 ({}, {})'.format(
+                          sub_path, start, end))
                 start = 0.
                 
             segment_time = end - start
