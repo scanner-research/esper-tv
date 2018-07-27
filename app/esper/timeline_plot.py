@@ -30,7 +30,7 @@ def parse_video_filename(filename):
     channel = tokens[0][:-1]
     date = tokens[1][:4] + '-' + tokens[1][4:6] + '-' + tokens[1][6:] + ':' + tokens[2][:2]
     show = ' '.join(tokens[3:])
-    return '[{} {}] {}'.format(channel, date, show) 
+    return channel, date, show
 
 
 class VideoRow(object):
@@ -50,7 +50,8 @@ class VideoRow(object):
         interval_labels=defaultdict(list), # { Key : [(timedelta, timedelta), ...] }
         discrete_labels=defaultdict(list) # { Key : [timedelta, ...] }
     ):
-        self.name = parse_video_filename(video.path.split('/')[-1].split('.')[0])
+        self.id = video.id
+        self.channel, self.date, self.show = parse_video_filename(video.path.split('/')[-1].split('.')[0])
         
         fps = video.fps
         self.length = timedelta(seconds=video.num_frames / fps)
@@ -84,7 +85,9 @@ def plot_video_timelines(
     interval_label_color_map={},
     discrete_label_shape_map={},
     max_length=None, # timedelta for video length
-    out_file=None    # save to a file (e.g., a pdf)
+    out_file=None,   # save to a file (e.g., a pdf)
+    show_legend=True,
+    min_y_margin=None
 ):
     fig = plt.figure()
     fig.set_size_inches(14, 2 * len(video_rows))
@@ -102,8 +105,8 @@ def plot_video_timelines(
     defined_labels = set()
     
     y_labels = []
-    for i, row in enumerate(sorted(video_rows, key=lambda x: x.name)):
-        y_labels.append(row.name)
+    for i, row in enumerate(video_rows):
+        y_labels.append('[{} {}]\n{}\n(id: {})'.format(row.channel, row.date, row.show, row.id))
         
         # Plot segments
         for segment_info in row.segments:
@@ -147,7 +150,7 @@ def plot_video_timelines(
                     label=label if label not in defined_labels else None
                 )
                 defined_labels.add(label)
-            vert_ofs += 0.075
+            vert_ofs += 0.05
             
         # Plot discrete labels
         for label, offsets in row.discrete_labels.items():
@@ -160,10 +163,14 @@ def plot_video_timelines(
                 label=label if label not in defined_labels else None
             )
             defined_labels.add(label)
-            vert_ofs += 0.075
+            vert_ofs += 0.05
             
     ax.set_yticks([0.5 + i for i in range(len(video_rows))], minor=True)
     
+    # TODO: this is a hack to fix the margins
+    if min_y_margin is not None:
+        ax.text(-min_y_margin, 0, '.')
+        
     plt.yticks(range(len(video_rows)), y_labels)
     plt.ylim([-0.5, len(video_rows) - 0.5])
     
@@ -180,7 +187,8 @@ def plot_video_timelines(
     plt.xticks(range(0, int(max_length), 3600))
     
     plt.xlabel('video time (s)')
-    plt.legend(loc=0, frameon=True, edgecolor='Black', facecolor='White', framealpha=0.7)
+    if show_legend:
+        plt.legend(loc=0, frameon=True, edgecolor='Black', facecolor='White', framealpha=0.7)
     if out_file is not None:
         plt.save_fig(out_file)
     plt.show()

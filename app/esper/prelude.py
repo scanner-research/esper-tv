@@ -750,7 +750,7 @@ def mutual_info(p):
 
 
 def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
-                  exclude_commercials=True, silent_mode=True):
+                  exclude_commercials=True, docs=[], silent_mode=True):
     from query.models import Commercial, Video
     
     r = requests.post(
@@ -759,7 +759,8 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
             'lexicon': lexicon, 
             'merge_overlaps': merge_overlaps,
             'threshold': threshold,
-            'window_size': window_size
+            'window_size': window_size,
+            'docs': docs
         }
     )
     

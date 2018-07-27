@@ -143,7 +143,8 @@ impl<Index: Indexed + Send> Corpus<Index> {
     }
 
     pub fn find_segments(&self, lexicon: Vec<(String, f64)>, window_size: usize, min_score_threshold: f64,
-                         merge_overlaps: bool) -> Vec<(String, (f32, f32), f64, Map<String, usize>)>
+                         merge_overlaps: bool, doc_set: HashSet<String>
+    ) -> Vec<(String, (f32, f32), f64, Map<String, usize>)>
     {
         let max_ngram = 3;
         let stride = 50;
@@ -158,7 +159,11 @@ impl<Index: Indexed + Send> Corpus<Index> {
         }
 
         // For each document:
-        let mut all_matches = self.docs.par_iter().progress_count(self.docs.len()).flat_map(|(path, doc)| {
+        let mut all_matches = self.docs.par_iter().filter(
+            |(path, _)| if doc_set.is_empty() { true } else { doc_set.contains(*path) }
+        ).progress_count(
+            self.docs.len()
+        ).flat_map(|(path, doc)| {
             // For each segment window, convolve with lexicon to produce segment score
             let matches = doc.meta.words
                 .windows(window_size)

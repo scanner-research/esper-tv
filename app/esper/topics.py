@@ -2,6 +2,7 @@ from esper.prelude import *
 from esper.stdlib import *
 from esper.major_canonical_shows import *
 from esper.topics import *
+from query.models import *
 
 import calendar
 from datetime import timedelta
@@ -76,15 +77,7 @@ def plot_total_segment_length_vs_threshold(lexicon, thresholds, window_size=100)
     plt.show()
     
     
-def get_overlap_between_topics(topics, window_size=100, threshold=50):
-    segments_by_topic = {
-        topic : find_segments(
-            mutual_info(topic), 
-            window_size=window_size, 
-            threshold=threshold, 
-            merge_overlaps=True
-        ) for topic in topics
-    }
+def get_overlap_between_topics(topic_to_segments):
     
     def get_video_id_to_segments(segs):
         video_id_to_segments = defaultdict(list)
@@ -133,14 +126,14 @@ def get_overlap_between_topics(topics, window_size=100, threshold=50):
         return timedelta(seconds=overlap_seconds)
     
     results = []
-    for t1 in topics:
-        for t2 in topics:
+    for t1 in topic_to_segments:
+        for t2 in topic_to_segments:
             if t1 <= t2:
                 continue
                 
-            t1_secs = get_total_segment_length(segments_by_topic[t1]).total_seconds()
-            t2_secs = get_total_segment_length(segments_by_topic[t2]).total_seconds()
-            t1_and_t2_secs = compute_overlap(segments_by_topic[t1], segments_by_topic[t2]).total_seconds()
+            t1_secs = get_total_segment_length(topic_to_segments[t1]).total_seconds()
+            t2_secs = get_total_segment_length(topic_to_segments[t2]).total_seconds()
+            t1_and_t2_secs = compute_overlap(topic_to_segments[t1], topic_to_segments[t2]).total_seconds()
             
             seconds_in_hour = 60 * 60
             results.append((
@@ -158,6 +151,43 @@ def get_overlap_between_topics(topics, window_size=100, threshold=50):
     ])
 
 
+def get_topic_time_by_video(segments):
+    """Get the total segment length by video id (assumes overlaps have alread been merged)"""
+    result = defaultdict(float)
+    for video_id, sub_path, (start, end), _, _ in segments:
+        assert start <= end
+        result[(video_id, sub_path)] += end - start
+    return { k : timedelta(seconds=v) for k, v in result.items() }
+        
+    
+def get_caption_mentions_by_show(phrases, show_count=False):
+    result = caption_search(phrases)[0]
+    show_to_mentions = defaultdict(int)
+    
+    if show_count:
+        video_count_by_show = {
+            x['show__canonical_show__name'] : x['count'] for x in
+            Video.objects.filter(id__in=set(result.keys())).values(
+                'show__canonical_show'
+            ).annotate(
+                count=Count('id')
+            ).values('count', 'show__canonical_show__name')
+        }
+        for k, v in video_count_by_show.items():
+            show_to_mentions[k] += v
+    else:
+        video_to_show = {
+            x['id'] : x['show__canonical_show__name'] for x in
+            Video.objects.filter(id__in=set(result.keys())).values(
+                'id', 'show__canonical_show__name'
+            )
+        }
+        for k, v in result.items():
+            show_to_mentions[video_to_show[k]] += len(v)
+    
+    return show_to_mentions
+    
+
 def get_topic_time_by_show(segments, date_range=None):
     qs = Video.objects.filter(
         id__in={ x[0] for x in segments }
@@ -172,6 +202,7 @@ def get_topic_time_by_show(segments, date_range=None):
     
     topic_time_by_show = defaultdict(float)
     for video_id, _, (start, end), _, _ in segments:
+        assert start <= end
         try:
             topic_time_by_show[video_id_to_canonical_show[video_id]] += end - start
         except KeyError:
@@ -315,3 +346,39 @@ def plot_topic_by_show_over_time(topic, segments, years=range(2015, 2018), quart
         plot_topic_time_by_show(series_names, topic_times_by_show, 
                                 normalize_by_total_runtime=False,
                                 sort_idx=sort_idx)
+
+
+MONTH_NAMES = ['Unk', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
+def plot_topic_over_time_by_channel(topic, segments, threshold=None, years=[2015, 2016, 2017]):
+    video_id_to_time_and_channel = { 
+        v['id'] : (v['time'], v['channel__name']) for v in Video.objects.all().values('id', 'time', 'channel__name')
+    }
+    month_to_time = defaultdict(float)
+    for video_id, _, (start, end), score, _ in segments:
+        if threshold is None or score >= threshold:
+            airtime, channel = video_id_to_time_and_channel[video_id]
+            month_to_time[(channel, airtime.year, airtime.month)] += end - start
+    
+    x = defaultdict(list)
+    y = defaultdict(list)
+    
+    channel_names = [c.name for c in Channel.objects.all()]
+    x_labels = []
+    for year in years:
+        for month in range(1, 13):
+            x_labels.append('{}-{}'.format(MONTH_NAMES[month], year % 2000))
+            for channel in channel_names:
+                y[channel].append(month_to_time[(channel, year, month)] / 60)    
+            
+    for channel in channel_names:
+        plt.plot(range(len(x_labels)), y[channel], '-o', label=channel)
+            
+    plt.legend()
+    plt.title('Topic time for "{}" over time by channel'.format(topic))
+    plt.xticks(range(len(x_labels)), x_labels, rotation=45, ha='right')
+    plt.ylabel('Time (min)')
+    plt.xlabel('Month-Year')
+    plt.show()        
+        

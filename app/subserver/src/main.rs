@@ -81,12 +81,17 @@ struct FindSegmentsInput {
     lexicon: Vec<(String, f64)>,
     threshold: f64,
     window_size: usize,
-    merge_overlaps: bool
+    merge_overlaps: bool,
+    docs: Vec<String>
 }
 
 #[post("/findsegments", format="application/json", data="<input>")]
 fn find_segments(input: Json<FindSegmentsInput>) -> Json<Vec<(String, (f32, f32), f64, Map<String, usize>)>> {
-    Json(CORPUS.find_segments(input.lexicon.clone(), input.window_size, input.threshold, input.merge_overlaps))
+    Json(
+        CORPUS.find_segments(
+            input.lexicon.clone(), input.window_size, input.threshold, input.merge_overlaps,
+            input.docs.iter().cloned().collect()
+    ))
 }
 
 

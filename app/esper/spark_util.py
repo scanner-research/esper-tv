@@ -204,23 +204,23 @@ def get_segments():
     return segments
 
 
-def _annotate_host_probability(faces, threshold=0.3):
+def _annotate_host_probability(faces, identity_threshold=0.3):
     face_identities = spark.load('query_faceidentity').alias('face_identity')
-    face_identities = face_identities.where(face_identities.probability > threshold)
+    face_identities = face_identities.where(face_identities.probability > identity_threshold)
     
-    faces = get_faces(annotate_host_probability=False).alias('faces')
-    faces = faces.where(faces.in_commercial == False)
+    faces2 = get_faces(annotate_host_probability=False).alias('faces2')
+    faces2 = faces2.where(faces2.in_commercial == False)
     
     face_identities = face_identities.join(
-        faces, face_identities.face_id == faces.id
+        faces2, face_identities.face_id == faces2.id
     ).select(
         'face_identity.face_id',
         'face_identity.identity_id',
         'face_identity.labeler_id',
         'face_identity.probability',
-        'faces.show_id', 
-        'faces.canonical_show_id',
-        'faces.channel_id'
+        'faces2.show_id', 
+        'faces2.canonical_show_id',
+        'faces2.channel_id'
     )
     
     show_id_to_host_ids = defaultdict(set)
@@ -243,12 +243,12 @@ def _annotate_host_probability(faces, threshold=0.3):
             face_id_to_host_prob[host.face_id] = host.probability
             
     def host_probability_helper(face_id):
-        return face_id_to_host_prob[face_id]
+        return face_id_to_host_prob.get(face_id, 0.)
     
     host_prob_udf = func.udf(host_probability_helper, DoubleType())
     faces = faces.withColumn('host_probability', host_prob_udf('id'))
     return faces
-
+    
 
 def get_faces(annotate_host_probability=True):
     faces = spark.load('query_face').alias('faces')
@@ -268,7 +268,8 @@ def get_faces(annotate_host_probability=True):
         'shots.in_commercial',
         'shots.hour',
         'shots.week_day',
-        'shots.time'
+        'shots.time',
+        'shots.fps'
     )
     
     faces = faces.withColumn('height', faces.bbox_y2 - faces.bbox_y1)
@@ -280,6 +281,41 @@ def get_faces(annotate_host_probability=True):
     
     return faces
     
+    
+def _annotate_size_percentile(face_genders, gender_threshold=0.9):
+    face_genders2 = face_genders.where(face_genders.probability > gender_threshold)
+    
+    num_buckets = 10000
+    face_genders2 = face_genders2.withColumn(
+        'height_bucket', (face_genders2.height * num_buckets).cast(IntegerType())
+    )
+    
+    key_to_size_buckets = defaultdict(lambda: {})
+    for x in face_genders2.groupBy(
+                'gender_id', 'in_commercial', 'height_bucket'
+            ).count().collect():
+        key_to_size_buckets[(
+            x['gender_id'], x['in_commercial']
+        )][x['height_bucket']] = x['count']
+
+    key_to_size_cdf_buckets = defaultdict(lambda: ([0.] * num_buckets) + [100.])
+    for k, size_buckets in key_to_size_buckets.items():
+        denom = sum(size_buckets.values())
+        acc_sum = 0.
+        for b in range(num_buckets):
+            acc_sum += size_buckets.get(b, 0.)
+            key_to_size_cdf_buckets[k][b] = 100. * acc_sum / denom
+            
+    def size_percentile_helper(gender_id, in_commercial, height):
+        return key_to_size_cdf_buckets[(gender_id, in_commercial)][int(height * num_buckets)]
+    
+    size_percentile_udf = func.udf(size_percentile_helper, DoubleType())
+    face_genders = face_genders.withColumn(
+        'size_percentile',
+        size_percentile_udf('gender_id', 'in_commercial', 'height')
+    )
+    return face_genders
+
 
 def get_face_genders():
     face_genders = spark.load('query_facegender').alias('face_genders')
@@ -301,6 +337,7 @@ def get_face_genders():
         'faces.duration',
         'faces.min_frame',
         'faces.max_frame',
+        'faces.fps',
         'faces.in_commercial',
         'faces.hour',
         'faces.week_day',
@@ -309,6 +346,7 @@ def get_face_genders():
         'faces.host_probability'
     )
     
+    face_genders = _annotate_size_percentile(face_genders)
     return face_genders
 
 
@@ -332,6 +370,7 @@ def get_face_identities():
         'faces.duration',
         'faces.min_frame',
         'faces.max_frame',
+        'faces.fps',
         'faces.in_commercial',
         'faces.hour',
         'faces.week_day',
@@ -341,3 +380,84 @@ def get_face_identities():
     )
     
     return face_identities
+
+
+def annotate_interval_overlap(df, video_id_to_intervals, new_column_name='overlap_seconds'):
+    """
+    df is a dataframe with video_id, min_frame, max_frame and fps
+    video_id_to_intervals is a dict mapping video_id to lists of tuples of (float, float)
+    
+    returns a dataframe with a new column that contains the number of seconds overlapped
+    assuming the intervals passed do not overlap
+    """
+    assert ('video_id' in df.columns)
+    assert ('min_frame' in df.columns)
+    assert ('max_frame' in df.columns)
+    assert ('fps' in df.columns)
+    assert (new_column_name not in df.columns)
+    
+    def overlap_helper(video_id, min_frame, max_frame, fps):
+        min_sec = min_frame / fps
+        max_sec = max_frame / fps
+        
+        acc_overlap = 0.
+        for interval in video_id_to_intervals.get(video_id, []):
+            int_min_sec, int_max_sec = interval
+            assert int_min_sec <= int_max_sec
+            tmp = min(max_sec, int_max_sec) - max(min_sec, int_min_sec)
+            if tmp > 0:
+                acc_overlap += tmp
+        return acc_overlap
+    
+    overlap_udf = func.udf(overlap_helper, DoubleType())
+    return df.withColumn(new_column_name, overlap_udf('video_id', 'min_frame', 'max_frame', 'fps'))
+
+
+def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=[], 
+                             group_by_key_fn=lambda x: x):
+    """
+    Sum a column over distinct values 
+    (this is inefficient, but Spark does not have an easy way to do it...)
+    
+    sum_column: column name
+    distinct_columns & group_by_columns: list of column names
+    group_by_key_fn: a custom function for group by applied to the group by columns
+    
+    returns float or dict from group_by columns to float
+    """
+    if len(group_by_columns) > 0:
+        result = defaultdict(float)
+    else:
+        result = 0.
+    distinct_set = set()
+    for x in df.select(sum_column, *distinct_columns, *group_by_columns).collect():
+        distinct_key = tuple(x[col] for col in distinct_columns)
+        if distinct_key in distinct_set:
+            continue
+        else:
+            distinct_set.add(distinct_key)
+        if len(group_by_columns) > 0:
+            group_key = group_by_key_fn(tuple(x[col] for col in group_by_columns))
+            result[group_key] += x[sum_column]
+        else:
+            result += x[sum_column]
+    return result
+
+
+DUMMY_SUM_COLUMN = 'DUMMY_SUM_COLUMN'
+
+
+def count_distinct_over_column(df, distinct_columns, group_by_columns=[], 
+                               group_by_key_fn=lambda x: x):
+    result = sum_distinct_over_column(
+        df.withColumn(DUMMY_SUM_COLUMN, func.lit(1)),
+        DUMMY_SUM_COLUMN,
+        distinct_columns=distinct_columns,
+        group_by_columns=group_by_columns,
+        group_by_key_fn=group_by_key_fn
+    )
+    if isinstance(result, float):
+        return int(result)
+    else:
+        return { k : int(v) for k, v in result.items() }
+        

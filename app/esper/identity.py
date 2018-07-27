@@ -1195,33 +1195,3 @@ def get_other_people_who_are_on_screen(model, precision_thresh=0.8, k=25, n_exam
         ))
 
     return esper_widget(group_results(results))
-
-
-# TODO: move this to some place more appropriate
-def get_caption_mentions_by_show(phrases, show_count=False):
-    result = caption_search(phrases)[0]
-    show_to_mentions = defaultdict(int)
-    
-    if show_count:
-        video_count_by_show = {
-            x['show__canonical_show__name'] : x['count'] for x in
-            Video.objects.filter(id__in=set(result.keys())).values(
-                'show__canonical_show'
-            ).annotate(
-                count=Count('id')
-            ).values('count', 'show__canonical_show__name')
-        }
-        for k, v in video_count_by_show.items():
-            show_to_mentions[k] += v
-    else:
-        video_to_show = {
-            x['id'] : x['show__canonical_show__name'] for x in
-            Video.objects.filter(id__in=set(result.keys())).values(
-                'id', 'show__canonical_show__name'
-            )
-        }
-        for k, v in result.items():
-            show_to_mentions[video_to_show[k]] += len(v)
-    
-    return show_to_mentions
-    
