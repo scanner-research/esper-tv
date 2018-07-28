@@ -414,7 +414,7 @@ def annotate_interval_overlap(df, video_id_to_intervals, new_column_name='overla
 
 
 def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=[], 
-                             group_by_key_fn=lambda x: x):
+                             group_by_key_fn=lambda x: x, probability_column=None):
     """
     Sum a column over distinct values 
     (this is inefficient, but Spark does not have an easy way to do it...)
@@ -425,23 +425,42 @@ def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=
     
     returns float or dict from group_by columns to float
     """
+    
     if len(group_by_columns) > 0:
         result = defaultdict(float)
+        variance = defaultdict(float)
     else:
         result = 0.
+        variance = 0.
     distinct_set = set()
-    for x in df.select(sum_column, *distinct_columns, *group_by_columns).collect():
+    
+    select_columns = [sum_column, *distinct_columns, *group_by_columns]
+    if probability_column is not None:
+        select_columns.append(probability_column)
+        
+    for x in df.select(*select_columns).collect():
         distinct_key = tuple(x[col] for col in distinct_columns)
         if distinct_key in distinct_set:
             continue
         else:
             distinct_set.add(distinct_key)
+            
+        variance_inc = (x[probability_column] * (1 - x[probability_column]) * (x[sum_column] ** 2)
+                        if probability_column is not None else 0.)
+        sum_inc = x[sum_column] * x[probability_column] if probability_column is not None else x[sum_column]
+        
         if len(group_by_columns) > 0:
             group_key = group_by_key_fn(tuple(x[col] for col in group_by_columns))
-            result[group_key] += x[sum_column]
+            result[group_key] += sum_inc
+            variance[group_key] += variance_inc
         else:
-            result += x[sum_column]
-    return result
+            result += sum_inc
+            variance += variance_inc
+    
+    if len(group_by_columns) > 0:
+        return defaultdict(lambda: (0., 0.), { k: (result[k], variance[k]) for k in result })
+    else:
+        return result, variance
 
 
 DUMMY_SUM_COLUMN = 'DUMMY_SUM_COLUMN'
