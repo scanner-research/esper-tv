@@ -25,6 +25,7 @@ class SparkWrapper:
             .config("spark.executor.memory", SPARK_MEMORY) \
             .config("spark.driver.maxResultSize", SPARK_MEMORY) \
             .config("spark.rpc.message.maxSize", "2047") \
+            .config('spark.driver.allowMultipleContexts', 'true') \
             .getOrCreate()
         self.sc = self.spark.sparkContext
         self.table = TableDelegator(self)

@@ -23,13 +23,16 @@ def plot_binary_screentime_proportion_comparison(series_names, values_by_subcate
                                                  secondary_series_names=None, secondary_data=None,
                                                  tertiary_series_names=None, tertiary_data=None,
                                                  show_raw_data_labels=True, raw_data_label_unit='m', 
-                                                 show_ebars=True, z_score=1.96):
+                                                 show_ebars=True, z_score=1.96, 
+                                                 subcategory_color_map=defaultdict(lambda: 'Black')):
     """
     series_names: [String]
     values_by_subcategory: [{subcategory1: (value, variance), ...}, ...]
     
     secondary_series_names: [String]
     secondary_data: [{subcategory1: (value, variance), ...}, ...]
+    
+    subcategory_color_map: {subcategory1: color, ...}
     """
     assert len(series_names) == 2
     assert len(values_by_subcategory) == 2
@@ -104,6 +107,9 @@ def plot_binary_screentime_proportion_comparison(series_names, values_by_subcate
         ax1.set_xlabel(xlabel)
         ax1.set_xticklabels([x[0] for x in primary_data], rotation=45, ha='right')
         
+        for xtick, x in zip(ax1.get_xticklabels(), primary_data):
+            xtick.set_color(subcategory_color_map[x[0]])
+        
         y_ticks = np.arange(-1., 1.01, 0.25)
         ax1.set_yticks(y_ticks)
         ax1.set_yticklabels([round(x, 2) for x in np.fabs(y_ticks)])
@@ -144,7 +150,7 @@ def plot_binary_screentime_proportion_comparison(series_names, values_by_subcate
             subcategory = x[0]
             series1 = selected_data[0][subcategory][0].total_seconds() if subcategory in selected_data[0] else 0.
             series2 = selected_data[1][subcategory][0].total_seconds() if subcategory in selected_data[1] else 0.
-            denom = series1 + series2
+            denom = series1 + series2 + 1e-12
             selected_data_to_plot.append((series1 / denom, series2 / denom))
         return selected_data_to_plot
     
@@ -185,3 +191,21 @@ def plot_time_series_by_month(series_names, month_to_values, years, title, ylabe
     plt.ylabel(ylabel)
     plt.xlabel('Month-Year')
     plt.show() 
+
+    
+def tile_images(imgs, rows=None, cols=None):
+    # If neither rows/cols is specified, make a square
+    if rows is None and cols is None:
+        rows = int(math.sqrt(len(imgs)))
+
+    if rows is None:
+        rows = int((len(imgs) + cols - 1) / cols)
+    else:
+        cols = int((len(imgs) + rows - 1) / rows)
+
+    # Pad missing frames with black
+    diff = rows * cols - len(imgs)
+    if diff != 0:
+        imgs.extend([np.zeros(imgs[0].shape, dtype=imgs[0].dtype) for _ in range(diff)])
+
+    return np.vstack([np.hstack(imgs[i * cols:(i + 1) * cols]) for i in range(rows)])

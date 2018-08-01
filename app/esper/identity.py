@@ -2,6 +2,7 @@ from esper.prelude import *
 from esper.stdlib import *
 from esper.major_canonical_shows import *
 from query.models import *
+from esper.plot_util import *
 
 try:
     from IPython.display import clear_output
@@ -31,12 +32,6 @@ if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
 
 GCS_MODEL_PREFIX = 'gs://esper/tvnews/face_identity_model'
-
-COLORS = ['LightCoral', 'SkyBlue', 'SandyBrown', 'Violet', 'Goldenrod', 'GreenYellow']
-
-
-def get_color(i):
-    return COLORS[i % len(COLORS)]
 
 
 def minutesToSeconds(x):
@@ -305,31 +300,13 @@ class PrecisionModel(object):
             result[k] = correct_count_by_bucket[k] / expected_count_by_bucket[k]
         return result
 
-    
-def tile_imgs(imgs, rows=None, cols=None):
-    # If neither rows/cols is specified, make a square
-    if rows is None and cols is None:
-        rows = int(math.sqrt(len(imgs)))
-
-    if rows is None:
-        rows = int((len(imgs) + cols - 1) / cols)
-    else:
-        cols = int((len(imgs) + rows - 1) / rows)
-
-    # Pad missing frames with black
-    diff = rows * cols - len(imgs)
-    if diff != 0:
-        imgs.extend([np.zeros(imgs[0].shape, dtype=imgs[0].dtype) for _ in range(diff)])
-
-    return np.vstack([np.hstack(imgs[i * cols:(i + 1) * cols]) for i in range(rows)])
-
 
 def faces_to_tiled_img(faces, cols=12):
     def face_img(face):
         return crop(load_frame(face.person.frame.video, face.person.frame.number, []), face)
     
     face_imgs = par_for(face_img, faces)
-    im = tile_imgs([cv2.resize(img, (200, 200)) for img in face_imgs], cols=cols)
+    im = tile_images([cv2.resize(img, (200, 200)) for img in face_imgs], cols=cols)
     return im
     
     

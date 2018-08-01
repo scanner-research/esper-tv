@@ -204,6 +204,9 @@ def get_segments():
     return segments
 
 
+NULL_IDENTITY_ID = -1
+
+
 def _annotate_host_probability(faces, identity_threshold=0.3):
     face_identities = spark.load('query_faceidentity').alias('face_identity')
     face_identities = face_identities.where(face_identities.probability > identity_threshold)
@@ -218,11 +221,12 @@ def _annotate_host_probability(faces, identity_threshold=0.3):
         'face_identity.identity_id',
         'face_identity.labeler_id',
         'face_identity.probability',
-        'faces2.show_id', 
+        'faces2.show_id', # Need this to get the hosts
         'faces2.canonical_show_id',
         'faces2.channel_id'
     )
     
+    # Annotate host probabilities
     show_id_to_host_ids = defaultdict(set)
     show_hosts = spark.load('query_show_hosts')
     for e in show_hosts.collect():
@@ -248,7 +252,7 @@ def _annotate_host_probability(faces, identity_threshold=0.3):
     host_prob_udf = func.udf(host_probability_helper, DoubleType())
     faces = faces.withColumn('host_probability', host_prob_udf('id'))
     return faces
-    
+
 
 def get_faces(annotate_host_probability=True):
     faces = spark.load('query_face').alias('faces')
@@ -317,6 +321,33 @@ def _annotate_size_percentile(face_genders, gender_threshold=0.9):
     return face_genders
 
 
+GENDER_FULL_NAME_MAP = {'M': 'male', 'F': 'female', 'U': 'unknown'}
+
+
+def _annotate_male_female_probability(face_genders):
+    """
+    Adds male_probability and female_probability columns
+    """
+    gender_map = {
+        x.id : GENDER_FULL_NAME_MAP[x.name] 
+        for x in spark.load('query_gender').select('id', 'name').collect()
+        if x.name != 'U'
+    }
+    
+    def build_udf(gid):
+        gid_copy = gid
+        def gender_prob_helper(gender_id, probability):
+            return probability if gid_copy == gender_id else 1. - probability
+        return func.udf(gender_prob_helper, DoubleType())
+    
+    for gid, gname in gender_map.items():
+        gender_prob_udf = build_udf(gid)
+        face_genders = face_genders.withColumn('{}_probability'.format(gname), 
+                                               gender_prob_udf('gender_id', 'probability'))
+    
+    return face_genders
+    
+
 def get_face_genders():
     face_genders = spark.load('query_facegender').alias('face_genders')
     
@@ -347,6 +378,7 @@ def get_face_genders():
     )
     
     face_genders = _annotate_size_percentile(face_genders)
+    face_genders = _annotate_male_female_probability(face_genders)
     return face_genders
 
 
@@ -413,10 +445,55 @@ def annotate_interval_overlap(df, video_id_to_intervals, new_column_name='overla
     return df.withColumn(new_column_name, overlap_udf('video_id', 'min_frame', 'max_frame', 'fps'))
 
 
+WEIGHTED_VARIANCE_COLUMN = 'WEIGHTED_VARIANCE_COLUMN'
+WEIGHTED_SUM_COLUMN = 'WEIGHTED_SUM_COLUMN'
+
+
+def sum_over_column(df, sum_column, group_by_columns=[], 
+                    group_by_key_fn=lambda x: x, probability_column=None):
+    """
+    Sum a column with variance and expectation
+    """
+    if len(group_by_columns) > 0:
+        result = defaultdict(float)
+        variance = defaultdict(float)
+    else:
+        result = 0.
+        variance = 0.
+    distinct_set = set()
+    
+    df = df.withColumn(
+        WEIGHTED_VARIANCE_COLUMN, 
+        df[probability_column] * (1. - df[probability_column]) * (df[sum_column] ** 2)
+        if probability_column is not None else func.lit(0)
+    )
+    df = df.withColumn(
+        WEIGHTED_SUM_COLUMN, 
+        df[probability_column] * df[sum_column] if probability_column is not None else df[sum_column]
+    ) 
+    
+    sum_key = 'sum({})'.format(WEIGHTED_SUM_COLUMN)
+    variance_key = 'sum({})'.format(WEIGHTED_VARIANCE_COLUMN)
+    if len(group_by_columns) > 0:
+        tmp_df = df.groupBy(*group_by_columns).sum(
+            WEIGHTED_SUM_COLUMN, WEIGHTED_VARIANCE_COLUMN
+        )
+        for x in tmp_df.collect(): 
+            group_key = group_by_key_fn(tuple(x[col] for col in group_by_columns))
+            result[group_key] += x[sum_key]
+            variance[group_key] += x[variance_key]
+        return defaultdict(lambda: (0., 0.), { k: (result[k], variance[k]) for k in result })
+    else:
+        for x in df.sum(WEIGHTED_SUM_COLUMN, WEIGHTED_VARIANCE_COLUMN).collect(): 
+            result += x[sum_key]
+            variance += x[variance_key]
+        return result, variance
+    
+
 def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=[], 
                              group_by_key_fn=lambda x: x, probability_column=None):
     """
-    Sum a column over distinct values 
+    Sum a column over distinct values with variance and expectation
     (this is inefficient, but Spark does not have an easy way to do it...)
     
     sum_column: column name
@@ -425,6 +502,14 @@ def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=
     
     returns float or dict from group_by columns to float
     """
+    if distinct_columns is None or len(distinct_columns) == 0:
+        print('No distinct columns. Falling back to sum non-distinct (faster)')
+        return sum_over_column(
+            df, sum_column, 
+            group_by_columns=group_by_columns,
+            group_by_key_fn=group_by_key_fn,
+            probability_column=probability_column
+        )                
     
     if len(group_by_columns) > 0:
         result = defaultdict(float)
@@ -444,10 +529,16 @@ def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=
             continue
         else:
             distinct_set.add(distinct_key)
-            
-        variance_inc = (x[probability_column] * (1 - x[probability_column]) * (x[sum_column] ** 2)
-                        if probability_column is not None else 0.)
-        sum_inc = x[sum_column] * x[probability_column] if probability_column is not None else x[sum_column]
+        
+        if probability_column is not None:
+            probability = x[probability_column]
+            assert probability >= 0. and probability <= 1., '{} is out of range'.format(probability)
+            variance_inc = probability * (1 - probability) * (x[sum_column] ** 2)
+            sum_inc = x[sum_column] * probability
+        else:
+            variance_in = 0.
+            sum_inc = x[sum_column]
+                          
         
         if len(group_by_columns) > 0:
             group_key = group_by_key_fn(tuple(x[col] for col in group_by_columns))
@@ -466,17 +557,49 @@ def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=
 DUMMY_SUM_COLUMN = 'DUMMY_SUM_COLUMN'
 
 
-def count_distinct_over_column(df, distinct_columns, group_by_columns=[], 
-                               group_by_key_fn=lambda x: x):
+def count_distinct_over_column(df, distinct_columns, **kwargs):
     result = sum_distinct_over_column(
         df.withColumn(DUMMY_SUM_COLUMN, func.lit(1)),
-        DUMMY_SUM_COLUMN,
-        distinct_columns=distinct_columns,
-        group_by_columns=group_by_columns,
-        group_by_key_fn=group_by_key_fn
+        DUMMY_SUM_COLUMN, distinct_columns, **kwargs
     )
-    if isinstance(result, float):
-        return int(result)
-    else:
-        return { k : int(v) for k, v in result.items() }
+    return result
+
+
+def annotate_max_identity(faces, identity_threshold=0.1):
+    """
+    Add a max_identity column to a dataframe derived from face
+    """
+    face_identities = spark.load('query_faceidentity').alias('face_identity')
+    face_identities = face_identities.where(face_identities.probability > identity_threshold)
+    
+    # Annotate max identity probabilities
+    face_id_to_max_identity = {}
+    for face_identity in face_identities.select('face_id', 'identity_id', 'probability').collect():
+        update_for_key = False
+        if face_identity.face_id in face_id_to_max_identity:
+            update_for_key = face_identity.probability > face_id_to_max_identity[face_identity.face_id][1]
+        else:
+            update_for_key = True
+        if update_for_key:
+            face_id_to_max_identity[face_identity.face_id] = (
+                face_identity.identity_id, 
+                face_identity.probability
+            )
+    
+    def max_identity_helper(face_id):
+        if face_id in face_id_to_max_identity:
+            return face_id_to_max_identity[face_id][0]
+        return NULL_IDENTITY_ID
+    
+    def max_identity_probability_helper(face_id):
+        if face_id in face_id_to_max_identity:
+            return face_id_to_max_identity[face_id][1]
+        return 0.
+    
+    max_identity_id_udf = func.udf(max_identity_helper, IntegerType())
+    faces = faces.withColumn('max_identity_id', max_identity_id_udf('id'))
+    
+    max_identity_prob_udf = func.udf(max_identity_probability_helper, DoubleType())
+    faces = faces.withColumn('max_identity_probability', max_identity_prob_udf('id'))
+    return faces
         
