@@ -75,6 +75,7 @@ services:
       - ${{HOME}}/.esper/.bash_history:/root/.bash_history
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
+      - ${{HOME}}/scannertools:/opt/scannertools
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:
@@ -85,6 +86,7 @@ services:
       - TERM={term}
       - RUST_BACKTRACE=full
     tty: true # https://github.com/docker/compose/issues/2231#issuecomment-165137408
+    privileged: true # make perf work
     security_opt: # make gdb work
       - seccomp=unconfined
 """.format(
@@ -134,6 +136,9 @@ def main():
 
     # Google Cloud config
     if 'google' in base_config:
+        if not os.path.isfile('service-key.json'):
+            raise Exception("Missing required service key file service-key.json")
+
         config.services.app.environment.extend([
             'GOOGLE_PROJECT={}'.format(base_config.google.project), 'GOOGLE_ZONE={}'.format(
                 base_config.google.zone)

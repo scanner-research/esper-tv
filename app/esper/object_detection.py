@@ -1,48 +1,15 @@
-from scannertools.object_detection import ObjectDetectionPipeline
-from scannertools import BoundOp
-from esper.prelude import ScannerWrapper, Timer
+from scannertools import object_detection
+from esper.prelude import ScannerWrapper, Timer, ScannerSQLTable
 from query.models import Object, Video, Frame, ScannerJob
 import scannerpy
 from scannerpy.stdlib import readers
 import json
 
-with Timer('Loading scanner'):
-    db_wrapper = ScannerWrapper(multiworker=True)
-    db = db_wrapper.db
 
-pipeline = ObjectDetectionPipeline(db)
+# 1. Define pipeline + auxiliary kernels
 
-videos = db_wrapper.filter_videos(Video.objects.all()[1:100], pipeline)
-print('Processing {} videos'.format(len(videos)))
-
-def source_builder():
-    frame = db.sources.FrameColumn()
-    frame_sampled = db.streams.Gather(frame)
-    frame_ids = db.sources.SQL(
-        config=db_wrapper.sql_config(),
-        query=db.protobufs.SQLQuery(
-            fields='query_frame.id as id, query_frame.number as number',
-            id='query_frame.id',
-            group='number',
-            table='query_frame INNER JOIN query_video ON query_frame.video_id = query_video.id',
-        ))
-
-    with Timer('Loading frames'):
-        frames = [
-            [f['number'] for f in
-             Frame.objects.filter(video=v).values('number').order_by('number')]
-            for v in videos
-        ]
-
-    return {
-        'frame': BoundOp(
-            op=frame, args=[db.table(v.path).column('frame') for v in videos]),
-        'frame_sampled': BoundOp(op=frame_sampled, args=frames),
-        'frame_ids': BoundOp(op=frame_ids, args=[{'filter': 'query_video.id = {}'.format(v.id)} for v in videos])
-    }
-
-@scannerpy.register_python_op(name='ToJson')
-def to_json(config, bboxes: bytes, frame_id: bytes) -> bytes:
+@scannerpy.register_python_op(name='BboxToJson')
+def bbox_to_json(config, bboxes: bytes, frame_id: bytes) -> bytes:
     bboxes = readers.bboxes(bboxes, config.protobufs)
     frame_id = json.loads(frame_id.decode('utf-8'))[0]['id']
     return json.dumps([{
@@ -55,11 +22,43 @@ def to_json(config, bboxes: bytes, frame_id: bytes) -> bytes:
         'frame_id': frame_id
     } for bb in bboxes])
 
-def sink_builder(inputs, output_ops):
-    jsonified = db.ops.ToJson(bboxes=output_ops['bboxes'], frame_id=inputs['frame_ids']['op'])
-    sql_sink = db_wrapper.sql_sink(Object, insert=True)
-    return BoundOp(op=sql_sink(jsonified), args=[{'job_name': v.path + '_objdet'} for v in videos])
+class ObjectDetectionPipeline(object_detection.ObjectDetectionPipeline):
+    additional_sources = ['frame_ids']
 
-pipeline.execute(
-    source_builder=source_builder,
-    sink_builder=sink_builder)
+    def build_sink(self, db_videos):
+        jsonified = self._db.ops.BboxToJson(
+            bboxes=self._output_ops['bboxes'], frame_id=self._sources['frame_ids'].op)
+        return ScannerWrapper(self._db).sql_sink(
+            cls=Object, input=jsonified, videos=db_videos, suffix='objdet', insert=True)
+
+    def parse_output(self):
+        pass
+
+detect_objects = ObjectDetectionPipeline.make_runner()
+
+
+# 2. Gather inputs
+
+db_wrapper = ScannerWrapper.create()
+db = db_wrapper.db
+
+videos = db_wrapper.filter_videos(Video.objects.all(), ObjectDetectionPipeline)[:1]
+print('Processing {} videos'.format(len(videos)))
+
+frames = [
+    [f['number'] for f in
+     Frame.objects.filter(video=v).values('number').order_by('number')]
+    for v in videos
+]
+
+
+# 3. Run pipeline
+
+detect_objects(
+    db,
+    videos=[v.for_scannertools() for v in videos],
+    frames=frames,
+    frame_ids=[ScannerSQLTable(Frame, v) for v in videos],
+    db_videos=videos)
+
+print('Done!')

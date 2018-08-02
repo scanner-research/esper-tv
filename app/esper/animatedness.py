@@ -1,10 +1,10 @@
 from esper.prelude import *
-from esper.tvnews.shot_detect import shot_detect, shot_stitch
-from esper.tvnews.face_detect import face_detect
-from esper.tvnews.face_embed import face_embed
-from esper.tvnews.pose_detect import pose_detect
-from esper.tvnews.identity_detect import identity_detect
-from esper.tvnews.gender_detect import gender_detect
+from esper.shot_detect import shot_detect, shot_stitch
+from esper.face_detect import face_detect
+from esper.face_embed import face_embed
+from esper.pose_detect import pose_detect
+from esper.identity_detect import identity_detect
+from esper.gender_detect import gender_detect
 
 POSE_STRIDE = 3
 
