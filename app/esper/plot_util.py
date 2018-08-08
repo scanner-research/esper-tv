@@ -313,7 +313,8 @@ def plot_time_series(series_names, series_data, title, ylabel,
                      min_time=None, max_time=None, plotstyle='-o', 
                      linewidth=1, discrete_events=None, 
                      discrete_event_marker='*',
-                     discrete_event_color = 'Red'):
+                     discrete_event_color = 'Red',
+                     figsize=(20, 7)):
     """
     series_names: [String]
     series_data: [{datetime: value, ...}, ...]
@@ -325,6 +326,12 @@ def plot_time_series(series_names, series_data, title, ylabel,
     
     def _truncate_to_month(dt):
         return datetime(year=dt.year, month=dt.month, day=1)
+    
+    def _increment_month(dt):
+        init_month = dt.month
+        while dt.month == init_month:
+            dt += timedelta(days=1)
+        return dt
     
     if min_time is None:
         for d in series_data:
@@ -338,13 +345,7 @@ def plot_time_series(series_names, series_data, title, ylabel,
             for k in d:
                 if max_time is None or max_time < k:
                     max_time = k
-    max_time = _truncate_to_month(max_time)
-    
-    def _increment_month(dt):
-        init_month = dt.month
-        while dt.month == init_month:
-            dt += timedelta(days=1)
-        return dt
+    max_time = _increment_month(_truncate_to_month(max_time))
     
     x_ticks = []
     x_ticklabels = []
@@ -357,6 +358,8 @@ def plot_time_series(series_names, series_data, title, ylabel,
         )
         curr_time = _increment_month(curr_time)
     
+    fig, ax = plt.subplots(figsize=figsize)
+    
     max_value = -1.
     for series, data in zip(series_names, series_data):
         x = []
@@ -364,8 +367,11 @@ def plot_time_series(series_names, series_data, title, ylabel,
         for k, v in sorted(data.items(), key=lambda x: x[0]):
             x.append(k)
             y.append(v)
-        max_value = max(max_value, max(y))
-        plt.plot(x, y, plotstyle, label=series, linewidth=linewidth)
+        ax.plot(x, y, plotstyle, label=series, linewidth=linewidth)
+        
+        # Track the max y value for the discrete event overlay later
+        if len(y) > 0:
+            max_value = max(max_value, max(y))
         
     def _unpack_event(x):
         if isinstance(x, datetime):
@@ -379,15 +385,17 @@ def plot_time_series(series_names, series_data, title, ylabel,
             value_x, value_y = _unpack_event(value)
             x.append(value_x)
             y.append(value_y)
-            plt.text(value_x, value_y, event, rotation=45, color=discrete_event_color,
-                     ha='right', va='top')
-        plt.scatter(x, y, marker=discrete_event_marker, color=discrete_event_color)
+            ax.text(value_x, value_y, event, rotation=45, color=discrete_event_color,
+                    ha='right', va='top')
+        ax.scatter(x, y, marker=discrete_event_marker, color=discrete_event_color)
             
-    plt.legend()
-    plt.title(title)
-    plt.xticks(x_ticks, x_ticklabels, rotation=45, ha='right')
-    plt.ylabel(ylabel)
-    plt.xlabel('Month-Year')
+    ax.legend()
+    ax.set_title(title)
+    ax.set_xlim([min_time, max_time])
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticklabels, rotation=45, ha='right')
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel('Month-Year')
     plt.show()
 
     
