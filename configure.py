@@ -274,12 +274,14 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             }
 
             sp.check_call(
-                'docker build -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+                'docker build --pull -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
                 format(
                     device=device,
                     build_args=' '.join(
                         ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
                 shell=True)
+
+        sp.check_call('docker-compose build', shell=True)
 
     if 'kube' in args.build:
         if 'google' in base_config:
@@ -288,7 +290,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             def build(tag):
                 fmt_args = {'base_url': base_url, 'tag': tag, 'device': args.kube_device}
                 sp.check_call(
-                    'docker build -t {base_url}/scanner-{tag}:{device} --build-arg device={device} -f app/kube/Dockerfile.{tag} app'.
+                    'docker build --pull -t {base_url}/scanner-{tag}:{device} --build-arg device={device} -f app/kube/Dockerfile.{tag} app'.
                     format(**fmt_args),
                     shell=True)
                 sp.check_call(
