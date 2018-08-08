@@ -1,4 +1,5 @@
 from esper.prelude import *
+from query.models import Labeler
 from scannerpy.stdlib import readers
 from scipy.spatial import distance
 from unionfind import unionfind

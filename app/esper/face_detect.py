@@ -1,5 +1,6 @@
 from esper.prelude import *
 from scannerpy.stdlib import pipelines, readers
+from query.models import Labeler, Tag
 
 LABELER, _ = Labeler.objects.get_or_create(name='tinyfaces')
 LABELED_TAG, _ = Tag.objects.get_or_create(name='tinyfaces:labeled')

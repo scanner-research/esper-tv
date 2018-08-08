@@ -1,3 +1,4 @@
+import scannertools as st
 from scannerpy import ProtobufGenerator, Config, Database, Job, DeviceType, ColumnType, ScannerException
 from storehouse import StorageConfig, StorageBackend
 from query.base_models import Track, BoundingBox
@@ -12,7 +13,7 @@ from timeit import default_timer as now
 from functools import reduce
 from typing import Dict
 from pprint import pprint
-
+from django.apps import apps
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
 import django.db.models as models
@@ -217,8 +218,57 @@ def par_filter(f, l, **kwargs):
     return [x for x, b in zip(l, par_for(f, l, **kwargs)) if b]
 
 
+def join_path(src_cls, dest_cls):
+    models = apps.get_models()
+
+    def key(m):
+        return m._meta.db_table
+
+    def join_graph():
+        edges = defaultdict(list)
+        edge_fields = defaultdict(dict)
+        for model in models:
+            for field in model._meta.get_fields():
+                if field.is_relation and hasattr(field, 'column'):
+                    edges[key(model)].append(key(field.related_model))
+                    edge_fields[key(model)][key(field.related_model)] = field
+
+        return edges, edge_fields
+
+    def bfs(join_graph):
+        frontier = set([key(src_cls)])
+        visited = set()
+        paths = {key(src_cls): []}
+
+        while len(frontier) > 0:
+            new_frontier = set()
+            for node in frontier:
+                adjacent_unvisited = set(join_graph[node]) - visited - frontier
+                for other in adjacent_unvisited:
+                    paths[other] = paths[node] + [node]
+                new_frontier |= adjacent_unvisited
+
+            visited |= frontier
+            frontier = new_frontier
+
+        return {k: v + [k] for k, v in paths.items()}
+
+    keymap = {key(m): m for m in models}
+    graph, fields = join_graph()
+    paths = bfs(graph)
+    path = paths[key(dest_cls)]
+    return [
+        fields[path[i]][path[i+1]]
+        for i in range(len(path) - 1)
+    ]
+
+
 class ScannerWrapper:
-    def __init__(self, kube=False, multiworker=False):
+    def __init__(self, db):
+        self.db = db
+
+    @classmethod
+    def create(cls, kube=False, multiworker=False):
         if kube:
             ip = sp.check_output(
                 '''
@@ -238,7 +288,7 @@ class ScannerWrapper:
 
             master = '{}:{}'.format(ip, port)
 
-            self.db = Database(master=master, start_cluster=False)
+            db = Database(master=master, start_cluster=False)
 
         else:
             workers = ['localhost:{}'.format(5002 + i)
@@ -249,9 +299,11 @@ class ScannerWrapper:
             # params.ParseFromString(bindings.default_machine_params())
             # params.num_load_workers = 2
             # params.num_save_workers = 2
-            self.db = Database(
+            db = Database(
                 #machine_params=params.SerializeToString(),
                 workers=workers)
+
+        return cls(db)
 
     def sql_config(self):
         return self.db.protobufs.SQLConfig(
@@ -262,17 +314,47 @@ class ScannerWrapper:
             user=os.environ['DJANGO_DB_USER'],
             password=os.environ['DJANGO_DB_PASSWORD'])
 
-    def sql_sink(self, cls, insert=True):
+    def sql_source(self, cls):
+        from query.models import Frame, Video
+        table = cls._meta.db_table
+        def joins(dst):
+            return ['INNER JOIN {dst} ON {src}.{srcfield} = {dst}.{dstfield}'.format(
+                src=field.model._meta.db_table,
+                srcfield=field.column,
+                dst=field.related_model._meta.db_table,
+                dstfield='id')
+                for field in join_path(cls, dst)]
+        return self.db.sources.SQL(
+            config=self.sql_config(),
+            query=self.db.protobufs.SQLQuery(
+                fields=','.join([
+                    '{}.{} as {}'.format(table, field.name, field.name)
+                    for field in cls._meta.get_fields()
+                    if not field.is_relation
+                ]),
+                id='{}.id'.format(Frame._meta.db_table),
+                group='{}.number'.format(Frame._meta.db_table),
+                table='{} {}'.format(table, ' '.join(joins(Frame) + joins(Video)))
+            ))
+
+    def sql_source_args(self, video):
+        from query.models import Video
+        return {'filter': '{}.id = {}'.format(Video._meta.db_table, video.id)}
+
+    def sql_sink(self, cls, input, videos, suffix, insert=True):
         from query.models import ScannerJob
-        return lambda input: self.db.sinks.SQL(
+        sink = self.db.sinks.SQL(
             config=self.sql_config(),
             input=input,
             table=cls._meta.db_table,
             job_table=ScannerJob._meta.db_table,
             insert=insert)
+        args = [{'job_name': '{}_{}'.format(v.path, suffix) for v in videos}]
+        return st.BoundOp(op=sink, args=args)
 
     # Remove videos that don't have a table or have already been processed by the pipeline
     def filter_videos(self, videos, pipeline):
+        from query.models import ScannerJob
         suffix = pipeline.job_suffix
         assert suffix is not None
 
@@ -280,8 +362,20 @@ class ScannerWrapper:
             t['name'] for t in ScannerJob.objects.filter(name__contains=suffix).values('name')])
 
         return [
-            v for v in videos if self._db.has_table(v.path) and not '{}_{}'.format(v.path, suffix) in processed
+            v for v in videos if self.db.has_table(v.path) and not '{}_{}'.format(v.path, suffix) in processed
         ]
+
+
+class ScannerSQLTable(st.DataSource):
+    def __init__(self, cls, video):
+        self._cls = cls
+        self._video = video
+
+    def scanner_source(self, db):
+        return ScannerWrapper(db).sql_source(self._cls)
+
+    def scanner_args(self, db):
+        return ScannerWrapper(db).sql_source_args(self._video)
 
 
 
@@ -454,16 +548,17 @@ def print_sql(self):
 
 setattr(QuerySet, 'print_sql', print_sql)
 
-
+import csv
 def bulk_create_copy(self, objects, table=None):
     meta = self.model._meta
     keys = [
-        f.attname for f in meta._get_fields(reverse=False)
-        if not isinstance(f, models.ManyToManyField)
+        'id', 'face_id', 'gender_id', 'labeler_id', 'probability'
+        # f.attname for f in meta._get_fields(reverse=False)
+        # if not isinstance(f, models.ManyToManyField)
     ]
     fname = '/app/rows.csv'
     log.debug('Creating CSV')
-    with open(fname, 'wb') as f:
+    with open(fname, 'w') as f:
         writer = csv.writer(f, delimiter=',')
         writer.writerow(keys)
         max_id = self.all().aggregate(Max('id'))['id__max']
@@ -474,14 +569,14 @@ def bulk_create_copy(self, objects, table=None):
                 id += 1
             writer.writerow([obj[k] for k in keys])
 
-    log.debug('Writing to database')
-    with connection.cursor() as cursor:
-        cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
-            table or meta.db_table, ', '.join(keys), fname))
-        if table is None:
-            cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
+    # log.debug('Writing to database')
+    # with connection.cursor() as cursor:
+    #     cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
+    #         table or meta.db_table, ', '.join(keys), fname))
+    #     if table is None:
+    #         cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
 
-    os.remove(fname)
+    #os.remove(fname)
     log.debug('Done!')
 
 
@@ -752,25 +847,25 @@ def mutual_info(p):
 def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                   exclude_commercials=True, docs=[], silent_mode=True):
     from query.models import Commercial, Video
-    
+
     r = requests.post(
-        'http://localhost:8111/findsegments', 
+        'http://localhost:8111/findsegments',
         json={
-            'lexicon': lexicon, 
+            'lexicon': lexicon,
             'merge_overlaps': merge_overlaps,
             'threshold': threshold,
             'window_size': window_size,
             'docs': docs
         }
     )
-    
+
     path_stem_to_video_id = {
         Path(x['path']).stem : x['id']
         for x in Video.objects.all().values('id', 'path')
     }
     def sub_path_to_video_id(sub_path):
         return path_stem_to_video_id[Path(sub_path).stem.split('.')[0]]
-    
+
     def exclude_com_helper(orig_segments):
         commercials_by_video_id = defaultdict(list)
         for x in Commercial.objects.all().annotate(
@@ -778,7 +873,7 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                      end=ExpressionWrapper(F('max_frame') / F('video__fps'), FloatField())
                  ).values('video__id', 'start', 'end').order_by('video__id', 'start'):
             commercials_by_video_id[x['video__id']].append((x['start'], x['end']))
-            
+
         segments = []
         for video_id, sub_path, (start, end), count, words in orig_segments:
             if start >= end:
@@ -786,26 +881,25 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                     print('Warning: segment from {} starts after end ({}, {})'.format(
                           sub_path, start, end))
                 continue
-                
             if start <= 0:
                 if not silent_mode:
                     print('Warning: segment from {} starts before 0 ({}, {})'.format(
                           sub_path, start, end))
                 start = 0.
-                
+
             segment_time = end - start
             segment_com_time = 0.
             segment_fragments = []
-            
+
             # commercials are sorted by start time
             for com_start, com_end in commercials_by_video_id[video_id]:
                 assert com_end >= com_start
-                
+
                 if com_start < start:
                     if com_end < start:
                         pass
                     else:
-                        if com_end <= end: 
+                        if com_end <= end:
                             # commercial overlaps start
                             segment_com_time += com_end - start
                             start = com_end
@@ -813,7 +907,7 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                             # rest of the segment is a commercial
                             segment_com_time += end - start
                             break
-                            
+
                 else:
                     if com_start <= end:
                         # start up to commercial is not a commercial
@@ -828,7 +922,7 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                             # rest of the segment is commercial
                             segment_com_time += end - com_start
                             break
-                        
+
                     else:
                         # commerical starts after the end
                         assert start <= end
@@ -838,10 +932,10 @@ def find_segments(lexicon, window_size=500, threshold=50., merge_overlaps=True,
                 # remainder of the video is commercial
                 assert start <= end
                 segment_fragments.append((video_id, sub_path, (start, end), count, words))
-                
+
             segments.extend(segment_fragments)
         return segments
-    
+
     segments = [(sub_path_to_video_id(x[0]), *x) for x in r.json()]
     return segments if not exclude_commercials else exclude_com_helper(segments)
 

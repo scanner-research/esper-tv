@@ -1,4 +1,5 @@
 from esper.prelude import *
+from query.models import Labeler
 import struct
 
 LABELER, _ = Labeler.objects.get_or_create(name='rude-carnie')
