@@ -6,7 +6,7 @@ from esper.plot_util import *
 from query.models import *
 
 import calendar
-from datetime import timedelta
+from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
 from collections import defaultdict
 from pandas import DataFrame
@@ -360,10 +360,11 @@ def plot_topic_over_time_by_channel(topic, segments, threshold=None, years=range
         month_to_min_for_channel = {}
         for (c, year, month), seconds in month_to_time.items():
             if c == channel:
-                month_to_min_for_channel[(year, month)] = seconds / 60
+                month_to_min_for_channel[datetime(year=year, month=month, day=1)] = seconds / 60
         channel_values.append(month_to_min_for_channel)
             
-    plot_time_series_by_month(channel_names, channel_values, years, 
-                              'Topic time for "{}" over time by channel'.format(topic),
-                              'Time (min)')
+    plot_time_series(
+        channel_names, channel_values, 
+        'Topic time for "{}" over time by channel'.format(topic),
+        'Time (min)')
         

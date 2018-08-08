@@ -454,14 +454,6 @@ def sum_over_column(df, sum_column, group_by_columns=[],
     """
     Sum a column with variance and expectation
     """
-    if len(group_by_columns) > 0:
-        result = defaultdict(float)
-        variance = defaultdict(float)
-    else:
-        result = 0.
-        variance = 0.
-    distinct_set = set()
-    
     df = df.withColumn(
         WEIGHTED_VARIANCE_COLUMN, 
         df[probability_column] * (1. - df[probability_column]) * (df[sum_column] ** 2)
@@ -475,6 +467,8 @@ def sum_over_column(df, sum_column, group_by_columns=[],
     sum_key = 'sum({})'.format(WEIGHTED_SUM_COLUMN)
     variance_key = 'sum({})'.format(WEIGHTED_VARIANCE_COLUMN)
     if len(group_by_columns) > 0:
+        result = defaultdict(float)
+        variance = defaultdict(float)
         tmp_df = df.groupBy(*group_by_columns).sum(
             WEIGHTED_SUM_COLUMN, WEIGHTED_VARIANCE_COLUMN
         )
@@ -484,7 +478,9 @@ def sum_over_column(df, sum_column, group_by_columns=[],
             variance[group_key] += x[variance_key]
         return defaultdict(lambda: (0., 0.), { k: (result[k], variance[k]) for k in result })
     else:
-        for x in df.sum(WEIGHTED_SUM_COLUMN, WEIGHTED_VARIANCE_COLUMN).collect(): 
+        result = 0.
+        variance = 0.
+        for x in df.groupBy().sum(WEIGHTED_SUM_COLUMN, WEIGHTED_VARIANCE_COLUMN).collect(): 
             result += x[sum_key]
             variance += x[variance_key]
         return result, variance
@@ -577,7 +573,8 @@ def annotate_max_identity(faces, identity_threshold=0.1):
     for face_identity in face_identities.select('face_id', 'identity_id', 'probability').collect():
         update_for_key = False
         if face_identity.face_id in face_id_to_max_identity:
-            update_for_key = face_identity.probability > face_id_to_max_identity[face_identity.face_id][1]
+            update_for_key = (face_identity.probability > 
+                              face_id_to_max_identity[face_identity.face_id][1])
         else:
             update_for_key = True
         if update_for_key:

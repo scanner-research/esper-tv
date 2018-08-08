@@ -889,7 +889,7 @@ def face_kmeans(ids, k=25):
     return r.json()
 
 
-def face_features(self, ids):
+def face_features(ids):
     r = requests.post('http://localhost:8111/facefeatures', json={'ids': ids})
     return [np.array(a) for a in r.json()]
 

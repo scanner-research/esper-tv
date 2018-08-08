@@ -305,7 +305,7 @@ def faces_to_tiled_img(faces, cols=12):
     def face_img(face):
         return crop(load_frame(face.person.frame.video, face.person.frame.number, []), face)
     
-    face_imgs = par_for(face_img, faces)
+    face_imgs = par_for(face_img, faces, progress=False)
     im = tile_images([cv2.resize(img, (200, 200)) for img in face_imgs], cols=cols)
     return im
     
@@ -334,7 +334,7 @@ def load_and_select_faces_from_images(img_dir):
         if len(face_imgs) != 1:
             continue
         candidate_face_imgs.extend(face_imgs)
-    imshow(tile_imgs([cv2.resize(img, (200, 200)) for img in candidate_face_imgs], cols=10))
+    imshow(tile_images([cv2.resize(img, (200, 200)) for img in candidate_face_imgs], cols=10))
     plt.show()
     if not yn_prompt('These are the candidate faces from Google Image Search. The next step '
                      'is to choose whether to keep each image. ' 
@@ -836,7 +836,8 @@ def get_screen_time_by_show(model, date_range=None):
     }
 
 
-def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_runtime=True):
+def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_runtime=True,
+                             figsize=(20,10)):
     """
     Plot per show screentime
     
@@ -849,20 +850,20 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
         screen_times_by_show = [screen_times_by_show]
     assert len(names) == len(screen_times_by_show)
     
-    if normalize_by_total_runtime:
+    if not normalize_by_total_runtime:
         def plot_bar_chart_by_show_raw(data_by_name):
-            fig, ax1 = plt.subplots()
+            fig, ax1 = plt.subplots(figsize=figsize)
 
             ind = np.arange(len(data_by_name[0]))
 
-            full_width = 0.8
+            full_width = 0.9
             width = full_width / len(data_by_name)
             for i, data in enumerate(data_by_name):
                 ys = [y for _, y, _ in data]
                 stds = [1.96 * (z ** 0.5) for _, _, z in data]
-                rect = ax1.bar(ind - full_width / 2 + i * width, ys, 
-                               width, color=get_color(i), yerr=stds, ecolor='black', 
-                               label=names[i])
+                rect = ax1.bar(ind - ((full_width / 2) + (i * width)), ys, 
+                               width, color=get_color(i), yerr=stds, 
+                               ecolor='black', label=names[i])
 
             ax1.legend()
             ax1.set_ylim(ymin=0.)
@@ -874,17 +875,16 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
             ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
             plt.show()
 
-        show_sort_order = { 
-            x[0] : i for i, x in enumerate(
-                sorted(screen_times_by_show[0].items(), 
-                       key=lambda x: x[1][0].total_seconds()))
-        }
+        show_sort_order = [
+            x[0] for x in sorted(screen_times_by_show[0].items(), 
+                                 key=lambda x: x[1][0].total_seconds())
+        ]
 
         data_to_plot = []
         for name, screen_time_by_show in zip(names, screen_times_by_show):
             single_show_data_to_plot = []
-            for show, (screen_time, variance) in sorted(screen_time_by_show.items(), 
-                                                      key=lambda x: show_sort_order[x[0]]):
+            for show in show_sort_order:
+                screen_time, variance = screen_time_by_show.get(show, (timedelta(0), 0))
                 single_show_data_to_plot.append((
                     show, secondsToMinutes(screen_time.total_seconds()), variance / 3600.
                 ))
@@ -893,10 +893,10 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
         
     else:
         def plot_bar_chart_by_show_scaled(data_by_name):
-            fig, ax1 = plt.subplots()
+            fig, ax1 = plt.subplots(figsize=figsize)
 
             ind = np.arange(len(data_by_name[0]))
-            full_width = 0.8
+            full_width = 0.9
             width = full_width / len(data_by_name)
 
             for i, data in enumerate(data_by_name):
@@ -952,7 +952,7 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
 
             ind = np.arange(len(screen_time_data))
 
-            full_width = 0.8
+            full_width = 0.9
             width = full_width / 2
 
             ys = [y for _, y, _ in screen_time_data]
@@ -1004,7 +1004,7 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
             fig, ax1 = plt.subplots()
 
             ind = np.arange(len(screen_time_data))
-            full_width = 0.8
+            full_width = 0.9
             width = full_width / 2
 
             ys = [y for _, y, _ in screen_time_data]
@@ -1024,7 +1024,7 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
 
             ax2 = ax1.twinx()
             ax2.set_ylabel('{} normalized by number of hours'.format(other_units), color=get_color(1))
-            ys_other = [normalized_other_by_show[x] for x, _, _ in screen_time_data]
+            ys_other = [normalized_other_by_show.get(x, 0.) for x, _, _ in screen_time_data]
             rect2 = ax2.bar(ind, ys_other, width,
                             color=get_color(1), label=other_name)
             fig.legend()
@@ -1041,12 +1041,12 @@ def plot_screen_time_and_other_by_show(name, screen_time_by_show, other_by_show,
         plot_bar_chart_by_show_scaled(screen_time_data_to_plot)
 
         
-def plot_difference_in_screen_time_by_show(names, screen_times_by_show, color=get_color(0), plot_proportion=True,
+def plot_difference_in_screen_time_by_show(names, screen_times_by_show, color=get_color(0), 
                                            plot_ratio=True):
     assert len(names) == 2
     assert len(screen_times_by_show) == 2
     
-    if plot_proportion:
+    if not plot_ratio:
         def plot_bar_chart_by_show_scaled(data):
             fig, ax1 = plt.subplots()
 
@@ -1080,8 +1080,8 @@ def plot_difference_in_screen_time_by_show(names, screen_times_by_show, color=ge
             ))
         data_to_plot.sort(key=lambda x: x[1])
         plot_bar_chart_by_show_scaled(data_to_plot)
-    
-    if plot_ratio:
+        
+    else:
         def plot_bar_chart_by_show_scaled(data):
             fig, ax1 = plt.subplots()
 

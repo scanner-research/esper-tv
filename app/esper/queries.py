@@ -964,3 +964,25 @@ def face_search_for_other_people():
                          limit=n_examples_per_cluster)
         ))
     return group_results(results)
+
+
+@query('Identity across major shows')
+def identity_across_shows():
+    from query.models import FaceIdentity
+    from esper.stdlib import qs_to_result
+    from esper.major_canonical_shows import MAJOR_CANONICAL_SHOWS
+    
+    name='hillary clinton'
+    
+    results = []
+    for show in sorted(MAJOR_CANONICAL_SHOWS):
+        qs = FaceIdentity.objects.filter(
+            identity__name=name, 
+            face__shot__video__show__canonical_show__name=show,
+            probability__gt=0.9
+        )
+        if qs.count() > 0:
+            results.append(
+                (show, qs_to_result(qs, shuffle=True, limit=10))
+            )
+    return group_results(results)
