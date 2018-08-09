@@ -399,6 +399,58 @@ def plot_time_series(series_names, series_data, title, ylabel,
     plt.show()
 
     
+def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
+                             heatmap_label_fn=lambda x: '{:0.2f}'.format(x)):
+    """
+    Plot a heatmap, but with images as the ylabels.
+    
+    heatmap: a 2d ndarray
+    xcategories: [String] (x labels) 
+    yimages: [image] (y labels - images of same aspect ratio)
+    """
+    yimage_aspect_ratio = math.ceil(yimages[0].shape[1] / yimages[0].shape[0])
+    yimage_width_proportion = yimage_aspect_ratio / (yimage_aspect_ratio + len(xcategories))
+    
+    fig, ax = plt.subplots(
+        figsize=(1.5 * (yimage_aspect_ratio + len(xcategories)), 1.5 * len(yimages))
+    )
+    
+    ax.set_position([yimage_width_proportion, 0, 1 - yimage_width_proportion, 1])
+    cax = ax.imshow(heatmap, origin='lower')
+    ax.set_xticks(range(len(xcategories)))
+    ax.set_xticklabels(xcategories)
+    ax.set_yticks([])
+    max_val = np.max(heatmap)
+    min_val = np.min(heatmap)
+    for i in range(heatmap.shape[0]):
+        for j in range(heatmap.shape[1]):
+            text = ax.text(
+                j, i, heatmap_label_fn(heatmap[i, j]), 
+                ha='center', va='center', 
+                color='white' if (heatmap[i, j] - min_val) / (max_val - min_val) < 0.6 else 'black'
+            )
+
+    def _swap_channels(im):
+        im2 = im.copy()
+        im2[:, :, 0] = im[:, :, 2]
+        im2[:, :, 2] = im[:, :, 0]
+        return im2
+
+    for i, im in enumerate(yimages):
+        ax1 = fig.add_axes(
+            [
+                 0,
+                 i / len(yimages), 
+                 yimage_width_proportion,
+                 1 / len(yimages)
+            ]
+        )
+        ax1.axison = False
+        ax1.imshow(_swap_channels(im))
+    plt.title(title)
+    plt.show()
+
+    
 def tile_images(imgs, rows=None, cols=None):
     # If neither rows/cols is specified, make a square
     if rows is None and cols is None:

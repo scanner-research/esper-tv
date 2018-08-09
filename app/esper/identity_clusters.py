@@ -1,10 +1,11 @@
 from esper.prelude import *
 from esper.stdlib import *
-from esper.plot_util import plot_time_series
+from esper.plot_util import plot_time_series, plot_heatmap_with_images
 from esper.identity import faces_to_tiled_img
 from query.models import *
 
 import random
+from collections import Counter
 from datetime import datetime
 
 from django.db.models import ExpressionWrapper, F, FloatField
@@ -20,7 +21,7 @@ CENTROID_EST_SAMPLES = 50
     
 
 def _get_cluster_images(clusters, n, c):
-    cluster_images = {}
+    cluster_images = [None] * len(clusters)
     for cluster_id, face_ids in clusters.items():
         im = faces_to_tiled_img(
             Face.objects.filter(id__in=face_ids).order_by('?')[:n], 
@@ -30,7 +31,7 @@ def _get_cluster_images(clusters, n, c):
     return cluster_images
 
 
-def _recluster_clusters(clusters, merge_cluster_thresh):
+def _recluster_clusters(clusters, merge_cluster_threshold):
     cluster_samples = []
     cluster_clusters = []
     cluster_nsamples = {}
@@ -62,7 +63,7 @@ def _recluster_clusters(clusters, merge_cluster_thresh):
     meta_clusters = [{i} for i in range(k)]
     for i in range(k):
         for j in range(i + 1, k):
-            if np.linalg.norm(est_centroids[i] - est_centroids[j]) <= merge_cluster_thresh:
+            if np.linalg.norm(est_centroids[i] - est_centroids[j]) <= merge_cluster_threshold:
                 meta_clusters = _merge_meta_clusters(meta_clusters, i, j)
 
     new_clusters = defaultdict(list)
@@ -136,77 +137,50 @@ def _manual_recluster(clusters, examples_per_cluster):
     return recluster
 
 
-def identity_clustering_workflow(name, examples_per_cluster=10, 
-                                 merge_cluster_thresh=0.3, init_clusters=10):
+def identity_clustering_workflow(name, examples_per_cluster=10,
+                                 face_probability_threshold=0.9, 
+                                 merge_cluster_threshold=0.2, 
+                                 init_clusters=10, 
+                                 exclude_commercials=True):
     """
     Cluster faces associated with a name and plot heatmaps of the distribution of the faces 
     across shows.
     
-    examples_per_cluster - number of examples to plot
-    merge_cluster_thresh - l2 threshold for merging clusters automatically
-    init_clusters - number of initial clusters (k for k-means)
+    face_probability_threshold: minimum probability face to consider
+    examples_per_cluster: number of examples to plot
+    merge_cluster_threshold: l2 threshold for merging clusters automatically
+    init_clusters: number of initial clusters (k for k-means)
     """
 
-    def _plot_heatmap_helper(heatmap, cluster_images, title, 
-                             heatmap_label_fn=lambda x: '{:0.2f}'.format(x)):
-        face_labels_proportion = examples_per_cluster / (examples_per_cluster + len(channels))
-        fig, ax = plt.subplots(
-            figsize=(1.5 * (examples_per_cluster + len(channels)), 1.5 * len(cluster_images))
-        )
-        ax.set_position([face_labels_proportion, 0, 1 - face_labels_proportion, 1])
-        cax = ax.imshow(heatmap, origin='lower')
-        ax.set_xticks(range(len(channels)))
-        ax.set_xticklabels(channels)
-        ax.set_yticks([])
-        max_val = np.max(heatmap)
-        for i in range(heatmap.shape[0]):
-            for j in range(heatmap.shape[1]):
-                text = ax.text(
-                    j, i, heatmap_label_fn(heatmap[i, j]), 
-                    ha='center', va='center', 
-                    color='white' if heatmap[i, j] / (max_val + 1e-12) < 0.6 else 'black'
-                )
-                
-        def _swap_channels(im):
-            im2 = im.copy()
-            im2[:, :, 0] = im[:, :, 2]
-            im2[:, :, 2] = im[:, :, 0]
-            return im2
-        
-        for cluster_id, im in sorted(cluster_images.items(), key=lambda x: x[0]):
-            ax1 = fig.add_axes(
-                [
-                     0,
-                     cluster_id / len(cluster_images), 
-                     face_labels_proportion,
-                     1 / len(cluster_images)
-                ]
-            )
-            ax1.axison = False
-            ax1.imshow(_swap_channels(im))
-        plt.title(title)
-        plt.show()
-
     channels = [c.name for c in Channel.objects.all()]
+    
+    extra_kwargs = {}
+    if exclude_commercials:
+        extra_kwargs['face__shot__in_commercial'] = False
     face_id_to_info = {
         x['face__id'] : { 
             'channel' : x['face__shot__video__channel__name'],
             'screentime' : x['screentime'],
             'time': x['face__shot__video__time']
         } for x in FaceIdentity.objects.filter(
-            identity__name=name.lower(), probability__gt=0.9
+            identity__name=name.lower(), 
+            probability__gt=face_probability_threshold, 
+            **extra_kwargs
         ).annotate(
             screentime=ExpressionWrapper(
                 (F('face__shot__max_frame') - F('face__shot__min_frame')) / F('face__shot__video__fps'), 
                 output_field=FloatField()
             )
-        ).values('face__id', 'face__shot__video__channel__name', 'screentime', 'face__shot__video__time')
-    }    
+        ).values(
+            'face__id', 'face__shot__video__channel__name', 
+            'screentime', 'face__shot__video__time'
+        )
+    }
         
     clusters = defaultdict(list)
     for face_id, cluster_id in face_kmeans(list(face_id_to_info.keys()), k=init_clusters):
         clusters[cluster_id].append(face_id)
-    clusters = _recluster_clusters(clusters, merge_cluster_thresh)
+    clusters = _recluster_clusters(clusters, merge_cluster_threshold)
     clusters = _manual_recluster(clusters, examples_per_cluster)
     
     def _sort_clusters_by_screentime(clusters):
@@ -219,7 +193,7 @@ def identity_clustering_workflow(name, examples_per_cluster=10,
     clusters = _sort_clusters_by_screentime(clusters)
     
     cluster_images = _get_cluster_images(clusters, n=examples_per_cluster,
-                                        c=examples_per_cluster)
+                                         c=examples_per_cluster)
     
     def _truncate_to_date(dt):
         return datetime(year=dt.year, month=dt.month, day=dt.day)
@@ -228,7 +202,22 @@ def identity_clustering_workflow(name, examples_per_cluster=10,
     min_time = min(v['time'] for v in face_id_to_info.values() if v['time'] is not None)
     max_time = max(v['time'] for v in face_id_to_info.values() if v['time'] is not None)
     for cluster_id in clusters:
-        print('Cluster {} ({} faces)'.format(cluster_id, len(clusters[cluster_id])))
+        
+        # Compute cluster composition
+        channel_counts = Counter()
+        for face_id in clusters[cluster_id]:
+            channel_counts[face_id_to_info[face_id]['channel']] += 1
+            
+        print('Cluster {} ({} faces): {}'.format(
+            cluster_id, 
+            len(clusters[cluster_id]),
+            ', '.join([
+                '{}: {:0.1f}%'.format(
+                    channel,
+                    100 * channel_counts[channel] / len(clusters[cluster_id])
+                ) for channel in channels
+            ])
+        ))
         imshow(cluster_images[cluster_id])
         plt.show()
         
@@ -250,24 +239,27 @@ def identity_clustering_workflow(name, examples_per_cluster=10,
             figsize=(20, 2)
         )
     
-    # Make heatmaps
+    # Make heatmap
     raw_heatmap = np.zeros((len(clusters), len(channels)))
-    for cluster_id, face_ids in sorted(clusters.items(), key=lambda x: x[0]):
+    for cluster_id in sorted(clusters):
+        face_ids = clusters[cluster_id]
         for face_id in face_ids:
             raw_heatmap[cluster_id][
                 channels.index(face_id_to_info[face_id]['channel'])
             ] += face_id_to_info[face_id]['screentime']
             
-    _plot_heatmap_helper(
-        raw_heatmap, cluster_images,
+    plot_heatmap_with_images(
+        raw_heatmap, channels, cluster_images,
         'Images of {} and Screen Time'.format(name),
         heatmap_label_fn=lambda x: '{:d}m'.format(int(x / 60))
     )
-    _plot_heatmap_helper(
-        raw_heatmap / raw_heatmap.sum(axis=1)[:, np.newaxis], cluster_images,
+    plot_heatmap_with_images(
+        raw_heatmap / raw_heatmap.sum(axis=1)[:, np.newaxis],
+        channels, cluster_images,
         'Images of {} and Screen Time (Row Normalized: Distribution Across Channels)'.format(name)
     )
-    _plot_heatmap_helper(
-        raw_heatmap / raw_heatmap.sum(axis=0)[np.newaxis, :], cluster_images,
+    plot_heatmap_with_images(
+        raw_heatmap / raw_heatmap.sum(axis=0)[np.newaxis, :], 
+        channels, cluster_images,
         'Images of {} and Screen Time (Column Normalized: Distribution on a Channel)'.format(name)
     )
