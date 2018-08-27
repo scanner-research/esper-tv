@@ -27,6 +27,7 @@ class Video(base.Video):
     time = models.DateTimeField()
     commercials_labeled = models.BooleanField(default=False)
     srt_extension = base.CharField()
+    threeyears_dataset = models.BooleanField(default=False)
 
     def get_stride(self):
         return int(math.ceil(self.fps) / 2)

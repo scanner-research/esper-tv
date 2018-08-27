@@ -1,106 +1,11 @@
-from query.scripts.script_util import *
-from django import db
-import json
+import subprocess as sp
 
-# print 'Videos'
-# videos = {}
-# with open('videos.csv') as f:
-#     lines = [s.strip().split('\t') for s in f.readlines()[1:]]
-#     for line in lines:
-#         [id, path, num_frames, fps, width, height, timestamp, channel, show, time] = line
-#         videos[id] = Video(id=id, path=path, num_frames=int(num_frames), fps=float(fps), width=int(width),
-#                            height=int(height), channel=channel, show=show, time=time)
-# Video.objects.bulk_create(videos.values())
+with open('/app/all-videos.txt', 'r') as f:
+    all_videos = [s.strip() for s in f.readlines()]
 
-# print 'Frames'
-# frames = []
-# with open('frames.csv') as f:
-#     lines = [s.strip().split('\t') for s in f.readlines()[1:]]
-#     for line in lines:
-#         [id, number, video_id] = line
-#         frames.append(Frame(id=id, video=videos[video_id], number=number))
-# Frame.objects.bulk_create(frames)
+downloaded = [s.strip().split('/')[-1][:-4] for s in sp.check_output('gsutil ls "gs://esper/tvnews/videos/*.mp4"', shell=True).decode('utf-8').splitlines()]
 
-handlabeled, _ = Labeler.objects.get_or_create(name='handlabeled')
-mtcnn, _ = Labeler.objects.get_or_create(name='mtcnn')
-facenet, _ = Labeler.objects.get_or_create(name='facenet')
-genders = {
-    'M':  m.Gender.objects.get_or_create(name='male')[0],
-    'F':  m.Gender.objects.get_or_create(name='female')[0],
-    '0':  m.Gender.objects.get_or_create(name='unknown')[0]
-}
+remaining = set(all_videos) - set(downloaded)
 
-print('Tracks')
-old_tracks = {}
-new_tracks = {}
-with open('tracks.csv') as f:
-    lines = [s.strip().split('\t') for s in f.readlines()[1:]]
-    for [id, gender] in lines:
-        old_tracks[int(id)] = Face(gender=genders[gender])
-
-with open('db.csv') as f:
-    lines = f.readlines()[1:]
-
-print('Faces')
-for i, line in enumerate(lines):
-    [path, frame_number, labelset, track, gender, bbox] = line.strip().split('\t')[:6]
-    if track == 'NULL':
-        new_tracks[i] = Face()
-
-Face.objects.bulk_create(list(old_tracks.values()) + list(new_tracks.values()))
-
-videos = {v.path: v for v in Video.objects.all()}
-frames = {v.id: {f.number: f for f in Frame.objects.filter(video=v)} for v in list(videos.values())}
-
-print('Instances')
-instances = {}
-tuples = set()
-missing = set()
-for i, line in enumerate(lines):
-    [path, frame_number, labelset, track, gender, bbox] = line.strip().split('\t')[:6]
-    frame_number = int(frame_number)
-
-    fname = path.split('/')[-1]
-    if 'full_vids' in path:
-        path = 'tvnews/videos/{}'.format(fname)
-    else:
-        path = 'tvnews/segments/{}'.format(fname)
-    if not path in videos:
-        missing.add(path)
-        continue
-    video = videos[path]
-    frame = frames[video.id][frame_number]
-
-    if track == 'NULL':
-        face = new_tracks[i]
-    else:
-        face = old_tracks[int(track)]
-
-    key = (video.id, frame_number, labelset, face.id)
-    if key in tuples:
-        continue
-    tuples.add(key)
-
-    labeler = mtcnn if labelset == 'detected' else handlabeled
-    bbox_bytes = bytearray.fromhex(bbox)
-    bbox = proto.BoundingBox()
-    bbox.ParseFromString(bbox_bytes)
-
-    instances[i] = FaceInstance(frame=frame, bbox_x1=bbox.x1, bbox_x2=bbox.x2, bbox_y1=bbox.y1, bbox_y2=bbox.y2, bbox_score=bbox.score, labeler=labeler, face=face, gender=genders[gender])
-
-print(('ERROR, MISSING: ', missing))
-FaceInstance.objects.bulk_create(list(instances.values()))
-
-print('Features')
-features = []
-for i, line in enumerate(lines):
-    if not i in instances: continue
-    try:
-        [path, frame_number, labelset, track, gender, bbox, features_str] = line.strip().split('\t')[:7]
-
-        features.append(FaceFeatures(labeler=facenet, features=features_str, faceinstance=instances[i]))
-    except ValueError:
-        pass
-
-db.reset_queries()
-FaceFeatures.objects.bulk_create(features, batch_size=1000)
+with open('/app/remaining-videos.txt', 'w') as f:
+    f.write('\n'.join(list(remaining)))
