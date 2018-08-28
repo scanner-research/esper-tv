@@ -11,6 +11,7 @@ import os
 
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
+TF_VERSION = '1.5.0'
 
 cores = multiprocessing.cpu_count()
 
@@ -124,9 +125,9 @@ def main():
     parser.add_argument('--config', '-c', required=True)
     parser.add_argument('--extra-processes', nargs='*', default=[], choices=extra_processes.keys())
     parser.add_argument('--extra-services', nargs='*', default=[], choices=extra_services.keys())
-    parser.add_argument(
-        '--build', nargs='*', default=['base', 'local'], choices=['base', 'local', 'kube', 'tf'])
-    parser.add_argument('--kube-device', default='cpu')
+    parser.add_argument('--no-build', action='store_true')
+    parser.add_argument('--build-tf', action='store_true')
+    parser.add_argument('--build-device', default='cpu')
     parser.add_argument('--enable-proxy', action='store_true')
     parser.add_argument('--hostname')
     args = parser.parse_args()
@@ -259,47 +260,33 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
         f.write(yaml.dump(config.toDict()))
 
     # Build Docker images where necessary
-    if 'base' in args.build:
-        devices = list(
-            set(([device] if 'local' in args.build else []) +
-                ([args.kube_device] if 'kube' in args.build else [])))
+    if not args.no_build:
+        build_args = {
+            'cores': cores,
+            'tag': 'cpu' if args.build_device == 'cpu' else 'gpu-9.1-cudnn7',
+            'device': args.build_device,
+            'tf_version': TF_VERSION,
+            'build_tf': 'on' if args.build_tf else 'off'
+        }
 
-        for device in devices:
-            build_args = {
-                'cores': cores,
-                'tag': 'cpu' if device == 'cpu' else 'gpu-9.1-cudnn7',
-                'device': device,
-                'tf_version': '1.5.0',
-                'build_tf': 'on' if 'tf' in args.build else 'off'
-            }
+        sp.check_call(
+            'docker build --pull -t esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+            format(
+                device=args.build_device,
+                build_args=' '.join(
+                    ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
+            shell=True)
 
+        if 'google' in base_config:
+            base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
             sp.check_call(
-                'docker build --pull -t scannerresearch/esper-base:{device} {build_args} -f app/Dockerfile.base app'.
-                format(
-                    device=device,
-                    build_args=' '.join(
-                        ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
+                'docker tag esper-base:{device} {base_url}/esper-base:{device} && \
+                gcloud docker -- push {base_url}/esper-base:{device}'.format(
+                    device=args.build_device,
+                    base_url=base_url),
                 shell=True)
 
         sp.check_call('docker-compose build', shell=True)
-
-    if 'kube' in args.build:
-        if 'google' in base_config:
-            base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
-
-            def build(tag):
-                fmt_args = {'base_url': base_url, 'tag': tag, 'device': args.kube_device}
-                sp.check_call(
-                    'docker build --pull -t {base_url}/scanner-{tag}:{device} --build-arg device={device} -f app/kube/Dockerfile.{tag} app'.
-                    format(**fmt_args),
-                    shell=True)
-                sp.check_call(
-                    'gcloud docker -- push {base_url}/scanner-{tag}:{device}'.format(**fmt_args),
-                    shell=True)
-
-            build('master')
-            build('worker')
-            # build('loader')
 
     print('Successfully configured Esper. To start Esper, run:')
     print('$ docker-compose up -d')

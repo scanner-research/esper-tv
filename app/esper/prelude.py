@@ -268,27 +268,9 @@ class ScannerWrapper:
         self.db = db
 
     @classmethod
-    def create(cls, kube=False, multiworker=False):
-        if kube:
-            ip = sp.check_output(
-                '''
-        kubectl get pods -l 'app=scanner-master' -o json | \
-        jq '.items[0].spec.nodeName' -r | \
-        xargs -I {} kubectl get nodes/{} -o json | \
-        jq '.status.addresses[] | select(.type == "ExternalIP") | .address' -r
-        ''',
-                shell=True).strip()
-
-            port = sp.check_output(
-                '''
-        kubectl get svc/scanner-master -o json | \
-        jq '.spec.ports[0].nodePort' -r
-        ''',
-                shell=True).strip()
-
-            master = '{}:{}'.format(ip, port)
-
-            db = Database(master=master, start_cluster=False)
+    def create(cls, cluster=None, multiworker=False, **kwargs):
+        if cluster is not None:
+            db = cluster.database(**kwargs)
 
         else:
             workers = ['localhost:{}'.format(5002 + i)
@@ -301,7 +283,8 @@ class ScannerWrapper:
             # params.num_save_workers = 2
             db = Database(
                 #machine_params=params.SerializeToString(),
-                workers=workers)
+                workers=workers,
+                **kwargs)
 
         return cls(db)
 

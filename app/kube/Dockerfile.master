@@ -1,7 +1,0 @@
-ARG device
-FROM scannerresearch/scanner:${device}
-WORKDIR /app
-
-COPY ./.scanner.toml /root/.scanner.toml
-COPY kube/master.py .
-CMD ["python", "master.py"]
