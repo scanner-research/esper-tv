@@ -532,7 +532,7 @@ def sum_distinct_over_column(df, sum_column, distinct_columns, group_by_columns=
             variance_inc = probability * (1 - probability) * (x[sum_column] ** 2)
             sum_inc = x[sum_column] * probability
         else:
-            variance_in = 0.
+            variance_inc = 0.
             sum_inc = x[sum_column]
                           
         

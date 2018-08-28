@@ -451,7 +451,7 @@ def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
     plt.show()
 
     
-def tile_images(imgs, rows=None, cols=None):
+def tile_images(imgs, rows=None, cols=None, blank_value=0):
     # If neither rows/cols is specified, make a square
     if rows is None and cols is None:
         rows = int(math.sqrt(len(imgs)))
@@ -464,6 +464,6 @@ def tile_images(imgs, rows=None, cols=None):
     # Pad missing frames with black
     diff = rows * cols - len(imgs)
     if diff != 0:
-        imgs.extend([np.zeros(imgs[0].shape, dtype=imgs[0].dtype) for _ in range(diff)])
+        imgs.extend([np.zeros(imgs[0].shape, dtype=imgs[0].dtype) + blank_value for _ in range(diff)])
 
     return np.vstack([np.hstack(imgs[i * cols:(i + 1) * cols]) for i in range(rows)])

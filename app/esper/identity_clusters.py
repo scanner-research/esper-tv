@@ -104,7 +104,7 @@ def _manual_recluster(clusters, examples_per_cluster):
 
         try:
             line = input(
-                'Enter a cluster ("d" if done, "-" to discard): [choices: {}]: '.format(
+                'Enter a cluster delimited by ","s ("d" if done, "-" to discard): [choices: {}]: '.format(
                     ', '.join([str(i) for i in sorted(remaining_clusters)])
                 )
             )

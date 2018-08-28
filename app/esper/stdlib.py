@@ -140,11 +140,9 @@ def qs_to_result(result: QuerySet,
     bases = cls.__bases__
     if bases[0] is base_models.Frame:
         if custom_order_by_id is not None:
-            raise NotImplementedError()
-
-        if not shuffle and deterministic_order:
+            result = sorted(result, key=lambda x: custom_order_by_id.index(x.id))
+        elif not shuffle and deterministic_order:
             result = result.order_by('video', 'number')
-
         for frame in result[:limit * stride:stride]:
             materialized_result.append({
                 'video': frame.video.id,
@@ -236,9 +234,6 @@ def qs_to_result(result: QuerySet,
                 materialized_result.append(r)
 
     elif bases[0] is base_models.Track:
-        if custom_order_by_id is not None:
-            raise NotImplementedError()
-
         if not shuffle and deterministic_order:
             result = result.order_by('video', 'min_frame')
 
@@ -259,7 +254,10 @@ def qs_to_result(result: QuerySet,
                 result['things'] = [thing.id for thing in t.things.all()]
 
             materialized_result.append(result)
-        materialized_result.sort(key=itemgetter('video', 'min_frame'))
+        if custom_order_by_id is not None:
+            materialized_result.sort(key=lambda x: custom_order_by_id.index(x['track']))
+        else:
+            materialized_result.sort(key=itemgetter('video', 'min_frame'))
 
     elif bases[0] is base_models.Video:
         if custom_order_by_id is not None:

@@ -106,7 +106,6 @@ def two_poses_with_two_hands_above_head():
     } for (frame, poses) in frames], 'Frame')
 
 
-
 @query("Non-handlabeled random faces/genders")
 def not_handlabeled():
     from query.models import Labeler, Tag, FaceGender
@@ -144,6 +143,22 @@ def donald_trump():
     from esper.stdlib import qs_to_result
     return qs_to_result(FaceIdentity.objects.filter(identity__name='donald trump', probability__gt=0.99))
 
+@query('Two identities')
+def two_identities():
+    person1 = 'sean hannity'
+    person2 = 'paul manafort'
+    identity_threshold = 0.7
+    def shots_with_identity(name):
+        return {
+            x['face__shot__id'] for x in FaceIdentity.objects.filter(
+                identity__name=name.lower(), probability__gt=identity_threshold
+            ).values('face__shot__id')
+        }
+    shots = shots_with_identity(person1) & shots_with_identity(person2)
+    return qs_to_result(
+        FaceIdentity.objects.filter(face__shot__id__in=list(shots)),
+        limit=100000
+    )
 
 @query("Commercials")
 def commercials():
@@ -817,73 +832,73 @@ def face_search_by_id():
     return group_results(agg_results)
 
 
-@query('Face search using svm by id')
-def face_search_svm_by_id():
-    # Wolf Blitzer
-#     target_face_ids = [975965, 5254043, 844004, 105093, 3801699, 4440669, 265071]
-#     not_target_face_ids =  [
-#         1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608,
-#         4831099, 2172821, 1981350, 1095709, 4427683, 1762835]
+# @query('Face search using svm by id')
+# def face_search_svm_by_id():
+#     # Wolf Blitzer
+# #     target_face_ids = [975965, 5254043, 844004, 105093, 3801699, 4440669, 265071]
+# #     not_target_face_ids =  [
+# #         1039037, 3132700, 3584906, 2057919, 3642645, 249473, 129685, 2569834, 5366608,
+# #         4831099, 2172821, 1981350, 1095709, 4427683, 1762835]
 
-    # Melania Trump
-    target_face_ids = [
-        2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617,
-        1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072]
-    not_target_face_ids = []
+#     # Melania Trump
+#     target_face_ids = [
+#         2869846, 3851770, 3567361, 401073, 3943919, 5245641, 198592, 5460319, 5056617,
+#         1663045, 3794909, 1916340, 1373079, 2698088, 414847, 4608072]
+#     not_target_face_ids = []
 
-    # Bernie Sanders
-    # target_face_ids = [
-    #     644710, 4686364, 2678025, 62032, 13248, 4846879, 4804861, 561270, 2651257,
-    #     2083010, 2117202, 1848221, 2495606, 4465870, 3801638, 865102, 3861979, 4146727,
-    #     3358820, 2087225, 1032403, 1137346, 2220864, 5384396, 3885087, 5107580, 2856632,
-    #     335131, 4371949, 533850, 5384760, 3335516]
-    # not_target_face_ids = [
-    #     2656438, 1410140, 4568590, 2646929, 1521533, 1212395, 178315, 1755096, 3476158,
-    #     3310952, 1168204, 3062342, 1010748, 1275607, 2190958, 2779945, 415610, 1744917,
-    #     5210138, 3288162, 5137166, 4169061, 3774070, 2595170, 382055, 2365443, 712023,
-    #     5214225, 178251, 1039121, 5336597, 525714, 4522167, 3613622, 5161408, 2091095,
-    #     741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225,
-    #     178251]
+#     # Bernie Sanders
+#     # target_face_ids = [
+#     #     644710, 4686364, 2678025, 62032, 13248, 4846879, 4804861, 561270, 2651257,
+#     #     2083010, 2117202, 1848221, 2495606, 4465870, 3801638, 865102, 3861979, 4146727,
+#     #     3358820, 2087225, 1032403, 1137346, 2220864, 5384396, 3885087, 5107580, 2856632,
+#     #     335131, 4371949, 533850, 5384760, 3335516]
+#     # not_target_face_ids = [
+#     #     2656438, 1410140, 4568590, 2646929, 1521533, 1212395, 178315, 1755096, 3476158,
+#     #     3310952, 1168204, 3062342, 1010748, 1275607, 2190958, 2779945, 415610, 1744917,
+#     #     5210138, 3288162, 5137166, 4169061, 3774070, 2595170, 382055, 2365443, 712023,
+#     #     5214225, 178251, 1039121, 5336597, 525714, 4522167, 3613622, 5161408, 2091095,
+#     #     741985, 521, 2589969, 5120596, 284825, 3361576, 1684384, 4437468, 5214225,
+#     #     178251]
 
-    increment = 0.2
-    min_thresh = -5.0
-    max_thresh = 1.0
-    max_results_per_group = 50
-    exclude_labeled = False
+#     increment = 0.2
+#     min_thresh = -5.0
+#     max_thresh = 1.0
+#     max_results_per_group = 50
+#     exclude_labeled = False
 
-    face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
+#     face_qs = UnlabeledFace.objects if exclude_labeled else Face.objects
 
-    face_scores = face_svm(target_face_ids, not_target_face_ids, 1000, 500, min_thresh, max_thresh)
+#     face_scores = face_svm(target_face_ids, not_target_face_ids, 1000, 500, min_thresh, max_thresh)
 
-    face_scores_by_bucket = {}
-    idx = 0
-    max_idx = len(face_scores)
-    for t in frange(min_thresh, max_thresh, increment):
-        start_idx = idx
-        cur_thresh = t + increment
-        while idx < max_idx and face_scores[idx][1] < cur_thresh:
-            idx += 1
-        face_scores_by_bucket[t] = face_scores[start_idx:idx]
+#     face_scores_by_bucket = {}
+#     idx = 0
+#     max_idx = len(face_scores)
+#     for t in frange(min_thresh, max_thresh, increment):
+#         start_idx = idx
+#         cur_thresh = t + increment
+#         while idx < max_idx and face_scores[idx][1] < cur_thresh:
+#             idx += 1
+#         face_scores_by_bucket[t] = face_scores[start_idx:idx]
 
-    results_by_bucket = {}
-    for t in frange(min_thresh, max_thresh, increment):
-        face_ids = [x for x, _ in face_scores_by_bucket[t]]
-        if len(face_ids) != 0:
-            faces = face_qs.filter(
-                id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
-            ).distinct('person__frame__video')
-            if faces.count() == 0:
-                continue
-            results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
-            results_by_bucket[(t, t + increment, len(face_ids))] = results
+#     results_by_bucket = {}
+#     for t in frange(min_thresh, max_thresh, increment):
+#         face_ids = [x for x, _ in face_scores_by_bucket[t]]
+#         if len(face_ids) != 0:
+#             faces = face_qs.filter(
+#                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
+#             ).distinct('person__frame__video')
+#             if faces.count() == 0:
+#                 continue
+#             results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
+#             results_by_bucket[(t, t + increment, len(face_ids))] = results
 
-    if len(results_by_bucket) == 0:
-        raise Exception('No results to show')
+#     if len(results_by_bucket) == 0:
+#         raise Exception('No results to show')
 
-    agg_results = [('in range=({:0.2f}, {:0.2f}), count={}'.format(k[0], k[1], k[2]), results_by_bucket[k])
-                   for k in sorted(results_by_bucket.keys())]
+#     agg_results = [('in range=({:0.2f}, {:0.2f}), count={}'.format(k[0], k[1], k[2]), results_by_bucket[k])
+#                    for k in sorted(results_by_bucket.keys())]
 
-    return group_results(agg_results)
+#     return group_results(agg_results)
 
 
 @query('Face search with exclusions')
@@ -986,3 +1001,82 @@ def identity_across_shows():
                 (show, qs_to_result(qs, shuffle=True, limit=10))
             )
     return group_results(results)
+
+
+@query('Host with other still face')
+def shots_with_host_and_still_face():
+    from query.models import FaceIdentity
+    from esper.stdlib import qs_to_result
+    from collections import defaultdict
+
+    host_name = 'rachel maddow'
+    probability_thresh = 0.9
+    host_face_height_thresh = 0.2
+    other_face_height_thresh = 0.1
+    host_to_other_size_ratio = 1.2 # 20% larger 
+    max_other_faces = 2
+    
+    shots_to_host = {
+        x['face__shot__id']: (
+            x['face__id'], x['face__bbox_x1'], x['face__bbox_x2'],
+            x['face__bbox_y1'], x['face__bbox_y2']
+        ) for x in FaceIdentity.objects.filter(
+            identity__name=host_name, probability__gt=0.8,
+        ).values(
+            'face__id', 'face__shot__id', 'face__bbox_x1', 'face__bbox_x2', 
+            'face__bbox_y1', 'face__bbox_y2',
+        )
+    }
+
+    def host_bbox_filter(x1, x2, y1, y2):
+        # The host should be entirely on one side of the frame
+        if not x1 > 0.5 and not x2 < 0.5:
+            return False
+        if not y2 - y1 > host_face_height_thresh:
+            return False
+        return True
+
+    shots_to_host = {
+        k : v for k, v in shots_to_host.items() if host_bbox_filter(*v[1:])
+    }
+    assert len(shots_to_host) > 0, 'No shots with host found'
+
+    shots_to_other_faces = defaultdict(list)
+    for x in Face.objects.filter(
+                shot__id__in=list(shots_to_host.keys())
+            ).exclude(
+                id__in=[x[0] for x in shots_to_host.values()] # Host faces
+            ).values(
+                'shot__id', 'bbox_x1', 'bbox_x2', 'bbox_y1', 'bbox_y2'
+            ):
+        shot_id = x['shot__id']
+        bbox = (x['bbox_x1'], x['bbox_x2'], x['bbox_y1'], x['bbox_y2'])
+        shots_to_other_faces[shot_id].append(bbox)
+        
+    def shot_filter(bbox_list):
+        if len(bbox_list) > max_other_faces:
+            return False
+  
+        result = False
+        for x1, x2, y1, y2 in bbox_list:
+            _, hx1, hx2, hy1, hy2 = shots_to_host[shot_id] # Host coordinates
+            # All other faces hould be on different side from host
+            if (hx2 < 0.5 and x2 < 0.5) or (hx1 > 0.5 and x1 > 0.5):
+                return False
+            # All other faces should be smaller than the host face
+            if (hy2 - hy1) / (y2 - y1) < host_to_other_size_ratio:
+                return False
+            
+            result |= y2 - y1 >= other_face_height_thresh
+        return result
+    
+    selected_shots = { 
+        shot_id for shot_id, bbox_list in shots_to_other_faces.items()
+        if shot_filter(bbox_list)
+    }  
+    assert len(selected_shots) > 0, 'No shots selected for display'
+
+    return qs_to_result(
+        Face.objects.filter(shot__id__in=list(selected_shots)), 
+        limit=100000
+    )
