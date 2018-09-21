@@ -1,4 +1,4 @@
-FROM scannerresearch/esper-base:cpu
+FROM esper-base:cpu
 ARG spark_version=2.3.1
 
 WORKDIR /opt
