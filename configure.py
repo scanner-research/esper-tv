@@ -70,7 +70,7 @@ services:
       dockerfile: Dockerfile.app
       args:
         cores: {cores}
-    depends_on: [db, frameserver]
+    depends_on: [db, frameserver, redis]
     volumes:
       - ./app:/app
       - ${{HOME}}/.esper/.bash_history:/root/.bash_history
@@ -90,6 +90,11 @@ services:
     privileged: true # make perf work
     security_opt: # make gdb work
       - seccomp=unconfined
+
+  redis:
+    image: redis:4
+    ports: ['6379:6379']
+    environment: []
 """.format(
         nginx_port=NGINX_PORT,
         ipython_port=IPYTHON_PORT,
@@ -128,6 +133,7 @@ def main():
     parser.add_argument('--no-build', action='store_true')
     parser.add_argument('--build-tf', action='store_true')
     parser.add_argument('--build-device', default='cpu')
+    parser.add_argument('--base-only', action='store_true')
     parser.add_argument('--enable-proxy', action='store_true')
     parser.add_argument('--hostname')
     args = parser.parse_args()
@@ -286,7 +292,8 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                     base_url=base_url),
                 shell=True)
 
-        sp.check_call('docker-compose build', shell=True)
+        if not args.base_only:
+            sp.check_call('docker-compose build', shell=True)
 
     print('Successfully configured Esper. To start Esper, run:')
     print('$ docker-compose up -d')

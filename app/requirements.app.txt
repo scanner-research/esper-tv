@@ -25,3 +25,4 @@ scikit-learn
 tqdm
 google_images_download
 psutil
+redis

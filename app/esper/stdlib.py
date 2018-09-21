@@ -12,7 +12,6 @@ from timeit import default_timer as now
 import os
 import query.base_models as base_models
 import importlib
-import esper.queries as queries
 from typing import Any, Dict, List, Union
 from django.db.models.query import QuerySet
 from django.db.models import F
@@ -313,6 +312,7 @@ UnlabeledFace = _UnlabeledFace()
 
 
 def esper_js_globals():
+    import esper.queries as queries
 
     def get_fields(cls):
         fields = cls._meta.get_fields()

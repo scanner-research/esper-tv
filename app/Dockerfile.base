@@ -11,7 +11,14 @@ WORKDIR ${APPDIR}
 
 RUN apt-get update && apt-get install -y default-jre postgresql-9.5 libpq-dev
 COPY ./scripts ./scripts
-COPY ./requirements.base.txt .
+COPY ./requirements.base.txt scannerpatc[h] ./
 RUN ./scripts/build-tf.sh
 RUN pip3 install -r requirements.base.txt
+
+RUN if [ -f /app/scannerpatch ]; then \
+    cd /opt/scanner && \
+    git apply /app/scannerpatch && \
+    ./build.sh; \
+    fi
+
 COPY ./.scanner.toml /root/.scanner/config.toml
