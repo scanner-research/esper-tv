@@ -12,7 +12,12 @@ Esper is a framework for exploratory analysis of large video collections. Esper 
 
 
 ## Setup
-First, install [Docker CE](https://docs.docker.com/engine/installation/#supported-platforms), [Python 3.5](https://www.python.org/downloads/), [jq](https://stedolan.github.io/jq/download/), and [pip](https://pip.pypa.io/en/stable/installing/). Ensure that you have Docker version >= 17.12, which you can check by running:
+First, install [Docker CE](https://docs.docker.com/engine/installation/#supported-platforms), [Python 3.5](https://www.python.org/downloads/), [jq](https://stedolan.github.io/jq/download/), and [pip](https://pip.pypa.io/en/stable/installing/). If you're on Ubuntu, you can install Python/pip/jq as follows:
+```
+sudo apt-get install python3 python3-pip jq
+```
+
+Ensure that you have Docker version >= 17.12, which you can check by running:
 ```
 $ docker --version
 Docker version 17.12.0-ce, build c97c6d6

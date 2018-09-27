@@ -1,5 +1,5 @@
 ARG device=cpu
-FROM scannerresearch/esper-base:${device}
+FROM esper-base:${device}
 ARG cores=1
 ENV DJANGO_CONFIGURATION Docker
 ENV TERM=xterm
@@ -39,7 +39,7 @@ RUN jupyter nbextension install --sys-prefix --py vega && \
 RUN npm config set registry http://registry.npmjs.org && \
     npm config set strict-ssl false
 
-COPY .deps/esper-run /usr/bin
+COPY .deps/esper-run .deps/esper-ipython /usr/bin/
 COPY .deps/common.sh /tmp
 RUN cat /tmp/common.sh >> /root/.bashrc
 
@@ -47,6 +47,8 @@ ENV GLOG_minloglevel 1
 ENV GOOGLE_APPLICATION_CREDENTIALS ${APPDIR}/service-key.json
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/lib:/usr/local/lib/python3.5/dist-packages/hwang
 ENV PYTHONPATH $PYTHONPATH:/app
+ENV PYTHONPATH /opt/scannertools:$PYTHONPATH
+
 CMD cp .scanner.toml /root/ && \
     ./scripts/google-setup.sh && \
     ./scripts/jupyter-setup.sh && \

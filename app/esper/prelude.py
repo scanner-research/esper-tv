@@ -376,7 +376,7 @@ class Timer:
         t = int(now() - self.start)
         if self._run:
             log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self._s, int(t / 3600), int(
-                t / 60),
+                (t / 60) % 60),
                                                                   int(t) % 60))
 
 
@@ -532,13 +532,8 @@ def print_sql(self):
 setattr(QuerySet, 'print_sql', print_sql)
 
 import csv
-def bulk_create_copy(self, objects, table=None):
+def bulk_create_copy(self, objects, keys, table=None):
     meta = self.model._meta
-    keys = [
-        'id', 'face_id', 'gender_id', 'labeler_id', 'probability'
-        # f.attname for f in meta._get_fields(reverse=False)
-        # if not isinstance(f, models.ManyToManyField)
-    ]
     fname = '/app/rows.csv'
     log.debug('Creating CSV')
     with open(fname, 'w') as f:
@@ -552,14 +547,19 @@ def bulk_create_copy(self, objects, table=None):
                 id += 1
             writer.writerow([obj[k] for k in keys])
 
-    # log.debug('Writing to database')
+    log.debug('Writing to database')
+    print(sp.check_output("""
+    echo "\copy {table} FROM '/app/rows.csv' WITH DELIMITER ',' CSV HEADER;" | psql -h db esper will
+    """.format(table=table or meta.db_table),
+        shell=True))
+
     # with connection.cursor() as cursor:
     #     cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
     #         table or meta.db_table, ', '.join(keys), fname))
     #     if table is None:
     #         cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
 
-    #os.remove(fname)
+    # os.remove(fname)
     log.debug('Done!')
 
 
@@ -985,3 +985,22 @@ def esper_widget(result, **kwargs):
         result=result_with_metadata(result),
         jsglobals=esper_js_globals(),
         settings=kwargs)
+
+def ring():
+    print('\a')
+
+def batch(l, n):
+    for i in range(0, len(l), n):
+        yield l[i:i+n]
+
+class Notifier:
+    def __init__(self):
+        import redis
+        self._r = redis.Redis(host='redis', port=6379)
+        self._p = self._r.pubsub()
+
+    def notify(self, message, action=None):
+        self._r.publish('main', json.dumps({
+            'message': message,
+            'action': action
+        }))
