@@ -2,16 +2,16 @@ import React from 'react';
 import {observer} from 'mobx-react';
 import * as Rb from 'react-bootstrap';
 import _ from 'lodash';
-import {FrontendSettingsContext, SearchContext} from './contexts.jsx';
-import Consumer from 'utils/Consumer.jsx';
+import {SettingsContext, DataContext} from './contexts.jsx';
+import Consumer from './Consumer.jsx';
 
-export let LABEL_MODES = Object.freeze({
+let LABEL_MODES = Object.freeze({
   DEFAULT: 0,
   SINGLE_IDENTITY: 1,
   TOPIC_SEGMENTS: 2
 });
 
-export let SELECT_MODES = Object.freeze({
+let SELECT_MODES = Object.freeze({
   RANGE: 0,
   INDIVIDUAL: 1
 });
@@ -39,7 +39,7 @@ let selectModeToString = (i) => {
 };
 
 @observer
-class OptionsView extends React.Component {
+class Options extends React.Component {
   fields = [
     {
       name: 'Label mode',
@@ -174,22 +174,22 @@ class OptionsView extends React.Component {
   ]
 
   render() {
-    return <Consumer contexts={[FrontendSettingsContext, SearchContext]}>{(frontendSettings, searchResult) =>
+    return <Consumer contexts={[SettingsContext, DataContext]}>{(settingsContext, dataContext) =>
       <div className='options'>
         <h2>Options</h2>
         <form>
           {this.fields.map((field, i) => {
-             return (!field.filter || field.filter(searchResult.result[0]))
+             return (!field.filter || field.filter(dataContext.groups[0]))
                  ?  <Rb.FormGroup key={i}>
                    <Rb.ControlLabel>{field.name}</Rb.ControlLabel>
                    {{
                       range: () => (
                         <span>
                           <input type="range" min={field.opts.min} max={field.opts.max}
-                                 step={field.opts.step} value={frontendSettings.get(field.key)}
+                                 step={field.opts.step} value={settingsContext.get(field.key)}
                                  onChange={(e) => {
                                      if (!field.opts.disable_autoupdate) {
-                                       frontendSettings.set(field.key, e.target.value)
+                                       settingsContext.set(field.key, e.target.value)
                                      }
                                  }}/>
                           {/*
@@ -198,27 +198,27 @@ class OptionsView extends React.Component {
                               field vs. moving a slider). See:
                               https://stackoverflow.com/questions/30727837/react-change-input-defaultvalue-by-passing-props--
                             */}
-                          <span key={frontendSettings.get(field.key)}>
+                          <span key={settingsContext.get(field.key)}>
                             <Rb.FormControl type="number" min={field.opts.min} max={field.opts.max}
-                                            defaultValue={frontendSettings.get(field.key)}
+                                            defaultValue={settingsContext.get(field.key)}
                                             onKeyPress={(e) => {
                                                 if (e.key === 'Enter') {
-                                                  frontendSettings.set(field.key, e.target.value);
+                                                  settingsContext.set(field.key, e.target.value);
                                                 }
                                             }} />
                           </span>
                         </span>),
                       radio: () => (
                         <Rb.ButtonToolbar>
-                          <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={frontendSettings.get(field.key)}
-                                                onChange={(e) => {frontendSettings.set(field.key, e)}}>
+                          <Rb.ToggleButtonGroup type="radio" name={field.key} defaultValue={settingsContext.get(field.key)}
+                                                onChange={(e) => {settingsContext.set(field.key, e)}}>
                             <Rb.ToggleButton value={true}>Yes</Rb.ToggleButton>
                             <Rb.ToggleButton value={false}>No</Rb.ToggleButton>
                           </Rb.ToggleButtonGroup>
                         </Rb.ButtonToolbar>),
                       option: () => (
-                        <Rb.FormControl componentClass="select" defaultValue={frontendSettings.get(field.key)} onChange={(e) => {
-                            frontendSettings.set(field.key, e.target.value);
+                        <Rb.FormControl componentClass="select" defaultValue={settingsContext.get(field.key)} onChange={(e) => {
+                            settingsContext.set(field.key, e.target.value);
                         }}>
                           {_.zip(field.opts.keys, field.opts.values).map(([key, value]) =>
                             <option value={key} key={key}>{value}</option>)}
@@ -235,10 +235,10 @@ class OptionsView extends React.Component {
 }
 
 @observer
-class MetadataView extends React.Component {
+class Metadata extends React.Component {
   render() {
     let keys = [
-      ['Viewing',  [
+      ['ing',  [
         ['f', 'expand thumbnail'],
         ['p', 'play clip'],
         ['l', 'play clip in loop'],
@@ -262,31 +262,9 @@ class MetadataView extends React.Component {
       ]]
     ];
 
-    return <SearchContext.Consumer>{ searchResult =>
+    return <DataContext.Consumer>{ dataContext =>
       <div className='metadata'>
-        <h2>Metadata</h2>
-        <div className='meta-block'>
-          <div className='meta-key'>Type</div>
-          <div className='meta-val'>{searchResult.type}</div>
-        </div>
-        {/* <div className='meta-block colors'>
-            <div className='meta-key'>Labelers</div>
-            <div className='meta-val'>
-            {_.values(searchResult.labelers).map((labeler, i) =>
-            <div key={i}>
-            {labeler.name}: &nbsp;
-            <div style={{backgroundColor: searchResult.labeler_colors[labeler.id],
-            width: '10px', height: '10px', display: 'inline-box'}} />
-            </div>
-            )}
-            <div className='clearfix' />
-            </div>
-            </div> */}
-        <div className='meta-block'>
-          <div className='meta-key'>Count</div>
-          <div className='meta-val'>{searchResult.count}</div>
-        </div>
-        <h3>Help</h3>
+        <h2>Help</h2>
         <div className='help'>
           On hover over a clip:
           {keys.map(([name, sec_keys], i) =>
@@ -298,18 +276,18 @@ class MetadataView extends React.Component {
           )}
         </div>
       </div>
-    }</SearchContext.Consumer>;
+    }</DataContext.Consumer>;
   }
 }
 
-export class SidebarView extends React.Component {
+export default class Sidebar extends React.Component {
   render() {
     return <div>
       <div className='sidebar left'>
-        <MetadataView {...this.props} />
+        <Metadata {...this.props} />
       </div>
       <div className='sidebar right'>
-        <OptionsView {...this.props} />
+        <Options {...this.props} />
       </div>
     </div>;
   }

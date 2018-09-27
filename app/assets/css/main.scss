@@ -1,28 +1,25 @@
-@import '~react-select/dist/react-select.css';
+@import '~bootstrap/dist/css/bootstrap.min.css';
 @import '~open-iconic/font/css/open-iconic-bootstrap.css';
-@import '~video.js/dist/video-js.min.css';
-@import '~videojs-markers/dist/videojs.markers.min.css';
+@import '~vgrid/dist/vgrid.css';
 
-body.esper {
+@import 'search-input';
+@import 'sidebar';
+
+body {
     background: #fefefe;
     font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
 }
 
-.esper {
-    @import 'search-input';
-    @import 'search-result';
+.login-error {
+    text-align: center;
+    font-size: 24px;
+    margin-top: 30px;
+}
 
-    .login-error {
-        text-align: center;
-        font-size: 24px;
-        margin-top: 30px;
-    }
+.clearfix {
+    clear: both;
+}
 
-    .spinner {
-        content: url('/static/images/spinner.gif');
-    }
-
-    .clearfix {
-        clear: both;
-    }
+.search-result {
+    position: relative;
 }
