@@ -77,6 +77,7 @@ services:
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ${{HOME}}/scannertools:/opt/scannertools
+      - ${{HOME}}/vgrid:/opt/vgrid
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:

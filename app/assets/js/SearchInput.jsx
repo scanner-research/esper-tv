@@ -23,7 +23,7 @@ function changeFavicon(src) {
 }
 
 @observer
-class SchemaView extends React.Component {
+class Schema extends React.Component {
   state = {
     loadingExamples: false,
     showExamples: false
@@ -96,7 +96,7 @@ class SchemaView extends React.Component {
 }
 
 @observer
-export default class SearchInputView extends React.Component {
+export default class SearchInput extends React.Component {
   state = {
     searching: false,
     showSchema: false,
@@ -186,7 +186,7 @@ export default class SearchInputView extends React.Component {
            })}
            </Rb.Panel>
          : null}
-        {this.state.showSchema ? <SchemaView /> : null}
+        {this.state.showSchema ? <Schema /> : null}
         {this.state.error !== null
         ? <Rb.Alert bsStyle="danger">
           <pre>{this.state.error}</pre>

@@ -62,6 +62,7 @@ module.exports = env => {
 
     // TODO: generic way to resolve aliases?
     resolve: {
+      symlinks: false, // https://github.com/npm/npm/issues/5875
       modules: ['node_modules', 'assets'],
       alias: {
         'views': path.resolve('assets/js/views'),
@@ -76,7 +77,6 @@ module.exports = env => {
   webConfig.entry = {
     web: './assets/js/web',
     styles: './assets/css/main',
-    bootstrap: './assets/css/bootstrap',
   };
   // BundleTracker lets Django know about the webpack build status, displaying errors if they occur
   webConfig.plugins.unshift(new BundleTracker({filename: './assets/bundles/webpack-stats.json'}));

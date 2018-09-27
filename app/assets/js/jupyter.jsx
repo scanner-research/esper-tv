@@ -2,9 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
 import _ from 'lodash';
-import SearchResultView from 'views/SearchResultView.jsx';
-import SearchResult from 'models/SearchResult.jsx';
-import {PythonContext, BackendSettingsContext, SearchContext} from 'views/contexts.jsx';
+import Groups from 'views/Groups.jsx';
+import {PythonContext, DataContext} from 'views/contexts.jsx';
 import Provider from 'utils/Provider.jsx';
 
 // For some reason, `import` syntax doesn't work here? AMD issues?
@@ -13,12 +12,10 @@ let widgets = require('@jupyter-widgets/base');
 // Use window.require so webpack doesn't try to import ahead of time
 let Jupyter = window.require('base/js/namespace');
 
-export let EsperView = widgets.DOMWidgetView.extend({
+export let Esper = widgets.DOMWidgetView.extend({
   render: function() {
-    let result = this.model.get('result');
-    let globals = this.model.get('jsglobals');
+    let data = this.model.get('result');
     let settings = this.model.get('settings');
-    let searchResult = new SearchResult(result);
     let fields = {
       selected: []
     };
@@ -31,16 +28,12 @@ export let EsperView = widgets.DOMWidgetView.extend({
       this.model.save_changes();
     };
 
-    globals.things_flat = {};
-    _.merge(globals.things_flat, ... _.values(globals.things));
-
     ReactDOM.render(
       <Provider values={[
         [PythonContext, {fields: fields, update: updateFields}],
-        [BackendSettingsContext, globals],
-        [SearchContext, searchResult]]}>
+        [DataContext, dataContext]]}>
         <div className='esper' onClick={(e) => { e.stopPropagation(); }}>
-          <SearchResultView jupyter={Jupyter} settings={settings} />
+          <Groups jupyter={Jupyter} settings={settings} />
         </div>
       </Provider>,
       this.el);
