@@ -57,6 +57,10 @@ module.exports = env => {
             presets: ['env', 'stage-0', 'react']
           }
         }]
+      }, {
+        test: /\.js$/,
+        use: ["source-map-loader"],
+        enforce: "pre"
       }]
     },
 
