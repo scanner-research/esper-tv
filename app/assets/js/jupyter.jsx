@@ -2,9 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
 import _ from 'lodash';
-import Groups from 'views/Groups.jsx';
-import {PythonContext, DataContext} from 'views/contexts.jsx';
-import Provider from 'utils/Provider.jsx';
+import VGrid from 'vgrid';
+import {observable} from 'mobx';
 
 // For some reason, `import` syntax doesn't work here? AMD issues?
 let widgets = require('@jupyter-widgets/base');
@@ -12,10 +11,10 @@ let widgets = require('@jupyter-widgets/base');
 // Use window.require so webpack doesn't try to import ahead of time
 let Jupyter = window.require('base/js/namespace');
 
-export let Esper = widgets.DOMWidgetView.extend({
+export let EsperView = widgets.DOMWidgetView.extend({
   render: function() {
     let data = this.model.get('result');
-    let settings = this.model.get('settings');
+    let settings = observable.map(this.model.get('settings'));
     let fields = {
       selected: []
     };
@@ -29,13 +28,9 @@ export let Esper = widgets.DOMWidgetView.extend({
     };
 
     ReactDOM.render(
-      <Provider values={[
-        [PythonContext, {fields: fields, update: updateFields}],
-        [DataContext, dataContext]]}>
-        <div className='esper' onClick={(e) => { e.stopPropagation(); }}>
-          <Groups jupyter={Jupyter} settings={settings} />
-        </div>
-      </Provider>,
+      <div className='esper' onClick={(e) => { e.stopPropagation(); }}>
+        {data !== null ? <VGrid data={data} jupyter={Jupyter} settings={settings} /> : <span>No results.</span>}
+      </div>,
       this.el);
   },
 });
