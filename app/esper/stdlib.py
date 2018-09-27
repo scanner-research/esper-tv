@@ -20,7 +20,8 @@ import django.db.models as models
 from esper.prelude import collect, BUCKET
 from query.base_models import Track
 from query.models import \
-    Thing, Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Speaker, ThingType, Segment, Tag, Person, Object
+    Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Segment, Tag, Person, Object, \
+    Topic, Identity
 import django.apps
 
 def access(obj: Any, path: str) -> Any:
@@ -322,19 +323,10 @@ def esper_js_globals():
     for m in django.apps.apps.get_models():
         schema.append([m.__name__, get_fields(m)])
 
-    things = {
-        ty.name: {
-            d.id: d.name
-            for d in Thing.objects.filter(type=ty)
-        }
-        for ty in ThingType.objects.all()
-    }
-
     return {
         'bucket': BUCKET,
         'schema': schema,
         'queries': queries.queries,
-        'things': things
     }
 
 
@@ -365,7 +357,6 @@ def result_with_metadata(result):
 
                     if 'gender_id' in bbox:
                         gender_ids.add(bbox['gender_id'])
-
     def to_dict(qs):
         return {t['id']: t for t in list(qs.values())}
 
@@ -373,13 +364,19 @@ def result_with_metadata(result):
     frames = to_dict(Frame.objects.filter(id__in=frame_ids))
     labelers = to_dict(Labeler.objects.filter(id__in=labeler_ids))
     genders = to_dict(Gender.objects.all())
+    topics = to_dict(Topic.objects.all())
+    identities = to_dict(Identity.objects.all())
 
     return {
-        'count': result['count'] if 'count' in result else 0,
-        'type': result['type'] if 'type' in result else '',
-        'result': result['result'],
-        'videos': videos,
-        'frames': frames,
-        'labelers': labelers,
-        'genders': genders
+        'groups': result['result'],
+        'tables': {
+            'videos': videos,
+            'frames': frames,
+            'labelers': labelers,
+        },
+        'categories': {
+            'genders': genders,
+            'topics': topics,
+            'identities': identities
+        }
     }

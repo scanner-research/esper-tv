@@ -5,15 +5,19 @@ import numpy as np
 import tempfile
 
 
+class Identity(models.Model):
+    name = base.CharField()
+
+
 class CanonicalShow(models.Model):
     name = base.CharField()
     is_recurring = models.BooleanField(default=False)
-    hosts = models.ManyToManyField('Thing', blank=True)
+    hosts = models.ManyToManyField(Identity, blank=True)
 
 
 class Show(models.Model):
     name = base.CharField()
-    hosts = models.ManyToManyField('Thing', blank=True)
+    hosts = models.ManyToManyField(Identity, blank=True)
     canonical_show = models.ForeignKey(CanonicalShow)
 
 
@@ -51,8 +55,7 @@ class Frame(base.Frame):
 
 class Labeler(base.Labeler):
     data_path = base.CharField(blank=True, null=True)
-    created = models.DateTimeField(auto_now_add=True, null=True,
-                                   blank=True)
+    created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
 
 class Gender(models.Model):
@@ -63,36 +66,18 @@ class Commercial(base.Track):
     pass
 
 
-class ThingType(models.Model):
+class Topic(models.Model):
     name = base.CharField()
-
-
-class Thing(models.Model):
-    name = base.CharField()
-    type = models.ForeignKey(ThingType)
-
-    class Meta:
-        unique_together = ('name', 'type')
 
 
 class Segment(base.Track):
-    things = models.ManyToManyField(Thing)
+    topics = models.ManyToManyField(Topic)
     polarity = models.FloatField(null=True)
     subjectivity = models.FloatField(null=True)
 
 
 class Shot(base.Track):
     in_commercial = models.BooleanField(default=False)
-
-
-class Identity(models.Model):
-    name = base.CharField(null=True)
-    thing = models.ForeignKey(Thing, null=True)
-
-
-class Speaker(base.Track):
-    gender = models.ForeignKey(Gender)
-    identity = models.ForeignKey(Identity, null=True)
 
 
 class Person(base.Noun):
@@ -129,7 +114,7 @@ class FaceGender(base.Attribute):
 
 class FaceIdentity(base.Attribute):
     face = models.ForeignKey(Face)
-    identity = models.ForeignKey(Thing)
+    identity = models.ForeignKey(Identity)
     probability = models.FloatField(default=1.)
 
     class Meta:

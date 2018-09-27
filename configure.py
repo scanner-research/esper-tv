@@ -134,7 +134,7 @@ def main():
     parser.add_argument('--build-tf', action='store_true')
     parser.add_argument('--build-device', default='cpu')
     parser.add_argument('--base-only', action='store_true')
-    parser.add_argument('--enable-proxy', action='store_true')
+    parser.add_argument('--no-pull', action='store_true')
     parser.add_argument('--hostname')
     args = parser.parse_args()
 
@@ -151,10 +151,6 @@ def main():
                 base_config.google.zone)
         ])
         config.services.app.ports.append('8001:8001')  # for kubectl proxy
-
-    # Proxy
-    if args.enable_proxy:
-        config.services.app.build.args.https_proxy = "${{https_proxy}}"
 
     # GPU settings
     if 'compute' in base_config:
@@ -276,9 +272,10 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
         }
 
         sp.check_call(
-            'docker build --pull -t esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+            'docker build {pull} -t esper-base:{device} {build_args} -f app/Dockerfile.base app'.
             format(
                 device=args.build_device,
+                pull='--pull' if not args.no_pull else '',
                 build_args=' '.join(
                     ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
             shell=True)
