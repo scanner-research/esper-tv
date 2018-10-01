@@ -49,6 +49,10 @@ export default class App extends React.Component {
     this.setState({clickedBox: box.id});
   }
 
+  _onSave = (toSave) => {
+    return axios.post('/api/labeled', toSave);
+  }
+
   render() {
     if (this.state.valid) {
       return (
@@ -63,7 +67,8 @@ export default class App extends React.Component {
                 {this.state.dataContext !== null
                  ? (this.state.dataContext.groups.length > 0
                   ? <div className='search-result'>
-                    <VGrid data={this.state.dataContext} settings={this._settings} />
+                    <VGrid data={this.state.dataContext} settings={this._settings}
+                           onSave={this._onSave} />
                     <Sidebar />
                   </div>
                   : <div>No results matching query.</div>)

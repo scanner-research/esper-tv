@@ -15,8 +15,7 @@
   "scripts": {
     "build": "webpack",
     "watch": "webpack -w",
-    "watch-web": "webpack -w --env.target=web",
-    "watch-jupyter": "webpack -w --env.target=jupyter"
+    "prepublish": "webpack -p"
   },
   "devDependencies": {
     "@jupyter-widgets/base": "^1.1.10",
@@ -53,5 +52,8 @@
     "videojs-markers": "^1.0.1",
     "webpack": "^2.5.1",
     "webpack-bundle-tracker": "^0.2.0"
+  },
+  "config": {
+    "unsafe-perm": true
   }
 }
