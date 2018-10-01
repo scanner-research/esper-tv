@@ -40,10 +40,10 @@ RUN npm config set registry http://registry.npmjs.org && \
     npm config set strict-ssl false
 
 RUN git clone https://github.com/scanner-research/vgrid /opt/vgrid && \
-    cd /opt/vgrid && npm install && npm link && npm run prepublish
+    cd /opt/vgrid && npm link
 
 RUN git clone https://github.com/scanner-research/vgrid_jupyter /opt/vgrid_jupyter && \
-    cd /opt/vgrid_jupyter/js && npm install && npm link vgrid && npm run prepublish && \
+    cd /opt/vgrid_jupyter/js && npm link vgrid &&  \
     cd /opt/vgrid_jupyter && pip3 install -e . && \
     jupyter nbextension install vgrid_jupyter --py --symlink --sys-prefix && \
     jupyter nbextension enable vgrid_jupyter --py --sys-prefix
