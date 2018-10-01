@@ -978,10 +978,10 @@ def frange(x, y, jump):
 
 def esper_widget(result, **kwargs):
     from esper.stdlib import result_with_metadata, esper_js_globals
-    import esper_jupyter
+    import vgrid_jupyter
     if not 'select_mode' in kwargs:
         kwargs['select_mode'] = 1
-    return esper_jupyter.EsperWidget(
+    return vgrid_jupyter.VGridWidget(
         result=result_with_metadata(result),
         jsglobals=esper_js_globals(),
         settings=kwargs)

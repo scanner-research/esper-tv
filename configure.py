@@ -78,6 +78,7 @@ services:
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ${{HOME}}/scannertools:/opt/scannertools
       - ${{HOME}}/vgrid:/opt/vgrid
+      - ${{HOME}}/vgrid_jupyter:/opt/vgrid_jupyter
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:
