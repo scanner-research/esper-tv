@@ -6,17 +6,17 @@ pushd .
 cd /opt/vgrid
 git pull
 npm install
-npm run prepublish
+npm run build
 
 cd /opt/vgrid_jupyter/js
 git pull
 npm install
 npm link vgrid
-npm run prepublish
+npm run build
 
 cd /app
 npm install
 npm link vgrid
-npm run prepublish
+npm run build
 
 popd
