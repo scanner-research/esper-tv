@@ -52,5 +52,8 @@
     "videojs-markers": "^1.0.1",
     "webpack": "^2.5.1",
     "webpack-bundle-tracker": "^0.2.0"
+  },
+  "config": {
+    "unsafe-perm": true
   }
 }
