@@ -69,6 +69,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                     let mut s = s.as_slice();
                     let mut bytes = CodedInputStream::new(&mut s);
                     meta.merge_from(&mut bytes).expect("Protobuf deserialize failed");
+
                     meta
                 };
 
@@ -348,5 +349,51 @@ impl<Index: Indexed + Send> Corpus<Index> {
         let min_score_threshold = 3.0;
         counts.sort_unstable_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
         counts.into_iter().filter(|(_, score)| *score > min_score_threshold).collect::<Vec<_>>()
+    }
+
+    pub fn lowercase_segments(&self) -> Map<String, Vec<(f64, f64)>> {
+        // eprintln!("In lowercase_segments!");
+        // eprintln!("{}", self.docs.len());
+        self.docs.par_iter().filter_map(|(path, doc)| {
+            let chars : Vec<char> = doc.text.chars().collect();
+
+            let mut segments = doc.meta.words.par_iter().filter_map(|w| {
+                if chars[(w.char_end-1) as usize].is_lowercase() {
+                    Some((w.time_start as f64, w.time_end as f64))
+                } else {
+                    None
+                }
+            }).collect::<Vec<(f64, f64)>>();
+
+            segments.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            // eprintln!("{:?}", segments);
+
+            let mut smashed_vector : Vec<(f64, f64)> = Vec::new();
+            if (segments.len() > 0) {
+                let mut first = segments[0];
+                for segment in segments {
+                    if segment.0 >= first.0 && segment.0 <= first.1 {
+                        // segment overlaps with first
+                        if segment.1 > first.1 {
+                            // need to push the upper bound
+                            first.1 = segment.1
+                        }
+                    } else {
+                        // segment does not overlap with first
+                        smashed_vector.push(first);
+                        first = segment;
+                    }
+                }
+            }
+            // eprintln!("{:?}", smashed_vector);
+            
+            if smashed_vector.len() > 0 {
+                Some((path.clone(), smashed_vector))
+            } else {
+                None
+            }
+        })
+        .progress_count(self.docs.len())
+        .collect()
     }
 }
