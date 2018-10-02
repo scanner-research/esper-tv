@@ -43,7 +43,6 @@ lazy_static! {
                 }
                 Err(_) => None })
             .collect();
-        // let paths = vec![paths[0].clone()];
         Corpus::new(paths)
     };
 
@@ -53,7 +52,7 @@ lazy_static! {
 }
 
 #[get("/lowercase")]
-fn lowercase() -> Json<Map<String, Vec<(f64, f64)>>> {
+fn lowercase() -> Json<Vec<(String, f64, f64)>> {
     Json(CORPUS.lowercase_segments())
 }
 
