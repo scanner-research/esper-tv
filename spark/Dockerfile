@@ -1,5 +1,5 @@
 FROM esper-base:cpu
-ARG spark_version=2.3.1
+ARG spark_version=2.3.2
 
 WORKDIR /opt
 RUN wget -q http://apache.mirrors.tds.net/spark/spark-${spark_version}/spark-${spark_version}-bin-hadoop2.7.tgz && \
