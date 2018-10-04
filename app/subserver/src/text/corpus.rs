@@ -29,6 +29,12 @@ struct IndexedDocument<Index> {
     text_index: Index,
 }
 
+#[derive(Copy, Clone)]
+pub struct Interval {
+    time_start: f64,
+    time_end: f64,
+}
+
 pub struct Corpus<Index> {
     docs: Map<String, IndexedDocument<Index>>
 }
@@ -69,6 +75,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                     let mut s = s.as_slice();
                     let mut bytes = CodedInputStream::new(&mut s);
                     meta.merge_from(&mut bytes).expect("Protobuf deserialize failed");
+
                     meta
                 };
 
@@ -348,5 +355,55 @@ impl<Index: Indexed + Send> Corpus<Index> {
         let min_score_threshold = 3.0;
         counts.sort_unstable_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
         counts.into_iter().filter(|(_, score)| *score > min_score_threshold).collect::<Vec<_>>()
+    }
+
+    pub fn lowercase_segments(&self) -> Vec<(String, f64, f64)> {
+        self.docs.par_iter().filter_map(|(path, doc)| {
+            let chars : Vec<char> = doc.text.chars().collect();
+
+            let mut segments = doc.meta.words.par_iter().filter_map(|w| {
+                if chars[(w.char_end-1) as usize].is_lowercase() {
+                    Some(Interval { time_start : w.time_start as f64,
+                        time_end : w.time_end as f64 })
+                } else {
+                    None
+                }
+            }).collect::<Vec<Interval>>();
+
+            segments.sort_by(|interval1, interval2|
+                             interval1.time_start.partial_cmp(
+                                &interval2.time_start).unwrap());
+
+            let mut smashed_vector : Vec<(String, f64, f64)> = Vec::new();
+            if (segments.len() > 0) {
+                let mut first = segments[0];
+                for segment in segments {
+                    if segment.time_start >= first.time_start
+                        && segment.time_start <= first.time_end {
+                        // segment overlaps with first
+                        if segment.time_end > first.time_end {
+                            // need to push the upper bound
+                            first.time_end = segment.time_end
+                        }
+                    } else {
+                        // segment does not overlap with first
+                        smashed_vector.push((path.clone(), first.time_start, 
+                                             first.time_end));
+                        first = segment;
+                    }
+                }
+                smashed_vector.push((path.clone(), first.time_start,
+                    first.time_end));
+            }
+            
+            if smashed_vector.len() > 0 {
+                Some(smashed_vector)
+            } else {
+                None
+            }
+        })
+        .progress_count(self.docs.len())
+        .flatten()
+        .collect()
     }
 }

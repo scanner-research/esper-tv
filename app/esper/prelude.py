@@ -806,6 +806,17 @@ def imshow(img):
     plt.axis('off')
 
 
+def lowercase_segments():
+    from query.models import Video
+    video_ids = {v.item_name(): v.id for v in Video.objects.all()}
+    r = requests.get('http://localhost:8111/lowercase')
+
+    def item_name(path):
+        return '.'.join(os.path.basename(path).split('.')[:-2])
+
+    return [(video_ids[item_name(k)], t1, t2) for (k, t1, t2) in r.json()]
+
+
 def caption_search(phrases):
     from query.models import Video
     videos = {v.item_name(): v.id for v in Video.objects.all()}
