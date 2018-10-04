@@ -27,9 +27,9 @@ def get_screen_time_with_spark(name, group_by_column, face_identities_df,
             (face_identities_df.time < func.to_date(func.lit(date_range[1])))
         )
     
-    thing_id = Thing.objects.get(name=name).id
+    identity_id = Identity.objects.get(name=name).id
     face_identities_df = face_identities_df.where(
-        face_identities_df.identity_id == thing_id
+        face_identities_df.identity_id == identity_id
     )
     
     # Remove duplicate identity labels on the same faces using max
@@ -114,7 +114,7 @@ def get_person_in_shot_similarity_spark(names, face_identities_df,
     for name in names:
         shot_ids_by_name[name] = {
             x.shot_id for x in face_identities_df.where(
-                (face_identities_df.identity_id == Thing.objects.get(name=name).id) & 
+                (face_identities_df.identity_id == Identity.objects.get(name=name).id) & 
                 (face_identities_df.probability >= precision_thresh)
             ).select('shot_id').collect()
         }

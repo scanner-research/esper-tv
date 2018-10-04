@@ -836,8 +836,9 @@ def get_screen_time_by_show(model, date_range=None):
     }
 
 
-def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_runtime=True,
-                             figsize=(20,10)):
+def plot_screen_time_by_show(names, screen_times_by_show, 
+                             normalize_by_total_runtime=False,
+                             title=None, xlabel=None, figsize=(20,10)):
     """
     Plot per show screentime
     
@@ -856,7 +857,7 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
 
             ind = np.arange(len(data_by_name[0]))
 
-            full_width = 0.9
+            full_width = 0.6
             width = full_width / len(data_by_name)
             for i, data in enumerate(data_by_name):
                 ys = [y for _, y, _ in data]
@@ -869,9 +870,9 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
             ax1.set_ylim(ymin=0.)
             ax1.set_ylabel('Minutes')
             ax1.set_title('Minutes of non-commercial screen time by show for {}'.format(
-                          ' & '.join(names)))
-            ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name')
+                          ' & '.join(names)) if title is None else title)
+            ax1.set_xticks(ind - 0.25)
+            ax1.set_xlabel('Show name' if xlabel is None else xlabel)
             ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
             plt.show()
 
@@ -896,7 +897,7 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
             fig, ax1 = plt.subplots(figsize=figsize)
 
             ind = np.arange(len(data_by_name[0]))
-            full_width = 0.9
+            full_width = 0.6
             width = full_width / len(data_by_name)
 
             for i, data in enumerate(data_by_name):
@@ -909,10 +910,10 @@ def plot_screen_time_by_show(names, screen_times_by_show, normalize_by_total_run
             ax1.set_ylim(ymin=0.)
             ax1.set_ylabel('Proportion of Show\'s Total Runtime')
             ax1.set_title('Proportion of non-commercial screen time by show for {}'.format(
-                          ' & '.join(names)))
+                          ' & '.join(names)) if title is None else title)
             ax1.legend()
-            ax1.set_xticks(ind)
-            ax1.set_xlabel('Show name')
+            ax1.set_xticks(ind - 0.25)
+            ax1.set_xlabel('Show name' if xlabel is None else xlabel)
             ax1.set_xticklabels([x for x, _, _ in data], rotation=45, ha='right')
             plt.show()
 

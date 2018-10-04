@@ -221,22 +221,22 @@ def _annotate_host_probability(faces, identity_threshold=0.3):
         'face_identity.identity_id',
         'face_identity.labeler_id',
         'face_identity.probability',
-        'faces2.show_id', # Need this to get the hosts
-        'faces2.canonical_show_id',
+        'faces2.show_id', 
+        'faces2.canonical_show_id', # Need this to get the hosts
         'faces2.channel_id'
     )
     
     # Annotate host probabilities
-    show_id_to_host_ids = defaultdict(set)
-    show_hosts = spark.load('query_show_hosts')
-    for e in show_hosts.collect():
-        show_id_to_host_ids[e.show_id].add(e.thing_id)
+    canonical_show_id_to_host_ids = defaultdict(set)
+    canonical_show_hosts = spark.load('query_canonicalshow_hosts')
+    for e in canonical_show_hosts.collect():
+        canonical_show_id_to_host_ids[e.canonicalshow_id].add(e.identity_id)
         
-    def is_host_helper(identity_id, show_id):
-        return identity_id in show_id_to_host_ids[show_id]
+    def is_host_helper(identity_id, canonical_show_id):
+        return identity_id in canonical_show_id_to_host_ids[canonical_show_id]
     
     host_filter_udf = func.udf(is_host_helper, BooleanType())
-    host_identities = face_identities.filter(host_filter_udf('identity_id', 'show_id'))
+    host_identities = face_identities.filter(host_filter_udf('identity_id', 'canonical_show_id'))
     
     face_id_to_host_prob = defaultdict(float)
     for host in host_identities.collect():

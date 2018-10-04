@@ -137,11 +137,16 @@ def _manual_recluster(clusters, examples_per_cluster):
     return recluster
 
 
-def identity_clustering_workflow(name, examples_per_cluster=10,
-                                 face_probability_threshold=0.9, 
-                                 merge_cluster_threshold=0.2, 
-                                 init_clusters=10, 
-                                 exclude_commercials=True):
+def identity_clustering_workflow(
+    name, examples_per_cluster=10,
+    face_probability_threshold=0.9, 
+    merge_cluster_threshold=0.2, 
+    init_clusters=10, 
+    exclude_commercials=True,
+    duration_label_unit='m',
+    show_titles=True,
+    save_paths=None,
+):
     """
     Cluster faces associated with a name and plot heatmaps of the distribution of the faces 
     across shows.
@@ -248,18 +253,38 @@ def identity_clustering_workflow(name, examples_per_cluster=10,
                 channels.index(face_id_to_info[face_id]['channel'])
             ] += face_id_to_info[face_id]['screentime']
             
+    def heatmap_raw_label_fn(x):
+        if duration_label_unit == 'm':
+            x /= 60
+        elif duration_label_unit == 'h':
+            x /= 3600
+        elif duration_label_unit == 's':
+            pass
+        else:
+            raise Exception('Unknown unit: {}'.format(duration_label_unit))
+            
+        if x <= 1e-4:
+            return '0{}'.format(duration_label_unit)
+        elif x < 1:
+            return '<1{}'.format(duration_label_unit)
+        else:
+            return '{:d}{}'.format(int(x), duration_label_unit)
+            
     plot_heatmap_with_images(
         raw_heatmap, channels, cluster_images,
-        'Images of {} and Screen Time'.format(name),
-        heatmap_label_fn=lambda x: '{:d}m'.format(int(x / 60))
+        'Images of {} and Screen Time'.format(name) if show_titles else '',
+        heatmap_label_fn=heatmap_raw_label_fn,
+        save_path=save_paths[0] if save_paths else None
     )
     plot_heatmap_with_images(
         raw_heatmap / raw_heatmap.sum(axis=1)[:, np.newaxis],
         channels, cluster_images,
-        'Images of {} and Screen Time (Row Normalized: Distribution Across Channels)'.format(name)
+        'Images of {} and Screen Time (Row Normalized: Distribution Across Channels)'.format(name) if show_titles else '',
+        save_path=save_paths[1] if save_paths else None
     )
     plot_heatmap_with_images(
         raw_heatmap / raw_heatmap.sum(axis=0)[np.newaxis, :], 
         channels, cluster_images,
-        'Images of {} and Screen Time (Column Normalized: Distribution on a Channel)'.format(name)
+        'Images of {} and Screen Time (Column Normalized: Distribution on a Channel)'.format(name) if show_titles else '',
+        save_path=save_paths[2] if save_paths else None
     )

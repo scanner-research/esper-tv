@@ -47,7 +47,13 @@ def plot_binary_proportion_comparison(
     tertiary_series_names=None, tertiary_data=None,
     baseline_series_names=None, baseline_data=None,
     raw_data_to_label_fn=str, show_ebars=True, z_score=1.96,
-    category_color_map=defaultdict(lambda: 'Black')
+    category_color_map=defaultdict(lambda: 'Black'),
+    sort_order=None, figsize=(15, 7), legend_loc=0,
+    series_colors=['LightBlue', 'LightSalmon'],
+    error_colors=['Blue', 'Red'],
+    secondary_colors=['DarkBlue', 'DarkRed'],
+    baseline_colors=['DarkBlue', 'DarkRed'],
+    save_path=None
 ):
     """
     series_names: [String]
@@ -74,7 +80,7 @@ def plot_binary_proportion_comparison(
         assert len(baseline_series_names) == len(baseline_data)
 
     def plot_bar_chart_by_show_scaled(primary_data, secondary_data, tertiary_data, baseline_data):
-        fig, ax1 = plt.subplots()
+        fig, ax1 = plt.subplots(figsize=figsize)
 
         ind = np.arange(len(primary_data))
         width = 0.8
@@ -82,19 +88,21 @@ def plot_binary_proportion_comparison(
         kwargs = {}
         if show_ebars:
             kwargs['yerr'] = [z_score * math.sqrt(e1) for _, _, e1, _, _, _, _ in primary_data]
-            kwargs['ecolor'] = 'Blue'
+            kwargs['ecolor'] = error_colors[0]
         rect1 = ax1.bar(ind - width / 2,
                         [s1 for _, s1, _,  _, _, _, _ in primary_data], 
-                        width, color='LightBlue', label=series_names[0], zorder=0,
+                        width, color=series_colors[0],
+                        label=series_names[0], zorder=0,
                         **kwargs)
         
         kwargs = {}
         if show_ebars:
             kwargs['yerr'] = [z_score * math.sqrt(e2) for _, _, _, _, _, e2, _ in primary_data]
-            kwargs['ecolor'] = 'Red'
+            kwargs['ecolor'] = error_colors[1]
         rect2 = ax1.bar(ind - width / 2, 
                         [-s2 for _, _, _, _, s2, _, _ in primary_data],
-                        width, color='LightSalmon', label=series_names[1], zorder=0,
+                        width, color=series_colors[1],
+                        label=series_names[1], zorder=0,
                         **kwargs)
         
         plt.axhline(-0.5, color='LightGray', linestyle='--', 
@@ -103,11 +111,11 @@ def plot_binary_proportion_comparison(
         
         if secondary_data is not None:
             ax1.scatter(ind - width / 2, [x for x, _ in secondary_data], 
-                        color='DarkBlue', marker='o', s=50,
+                        color=secondary_colors[0], marker='o', s=50,
                         label=secondary_series_names[0],
                         zorder=2)
             ax1.scatter(ind - width / 2, [-y for _, y in secondary_data], 
-                        color='DarkRed', marker='s', s=50,
+                        color=secondary_colors[1], marker='s', s=50,
                         label=secondary_series_names[1],
                         zorder=2)
             
@@ -122,9 +130,11 @@ def plot_binary_proportion_comparison(
                         zorder=3)
             
         if baseline_data is not None:
-            plt.axhline(baseline_data[0], color='DarkBlue', linestyle=':', 
+            plt.axhline(baseline_data[0], color=baseline_colors[0], 
+                        linestyle=':', 
                         label=baseline_series_names[0], zorder=4)
-            plt.axhline(-baseline_data[1], color='DarkRed', linestyle=':', 
+            plt.axhline(-baseline_data[1], color=baseline_colors[1], 
+                        linestyle=':', 
                         label=baseline_series_names[1], zorder=4)
             
         if raw_data_to_label_fn is not None:
@@ -140,7 +150,7 @@ def plot_binary_proportion_comparison(
 
         ax1.set_ylabel(ylabel)
         ax1.set_title(title)
-        ax1.set_xticks(ind)
+        ax1.set_xticks(ind - 0.25)
         ax1.set_xlabel(xlabel)
         ax1.set_xticklabels([x[0] for x in primary_data], rotation=45, ha='right')
         
@@ -154,8 +164,12 @@ def plot_binary_proportion_comparison(
         
         plt.axhline(0., color='Black', linestyle='-')
         
-        ax1.legend()
-        plt.show()
+        ax1.legend(loc=legend_loc)
+        if save_path is not None:
+            plt.tight_layout()
+            plt.savefig(save_path)
+        else:
+            plt.show()
 
     primary_data_to_plot = []
     for category in values_by_category[0]:
@@ -176,8 +190,13 @@ def plot_binary_proportion_comparison(
             (series2 + EPSILON) / denom, var2 / denom ** 2, series2
         ))
         
-    # Order by primary series
-    primary_data_to_plot.sort(key=lambda x: x[1] - x[4])
+    if sort_order is not None:
+        sort_fn = lambda x: sort_order.index(x[0])
+        primary_data_to_plot = [x for x in primary_data_to_plot if x[0] in sort_order]
+    else:
+        # Order by primary series
+        sort_fn = lambda x: x[1] - x[4]
+    primary_data_to_plot.sort(key=sort_fn)
     
     def get_non_primary_data(selected_data):
         selected_data_to_plot = []
@@ -313,8 +332,8 @@ def plot_time_series(series_names, series_data, title, ylabel,
                      min_time=None, max_time=None, plotstyle='-o', 
                      linewidth=1, discrete_events=None, 
                      discrete_event_marker='*',
-                     discrete_event_color = 'Red',
-                     figsize=(20, 7)):
+                     discrete_event_color = 'Black',
+                     figsize=(20, 7), save_path=None):
     """
     series_names: [String]
     series_data: [{datetime: value, ...}, ...]
@@ -385,8 +404,8 @@ def plot_time_series(series_names, series_data, title, ylabel,
             value_x, value_y = _unpack_event(value)
             x.append(value_x)
             y.append(value_y)
-            ax.text(value_x, value_y, event, rotation=45, color=discrete_event_color,
-                    ha='right', va='top')
+            ax.text(value_x, value_y, event + ' ', color=discrete_event_color,
+                    ha='right', va='center')
         ax.scatter(x, y, marker=discrete_event_marker, color=discrete_event_color)
             
     ax.legend()
@@ -396,11 +415,15 @@ def plot_time_series(series_names, series_data, title, ylabel,
     ax.set_xticklabels(x_ticklabels, rotation=45, ha='right')
     ax.set_ylabel(ylabel)
     ax.set_xlabel('Month-Year')
-    plt.show()
-
+    if save_path is not None:
+        plt.tight_layout()
+        plt.savefig(save_path)
+    else:
+        plt.show()
     
 def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
-                             heatmap_label_fn=lambda x: '{:0.2f}'.format(x)):
+                             heatmap_label_fn=lambda x: '{:0.2f}'.format(x),
+                             save_path=None):
     """
     Plot a heatmap, but with images as the ylabels.
     
@@ -412,7 +435,7 @@ def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
     yimage_width_proportion = yimage_aspect_ratio / (yimage_aspect_ratio + len(xcategories))
     
     fig, ax = plt.subplots(
-        figsize=(1.5 * (yimage_aspect_ratio + len(xcategories)), 1.5 * len(yimages))
+        figsize=(1 * (yimage_aspect_ratio + len(xcategories)), 1 * len(yimages))
     )
     
     ax.set_position([yimage_width_proportion, 0, 1 - yimage_width_proportion, 1])
@@ -448,7 +471,10 @@ def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
         ax1.axison = False
         ax1.imshow(_swap_channels(im))
     plt.title(title)
-    plt.show()
+    if save_path is not None:
+        plt.savefig(save_path)
+    else:
+        plt.show()
 
     
 def tile_images(imgs, rows=None, cols=None, blank_value=0):
@@ -467,3 +493,59 @@ def tile_images(imgs, rows=None, cols=None, blank_value=0):
         imgs.extend([np.zeros(imgs[0].shape, dtype=imgs[0].dtype) + blank_value for _ in range(diff)])
 
     return np.vstack([np.hstack(imgs[i * cols:(i + 1) * cols]) for i in range(rows)])
+
+
+def plot_bar_chart(series_names, values_by_category, title, xlabel, ylabel, 
+                   series_colors=None, logy=False, show_ebars=True, sort_order=None, 
+                   figsize=(14, 7), save_path=None):
+    assert len(series_names) == len(values_by_category)
+    
+    if not sort_order:
+        all_categories = set()
+        for v in values_by_category:
+            all_categories.update(v.keys())
+        sort_order = list(all_categories)
+        sort_order.sort(key=lambda x: values_by_category[0].get(_unpack_value(x), -1e12))
+    all_categories = sort_order         
+           
+    series_to_plot = []
+    for values in values_by_category:
+        series = []
+        for c in all_categories:
+            value = _unpack_value(values.get(c, 0))
+            variance = _unpack_variance(values.get(c, (None, 0))) if show_ebars else 0
+            series.append((value, variance))
+        series_to_plot.append(series)
+    
+    fig, ax1 = plt.subplots(figsize=figsize)
+    ind = np.arange(len(all_categories))
+
+    full_width = 0.6
+    width = full_width / len(series_to_plot)
+    for i, series in enumerate(series_to_plot):
+        ys = [y for y, _ in series]
+        stds = [1.96 * (z ** 0.5) for _, z in series]
+        rect = ax1.bar(
+            ind - ((full_width / 2) + (i * width)), ys, 
+            width, 
+            color=get_color(i) if series_colors is None else series_colors[i], 
+            yerr=stds if show_ebars else None, 
+            ecolor='black', label=series_names[i]                                                               
+        )
+
+    ax1.legend()
+    ax1.set_ylabel(ylabel)
+    if logy:
+        ax1.set_yscale('log', nonposy='clip')
+    else:
+        ax1.set_ylim(ymin=0.)
+    ax1.set_title(title)
+    ax1.set_xticks(ind - 0.25)
+    ax1.set_xlabel(xlabel)
+    ax1.set_xticklabels(all_categories, rotation=45, ha='right')
+    if save_path is not None:
+        plt.tight_layout()
+        plt.savefig(save_path)
+    else:
+        plt.show()
+    

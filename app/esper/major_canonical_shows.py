@@ -10,7 +10,8 @@ NUM_MAJOR_CANONICAL_SHOWS = 40
 MAJOR_CANONICAL_SHOWS = [
     x['show__canonical_show__name'] for x in
     Video.objects.filter(
-        show__canonical_show__is_recurring=True
+        show__canonical_show__is_recurring=True,
+        threeyears_dataset=True # TODO: remove this check
     ).values(
         'show__canonical_show__name'
     ).annotate(

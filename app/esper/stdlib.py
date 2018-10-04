@@ -244,12 +244,6 @@ def qs_to_result(result: QuerySet,
                 'min_frame': t.min_frame,
                 'max_frame': t.max_frame,
             }
-
-            if cls is Speaker:
-                result['gender'] = t.gender_id
-                if t.identity is not None:
-                    result['identity'] = t.identity_id
-
             if cls is Segment:
                 result['things'] = [thing.id for thing in t.things.all()]
 

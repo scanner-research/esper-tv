@@ -163,10 +163,17 @@ struct FaceFeaturesInput {
 fn face_features(input: Json<FaceFeaturesInput>) -> Json<Vec<Vec<f32>>> {
     Json(FEATURES.features_for_id(&input.ids).into_iter().map(|v| v.to_vec()).collect())
 }
+
 fn main() {
     let config = Config::build(Environment::Development)
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![sub_search, sub_count, mutual_info, find_segments, face_search, face_search_svm, face_features, face_kmeans]).launch();
+    rocket::custom(config, true).mount(
+        "/", 
+        routes![
+            sub_search, sub_count, mutual_info, find_segments, 
+            face_search, face_search_svm, face_features, face_kmeans
+        ]
+    ).launch();
 }
