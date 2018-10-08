@@ -43,6 +43,10 @@ class SparkWrapper:
     def dicts_to_df(self, ds):
         return self.spark.createDataFrame(self.sc.parallelize(ds, 96).map(lambda d: Row(**d)))
 
+    # array of tuples to dataframe, with column names in cols
+    def arraytups_to_df(self, array, cols):
+        self.spark.createDataFrame(array, cols);
+
     def append_column(self, df, name, col):
         csv_path = '/app/{}.csv'.format(name)
         with open(csv_path, 'wb') as f:

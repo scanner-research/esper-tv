@@ -362,12 +362,14 @@ impl<Index: Indexed + Send> Corpus<Index> {
             let chars : Vec<char> = doc.text.chars().collect();
 
             let mut segments = doc.meta.words.par_iter().filter_map(|w| {
-                if chars[(w.char_end-1) as usize].is_lowercase() {
-                    Some(Interval { time_start : w.time_start as f64,
-                        time_end : w.time_end as f64 })
-                } else {
-                    None
+                for i in w.char_start..w.char_end {
+                    if chars[i as usize].is_lowercase() {
+                        return Some(Interval {
+                            time_start : w.time_start as f64,
+                            time_end : w.time_end as f64 })
+                    }
                 }
+                None
             }).collect::<Vec<Interval>>();
 
             segments.sort_by(|interval1, interval2|
