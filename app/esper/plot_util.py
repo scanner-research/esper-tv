@@ -497,7 +497,7 @@ def tile_images(imgs, rows=None, cols=None, blank_value=0):
 
 def plot_bar_chart(series_names, values_by_category, title, xlabel, ylabel, 
                    series_colors=None, logy=False, show_ebars=True, sort_order=None, 
-                   figsize=(14, 7), save_path=None):
+                   figsize=(14, 7), save_path=None, legend_loc=0):
     assert len(series_names) == len(values_by_category)
     
     if not sort_order:
@@ -533,9 +533,10 @@ def plot_bar_chart(series_names, values_by_category, title, xlabel, ylabel,
             ecolor='black', label=series_names[i]                                                               
         )
 
-    ax1.legend()
+    ax1.legend(loc=legend_loc)
     ax1.set_ylabel(ylabel)
     if logy:
+        ax1.set_ylim(bottom=10)
         ax1.set_yscale('log', nonposy='clip')
     else:
         ax1.set_ylim(ymin=0.)
