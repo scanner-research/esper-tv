@@ -93,11 +93,11 @@ class TemporalRange:
     '''
     Getters.
     '''
-    def start(self):
+    def get_start(self):
         return self.start
-    def end(self):
+    def get_end(self):
         return self.end
-    def label(self):
+    def get_label(self):
         return self.label
 
 
@@ -115,13 +115,12 @@ class TemporalRangeList:
     Return an ordered list of the TemporalRanges.
     '''
     def get_temporal_ranges(self):
-        return trs
+        return self.trs
 
     '''
     Combine the temporal ranges in self with the temporal ranges in other.
     '''
     def set_union(self, other):
-        assert(isinstance(other, TemporalRangeList))
         return TemporalRangeList(self.trs + other.trs)
 
     '''
@@ -187,6 +186,20 @@ class TemporalRangeList:
         return self.filter(filter_fn)
 
     '''
+    Filter the ranges in self against the ranges in other, only keeping the
+    ranges in self that satisfy predicate with at least one other range in
+    other.
+    '''
+    def filter_against(self, other, predicate=TruePred()):
+        def filter_fn(tr):
+            for trother in other.trs:
+                if predicate.compute(tr, trother):
+                    return True
+            return False
+
+        return self.filter(filter_fn)
+
+    '''
     Calculate the difference between the temporal ranges in self and the temporal ranges
     in other.
 
@@ -214,7 +227,11 @@ class TemporalRangeList:
     |---------|              |-------------------------------|
     |------------------------------|                |--------|
 
-    Only processes pairs that overlap and that satisfy predicate.
+    Only computes differences for pairs that overlap and that satisfy
+    predicate.
+
+    If an interval in self overlaps no pairs in other such that the two
+    satisfy predicate, then the interval is reproduced in the output.
 
     Labels the resulting intervals with label_producer_fn. For recursive_diff,
     the intervals passed in to the label producer function are the original
@@ -225,11 +242,15 @@ class TemporalRangeList:
         if not recursive_diff:
             output = []
             for tr1 in self.trs:
+                found_overlap = False
                 for tr2 in other.trs:
                     if Overlaps().compute(tr1, tr2) and predicate.compute(tr1, tr2):
+                        found_overlap = True
                         candidates = tr1.minus(tr2)
                         if len(candidates) > 0:
                             output = output + candidates
+                if not found_overlap:
+                    output.append(tr1.copy())
             return TemporalRangeList(output)
         else:
             output = []
@@ -245,6 +266,9 @@ class TemporalRangeList:
                     if (Overlaps().compute(tr1, tr2) and
                         predicate.compute(tr1, tr2)):
                         overlapping.append(tr2)
+
+                if len(overlapping) == 0:
+                    output.append(tr1.copy())
                 
                 # Create a sorted list of all start to end points between
                 #   tr1.start and tr1.end, inclusive

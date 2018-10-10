@@ -158,6 +158,24 @@ class TemporalRangeListTest(unittest.TestCase):
         trl1 = trl1.filter_length(max_length=1.8)
         self.assertEqual(len(trl1.trs), 0)
 
+    def test_filter_against(self):
+        trlong1 = TemporalRange(1., 10., 1)
+        trlong2 = TemporalRange(3., 15., 2)
+
+        trshort1 = TemporalRange(2., 2.5, 3)
+        trshort2 = TemporalRange(2., 2.7, 4)
+        trshort3 = TemporalRange(2.9, 3.5, 5)
+
+        trllong = TemporalRangeList([trlong2, trlong1])
+        trlshort = TemporalRangeList([
+            trshort1,
+            trshort2,
+            trshort3])
+
+        trlfiltered = trllong.filter_against(trlshort, predicate=DuringInv())
+        self.assertEqual(len(trlfiltered.trs), 1)
+        self.assertEqual(trlfiltered.trs[0].__repr__(), trlong1.__repr__())
+
     def test_minus(self):
         trlong1 = TemporalRange(1., 10., 1)
         trlong2 = TemporalRange(3., 15., 2)
@@ -222,6 +240,23 @@ class TemporalRangeListTest(unittest.TestCase):
             "<Temporal Range start:1.0 end:9.0 label:1>")
         self.assertEqual(trlminusrec.trs[1].__repr__(),
             "<Temporal Range start:3.0 end:14.0 label:2>")
+
+    def test_minus_against_nothing(self):
+        trlong1 = TemporalRange(1., 10., 1)
+        trlong2 = TemporalRange(3., 15., 2)
+        
+        trllong = TemporalRangeList([trlong2, trlong1])
+
+        trshort1 = TemporalRange(20., 20.5, 3)
+        trlshort = TemporalRangeList([trshort1])
+
+        trlminusrec = trllong.minus(trlshort)
+        self.assertEqual(len(trlminusrec.trs), 2)
+        self.assertEqual(trlminusrec.trs[0].__repr__(),
+            "<Temporal Range start:1.0 end:10.0 label:1>")
+        self.assertEqual(trlminusrec.trs[1].__repr__(),
+            "<Temporal Range start:3.0 end:15.0 label:2>")
+
 
     def test_overlaps(self):
         tra1 = TemporalRange(1., 25., 1)
