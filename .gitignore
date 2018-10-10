@@ -1,5 +1,6 @@
 *.sqlite3
 *.pyc
+*.swp
 docker-compose.yml
 nvidia-docker-compose.yml
 service-key.json

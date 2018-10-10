@@ -16,6 +16,7 @@ assets/audio
 .ipynb_checkpoints
 rust-scripts/target
 rust-scripts/build
+esper_jupyter
 # Specific files
 service-key.json
 npm-debug.log
