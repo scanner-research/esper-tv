@@ -90,6 +90,17 @@ class TemporalRange:
         return TemporalRange(min(self.start, other.start),
                 max(self.end, other.end), label)
 
+    '''
+    Getters.
+    '''
+    def start(self):
+        return self.start
+    def end(self):
+        return self.end
+    def label(self):
+        return self.label
+
+
 '''
 A TemporalRangeList is a wrapper around a list of Temporal Ranges that contains
 a number of useful helper functions.
@@ -99,6 +110,12 @@ class TemporalRangeList:
         self.trs = sorted([tr if isinstance(tr, TemporalRange)
                 else TemporalRange(tr[0], tr[1], tr[2]) for tr in trs],
                 key = TemporalRange.sort_key)
+    
+    '''
+    Return an ordered list of the TemporalRanges.
+    '''
+    def get_temporal_ranges(self):
+        return trs
 
     '''
     Combine the temporal ranges in self with the temporal ranges in other.
