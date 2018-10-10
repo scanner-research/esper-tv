@@ -1,6 +1,6 @@
 import itertools
-from temporal_rangelist_common import Constants
-from temporal_predicates import *
+from esper.temporal_rangelist_common import Constants
+from esper.temporal_predicates import *
 
 '''
 A helper function that, given two objects, returns the label field of the first
@@ -21,12 +21,8 @@ class TemporalRange:
         self.end = end
         self.label = label
 
-    def __cmp__(self, other):
-        if hasattr(other, 'start'):
-            if self.start == other.start:
-                return self.end.__cmp__(other.end)
-            else:
-                return self.start.__cmp__(other.start)
+    def sort_key(tr):
+        return (tr.start, tr.end, tr.label)
 
     def __repr__(self):
         return "<Temporal Range start:{} end:{} label:{}>".format(self.start,
@@ -48,7 +44,7 @@ class TemporalRange:
     def minus(self, other, label_producer_fn=_tr1_label):
         if Overlaps().compute(self, other):
             label = label_producer_fn(self, other)
-            if During().compute(self, other) or Equals().compute(self, other):
+            if During().compute(self, other) or Equal().compute(self, other):
                 return []
             if OverlapsBefore().compute(self, other):
                 return [TemporalRange(self.start, other.start, label)]
@@ -72,7 +68,7 @@ class TemporalRange:
     def overlap(self, other, label_producer_fn=_tr1_label):
         if Overlaps().compute(self, other):
             label = label_producer_fn(self, other)
-            if During().compute(self, other) or Equals().compute(self, other):
+            if During().compute(self, other) or Equal().compute(self, other):
                 return TemporalRange(self.start, self.end, label)
             if OverlapsBefore().compute(self, other):
                 return TemporalRange(other.start, self.end, label)
@@ -100,9 +96,9 @@ a number of useful helper functions.
 '''
 class TemporalRangeList:
     def __init__(self, trs):
-        self.trs = [tr if isinstance(tr, TemporalRange)
-                else TemporalRange(tr[0], tr[1], tr[2])].sort()
-
+        self.trs = sorted([tr if isinstance(tr, TemporalRange)
+                else TemporalRange(tr[0], tr[1], tr[2]) for tr in trs],
+                key = TemporalRange.sort_key)
 
     '''
     Combine the temporal ranges in self with the temporal ranges in other.
@@ -129,7 +125,7 @@ class TemporalRangeList:
                 label = 0
             if label in first_by_label:
                 first = first_by_label[label]
-                if tr.start >= first.start and tr.st <= first.end:
+                if tr.start >= first.start and tr.start <= first.end:
                     # tr overlaps with first
                     if tr.end > first.end:
                         # need to push the upper bound of first
@@ -213,7 +209,7 @@ class TemporalRangeList:
             output = []
             for tr1 in self.trs:
                 for tr2 in other.trs:
-                    if Overlaps().compute(tr1, tr2) and predicate(tr1, tr2):
+                    if Overlaps().compute(tr1, tr2) and predicate.compute(tr1, tr2):
                         candidates = tr1.minus(tr2)
                         if len(candidates) > 0:
                             output = output + candidates
@@ -224,23 +220,24 @@ class TemporalRangeList:
                 # For each interval in self.trs, get all the overlapping
                 #   intervals from other.trs
                 overlapping = []
-                for tr2 in self.trs:
+                for tr2 in other.trs:
                     if tr1 == tr2:
                         continue
                     if Before().compute(tr1, tr2):
                         break
-                    if Overlaps().compute(tr1, tr2):
+                    if (Overlaps().compute(tr1, tr2) and
+                        predicate.compute(tr1, tr2)):
                         overlapping.append(tr2)
                 
                 # Create a sorted list of all start to end points between
                 #   tr1.start and tr1.end, inclusive
-                endpoints_set = Set([tr1.start, tr1.end])
+                endpoints_set = set([tr1.start, tr1.end])
                 for tr in overlapping:
                     if tr.start > tr1.start:
                         endpoints_set.add(tr.start)
                     if tr.end < tr1.end:
                         endpoints_set.add(tr.end)
-                endpoints_list = list(endpoints_set).sort()
+                endpoints_list = sorted(list(endpoints_set))
 
                 # Calculate longest subsequence endpoint pairs
                 longest_subsequences = []
@@ -251,16 +248,16 @@ class TemporalRangeList:
                     start = endpoints_list[i]
                     valid = True
                     for tr in overlapping:
-                        if tr.start > start_point:
+                        if tr.start > start:
                             break
-                        if tr.start < start_point and tr.end > start_point:
+                        if tr.start < start and tr.end > start:
                             valid = False
                             break
                     if not valid:
                         continue
                     max_j = len(endpoints_list) - 1
                     for j in range(max_j, i, -1):
-                        end = endoints_list[j]
+                        end = endpoints_list[j]
                         tr_candidate = TemporalRange(start, end, 0)
                         valid = True
                         for tr in overlapping:
@@ -270,12 +267,12 @@ class TemporalRangeList:
                                 valid = False
                                 break
                         if valid:
-                            longest_subsequence.append((start, end))
+                            longest_subsequences.append((start, end))
                             last_j = j
 
                 # Figure out which intervals from overlapping to use to
                 # construct new intervals
-                for subsequence in longest_subsequence:
+                for subsequence in longest_subsequences:
                     start = subsequence[0]
                     end = subsequence[1]
                     for tr in overlapping:
@@ -283,6 +280,9 @@ class TemporalRangeList:
                             label = label_producer_fn(tr1, tr)
                             output.append(TemporalRange(start, end, label))
                             break
+
+            return TemporalRangeList(output)
+
 
     '''
     Get the overlapping intervals between self and other.
@@ -316,6 +316,6 @@ class TemporalRangeList:
     pairs are processed using the udf.
     '''
     def cross_udf(self, other, udf):
-        return TemporalRangeList(list(itertools.chain_from_iterable([
-                udf(tr1, tr2) for tr1 in self.trs for tr2 in self.trs
+        return TemporalRangeList(list(itertools.chain.from_iterable([
+                udf(tr1, tr2) for tr1 in self.trs for tr2 in other.trs
             ])))
