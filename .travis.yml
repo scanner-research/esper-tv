@@ -21,4 +21,6 @@ env:
 before_install:
   - pip3 install -r requirements.txt
 
-script: ./scripts/travis-build.sh
+script:
+  - ./scripts/travis-build.sh
+  - ./scripts/run-app-tests.sh

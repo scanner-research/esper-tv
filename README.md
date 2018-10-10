@@ -78,3 +78,7 @@ Install [jq](https://stedolan.github.io/jq/). Then run this:
 ```
 git config --local include.path ../.gitconfig
 ```
+
+### Testing
+
+To add new test suites to the build, add a script running the test suite to `scripts` and add a line to run the script in the script section of `.travis.yml`. Right now the only testing that happens is in `esper/app/test`.
