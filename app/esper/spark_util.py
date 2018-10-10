@@ -348,14 +348,10 @@ def _annotate_male_female_probability(face_genders):
     return face_genders
     
 
-def get_face_genders():
+def get_face_genders(include_bbox=False):
     face_genders = spark.load('query_facegender').alias('face_genders')
     
-    faces = get_faces().alias('faces')
-    face_genders = face_genders.join(
-        faces, face_genders.face_id == faces.id
-    ).select(
-        'face_genders.*',
+    cols = ['face_genders.*',
         'faces.height',
         'faces.width',
         'faces.area',
@@ -374,22 +370,27 @@ def get_face_genders():
         'faces.week_day',
         'faces.time',
         'faces.is_host',
-        'faces.host_probability'
-    )
+        'faces.host_probability']
+    if include_bbox:
+        cols = cols + ['faces.bbox_x1',
+                'faces.bbox_x2',
+                'faces.bbox_y1',
+                'faces.bbox_y2']
+
+    faces = get_faces().alias('faces')
+    face_genders = face_genders.join(
+        faces, face_genders.face_id == faces.id
+    ).select(*cols)
     
     face_genders = _annotate_size_percentile(face_genders)
     face_genders = _annotate_male_female_probability(face_genders)
     return face_genders
 
 
-def get_face_identities():
+def get_face_identities(include_bbox=False, include_name=False):
     face_identities = spark.load('query_faceidentity').alias('face_identities')
     
-    faces = get_faces().alias('faces')
-    face_identities = face_identities.join(
-        faces, face_identities.face_id == faces.id
-    ).select(
-        'face_identities.*',
+    cols = ['face_identities.*',
         'faces.height',
         'faces.width',
         'faces.area',
@@ -408,8 +409,24 @@ def get_face_identities():
         'faces.week_day',
         'faces.time',
         'faces.is_host',
-        'faces.host_probability'
-    )
+        'faces.host_probability']
+    if include_bbox:
+        cols = cols + ['faces.bbox_x1',
+                'faces.bbox_x2',
+                'faces.bbox_y1',
+                'faces.bbox_y2']
+
+    faces = get_faces().alias('faces')
+    face_identities = face_identities.join(
+        faces, face_identities.face_id == faces.id
+    ).select(*cols)
+
+    if include_name:
+        cols.append('identities.name')
+        identities = spark.load('query_identity').alias('identities')
+        face_identities = face_identities.join(
+            identities, face_identities.identity_id == identities.id
+        ).select(*cols)
     
     return face_identities
 
