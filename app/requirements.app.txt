@@ -27,3 +27,4 @@ google_images_download
 psutil
 wordcloud
 redis
+msgpack
