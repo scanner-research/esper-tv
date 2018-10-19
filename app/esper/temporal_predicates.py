@@ -1,11 +1,10 @@
 from esper.temporal_rangelist_common import Constants
 
 '''
-Binary Predicates on Temporal Ranges. Each predicate has a compute function
-that takes in two intervals (henceforth tr1 and tr2).
+Binary s on Temporal Ranges.
 
 Before and After:
-    These Predicates optionally take a min_dist and max_dist. They check if
+    These s optionally take a min_dist and max_dist. They check if
     the distance between tr1 and tr2 is in the range [min_dist, max_dist] (in
     the right direction). Note that by default, this includes intervals that
     meet each other.
@@ -41,127 +40,75 @@ Overlaps:
     Sugar for a more colloquial version of overlapping. Includes Starts/Inv,
     Finishes/Inv, During/Inv, Equal, and OverlapsBefore/After.
 '''
-class Predicate:
-    def compute(self, tr1, tr2):
-        raise NotImplementedError('Must define compute!');
+def true_pred():
+    return lambda tr1, tr2: True;
 
-class TruePred(Predicate):
-    def compute(self, tr1, tr2):
-        return True
+def false_pred():
+    return lambda tr1, tr2: False;
 
-class FalsePred(Predicate):
-    def compute(self, tr1, tr2):
-        return False
-
-class Before(Predicate):
-    def __init__(self, min_dist=0, max_dist=Constants.INFTY):
-        self.min_dist = min_dist
-        self.max_dist = max_dist
-
-    def compute(self, tr1, tr2):
+def before(min_dist=0, max_dist=Constants.INFTY):
+    def fn(tr1, tr2):
         time_diff = tr2.start - tr1.end
-        return (time_diff >= self.min_dist and
-            (self.max_dist == Constants.INFTY or time_diff <= self.max_dist))
+        return (time_diff >= min_dist and
+            (max_dist == Constants.INFTY or time_diff <= max_dist))
 
-class After(Predicate):
-    def __init__(self, min_dist=0, max_dist=Constants.INFTY):
-        self.min_dist = min_dist
-        self.max_dist = max_dist
+    return fn
 
-    def compute(self, tr1, tr2):
+def after(min_dist=0, max_dist=Constants.INFTY):
+    def fn(tr1, tr2):
         time_diff = tr1.start - tr2.end
-        return (time_diff >= self.min_dist
-            and (self.max_dist == Constants.INFTY or time_diff <= self.max_dist))
+        return (time_diff >= min_dist and
+            (max_dist == Constants.INFTY or time_diff <= max_dist))
 
-class Overlaps(Predicate):
-    def compute(self, tr1, tr2):
-        return ((tr1.start < tr2.start and tr1.end > tr2.start) or
+    return fn
+
+def overlaps():
+    return lambda tr1, tr2: ((tr1.start < tr2.start and tr1.end > tr2.start) or
             (tr1.start < tr2.end and tr1.end > tr2.end) or
             (tr1.start <= tr2.start and tr1.end >= tr2.end) or
             (tr1.start >= tr2.start and tr1.end <= tr2.end))
 
-class OverlapsBefore(Predicate):
-    def compute(self, tr1, tr2):
-        return (tr1.end > tr2.start and tr1.end < tr2.end and tr1.start <
-                tr2.start)
+def overlaps_before():
+    return lambda tr1, tr2: (tr1.end > tr2.start and tr1.end < tr2.end and
+            tr1.start < tr2.start)
 
-class OverlapsAfter(Predicate):
-    def compute(self, tr1, tr2):
-        return (tr1.start > tr2.start and tr1.start < tr2.end and tr1.end >
-                tr2.end)
+def overlaps_after():
+    return lambda tr1, tr2: (tr1.start > tr2.start and tr1.start < tr2.end and
+            tr1.end > tr2.end)
 
-class Starts(Predicate):
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
-
-    def compute(self, tr1, tr2):
-        return (abs(tr1.start - tr2.start) <= self.epsilon
+def starts(epsilon=0):
+    return lambda tr1, tr2: (abs(tr1.start - tr2.start) <= epsilon
             and tr1.end < tr2.end)
 
-class StartsInv(Predicate):
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
-
-    def compute(self, tr1, tr2):
-        return (abs(tr1.start - tr2.start) <= self.epsilon
+def starts_inv(epsilon=0):
+    return lambda tr1, tr2: (abs(tr1.start - tr2.start) <= epsilon
             and tr2.end < tr1.end)
 
-class Finishes(Predicate):
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
-
-    def compute(self, tr1, tr2):
-        return (abs(tr1.end - tr2.end) <= self.epsilon
+def finishes(epsilon=0):
+    return lambda tr1, tr2: (abs(tr1.end - tr2.end) <= epsilon
             and tr1.start > tr2.start)
 
-class FinishesInv(Predicate):
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
-
-    def compute(self, tr1, tr2):
-        return (abs(tr1.end - tr2.end) <= self.epsilon
+def finishes_inv(epsilon=0):
+    return lambda tr1, tr2: (abs(tr1.end - tr2.end) <= epsilon
             and tr2.start > tr1.start)
 
-class During(Predicate):
-    def compute(self, tr1, tr2):
-        return tr1.start > tr2.start and tr1.end < tr2.end
+def during():
+    return lambda tr1, tr2: tr1.start > tr2.start and tr1.end < tr2.end
 
-class DuringInv(Predicate):
-    def compute(self, tr1, tr2):
-        return tr2.start > tr1.start and tr2.end < tr1.end
+def during_inv():
+    return lambda tr1, tr2: tr2.start > tr1.start and tr2.end < tr1.end
 
-class MeetsBefore(Predicate):
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
+def meets_before(epsilon=0):
+    return lambda tr1, tr2: abs(tr1.end-tr2.start) <= epsilon
 
-    def compute(self, tr1, tr2):
-        return abs(tr1.end-tr2.start) <= self.epsilon
+def meets_after(epsilon=0):
+    return lambda tr1, tr2: abs(tr2.end-tr1.start) <= epsilon
 
-class MeetsAfter(Predicate):
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
+def equal():
+    return lambda tr1, tr2: tr1.start == tr2.start and tr1.end == tr2.end
 
-    def compute(self, tr1, tr2):
-        return abs(tr2.end-tr1.start) <= self.epsilon
+def and_pred(pred1, pred2):
+    return lambda tr1, tr2: pred1(tr1, tr2) and pred2(tr1, tr2) 
 
-class Equal(Predicate):
-    def compute(self, tr1, tr2):
-        return tr1.start == tr2.start and tr1.end == tr2.end
-
-class And(Predicate):
-    def __init__(self, pred1, pred2):
-        assert(isinstance(pred1, Predicate) and isinstance(pred2, Predicate))
-        self.pred1 = pred1
-        self.pred2 = pred2
-
-    def compute(self, tr1, tr2):
-        return self.pred1.compute(tr1, tr2) and self.pred2.compute(tr1, tr2) 
-
-class Or(Predicate):
-    def __init__(self, pred1, pred2):
-        assert(isinstance(pred1, Predicate) and isinstance(pred2, Predicate))
-        self.pred1 = pred1
-        self.pred2 = pred2
-
-    def compute(self, tr1, tr2):
-        return self.pred1.compute(tr1, tr2) or self.pred2.compute(tr1, tr2) 
+def or_pred(pred1, pred2):
+    return lambda tr1, tr2: pred1(tr1, tr2) or pred2(tr1, tr2) 

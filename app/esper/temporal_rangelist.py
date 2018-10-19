@@ -6,8 +6,15 @@ from esper.temporal_predicates import *
 A helper function that, given two objects, returns the label field of the first
 one.
 '''
-def _tr1_label(tr1, tr2):
+def tr1_label(tr1, tr2):
     return tr1.label
+
+'''
+A helper function that, given two objects, returns the label field of the first
+one.
+'''
+def tr2_label(tr1, tr2):
+    return tr2.label
 
 '''
 A TemporalRange has a start time, end time, and label.
@@ -41,16 +48,16 @@ class TemporalRange:
     The labels of the members of l are determined by
     label_producer_fn(self, other).
     '''
-    def minus(self, other, label_producer_fn=_tr1_label):
-        if Overlaps().compute(self, other):
+    def minus(self, other, label_producer_fn=tr1_label):
+        if overlaps()(self, other):
             label = label_producer_fn(self, other)
-            if During().compute(self, other) or Equal().compute(self, other):
+            if during()(self, other) or equal()(self, other):
                 return []
-            if OverlapsBefore().compute(self, other):
+            if overlaps_before()(self, other):
                 return [TemporalRange(self.start, other.start, label)]
-            if OverlapsAfter().compute(self, other):
+            if overlaps_after()(self, other):
                 return [TemporalRange(other.end, self.end, label)]
-            if During().compute(other, self):
+            if during()(other, self):
                 return [TemporalRange(self.start, other.start, label),
                         TemporalRange(other.end, self.end, label)]
             error_string = "Reached unreachable point in minus with {} and {}"
@@ -65,16 +72,16 @@ class TemporalRange:
     Otherwise, it returns an interval that maximally overlaps both self and
     other, with label produced by lable_producer_fn(self, other).
     '''
-    def overlap(self, other, label_producer_fn=_tr1_label):
-        if Overlaps().compute(self, other):
+    def overlap(self, other, label_producer_fn=tr1_label):
+        if overlaps()(self, other):
             label = label_producer_fn(self, other)
-            if During().compute(self, other) or Equal().compute(self, other):
+            if during()(self, other) or equal()(self, other):
                 return TemporalRange(self.start, self.end, label)
-            if OverlapsBefore().compute(self, other):
+            if overlaps_before()(self, other):
                 return TemporalRange(other.start, self.end, label)
-            if OverlapsAfter().compute(self, other):
+            if overlaps_after()(self, other):
                 return TemporalRange(self.start, other.end, label)
-            if During().compute(other, self):
+            if during()(other, self):
                 return TemporalRange(other.start, other.end, label)
             error_string = "Reached unreachable point in minus with {} and {}"
             error_string = error_string.format(self, other)
@@ -85,7 +92,7 @@ class TemporalRange:
     '''
     Computes the minimum interval that contains both self and other.
     '''
-    def merge(self, other, label_producer_fn=_tr1_label):
+    def merge(self, other, label_producer_fn=tr1_label):
         label = label_producer_fn(self, other)
         return TemporalRange(min(self.start, other.start),
                 max(self.end, other.end), label)
@@ -110,7 +117,16 @@ class TemporalRangeList:
         self.trs = sorted([tr if isinstance(tr, TemporalRange)
                 else TemporalRange(tr[0], tr[1], tr[2]) for tr in trs],
                 key = TemporalRange.sort_key)
+
+    def __repr__(self):
+        return str(self.trs)
     
+    '''
+    Gets number of Temporal Ranges stored by this TemporalRangeList.
+    '''
+    def size(self):
+        return len(self.trs)
+
     '''
     Return an ordered list of the TemporalRanges.
     '''
@@ -190,10 +206,10 @@ class TemporalRangeList:
     ranges in self that satisfy predicate with at least one other range in
     other.
     '''
-    def filter_against(self, other, predicate=TruePred()):
+    def filter_against(self, other, predicate=true_pred()):
         def filter_fn(tr):
             for trother in other.trs:
-                if predicate.compute(tr, trother):
+                if predicate(tr, trother):
                     return True
             return False
 
@@ -237,14 +253,14 @@ class TemporalRangeList:
     the intervals passed in to the label producer function are the original
     interval and the first interval that touches the output interval.
     '''
-    def minus(self, other, recursive_diff = True, predicate = TruePred(),
-            label_producer_fn = _tr1_label):
+    def minus(self, other, recursive_diff = True, predicate = true_pred(),
+            label_producer_fn = tr1_label):
         if not recursive_diff:
             output = []
             for tr1 in self.trs:
                 found_overlap = False
                 for tr2 in other.trs:
-                    if Overlaps().compute(tr1, tr2) and predicate.compute(tr1, tr2):
+                    if overlaps()(tr1, tr2) and predicate(tr1, tr2):
                         found_overlap = True
                         candidates = tr1.minus(tr2)
                         if len(candidates) > 0:
@@ -261,10 +277,10 @@ class TemporalRangeList:
                 for tr2 in other.trs:
                     if tr1 == tr2:
                         continue
-                    if Before().compute(tr1, tr2):
+                    if before()(tr1, tr2):
                         break
-                    if (Overlaps().compute(tr1, tr2) and
-                        predicate.compute(tr1, tr2)):
+                    if (overlaps()(tr1, tr2) and
+                        predicate(tr1, tr2)):
                         overlapping.append(tr2)
 
                 if len(overlapping) == 0:
@@ -304,7 +320,7 @@ class TemporalRangeList:
                         for tr in overlapping:
                             if tr.start > end:
                                 break
-                            if Overlaps().compute(tr, tr_candidate):
+                            if overlaps()(tr, tr_candidate):
                                 valid = False
                                 break
                         if valid:
@@ -332,12 +348,12 @@ class TemporalRangeList:
 
     Labels the resulting intervals with label_producer_fn.
     '''
-    def overlaps(self, other, predicate = TruePred(), label_producer_fn =
-            _tr1_label):
+    def overlaps(self, other, predicate = true_pred(), label_producer_fn =
+            tr1_label):
         return TemporalRangeList([tr1.overlap(tr2, label_producer_fn)
                 for tr1 in self.trs for tr2 in other.trs
-                if (Overlaps().compute(tr1, tr2) and
-                    predicate.compute(tr1, tr2))])
+                if (overlaps()(tr1, tr2) and
+                    predicate(tr1, tr2))])
 
     '''
     Merges pairs of intervals in self and other that satisfy label_producer_fn.
@@ -346,11 +362,11 @@ class TemporalRangeList:
 
     Labels the resulting intervals with label_producer_fn.
     '''
-    def merge(self, other, predicate = TruePred(), label_producer_fn =
-            _tr1_label):
+    def merge(self, other, predicate = true_pred(), label_producer_fn =
+            tr1_label):
         return TemporalRangeList([tr1.merge(tr2, label_producer_fn)
                 for tr1 in self.trs for tr2 in other.trs
-                if predicate.compute(tr1, tr2)])
+                if predicate(tr1, tr2)])
 
     '''
     Generates a new TemporalRangeList from the cross product of self and other;
