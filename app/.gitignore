@@ -2,7 +2,7 @@
 scanner_db
 node_modules
 data
-deps
+deps/tmp
 google_images
 nets
 .cache

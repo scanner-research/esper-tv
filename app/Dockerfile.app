@@ -6,7 +6,7 @@ ENV TERM=xterm
 
 # Misc apt dependencies
 RUN apt-get update && \
-    apt-get install -y cron npm nodejs curl unzip jq gdb psmisc zsh python-pip && \
+    apt-get install -y cron npm nodejs curl unzip jq gdb psmisc zsh && \
     ln -s /usr/bin/nodejs /usr/bin/node
 
 # Google Cloud SDK
@@ -18,7 +18,7 @@ RUN echo "deb http://packages.cloud.google.com/apt cloud-sdk-xenial main" | \
 # Python setup
 COPY requirements.app.txt ./
 RUN pip3 install -r requirements.app.txt
-RUN pip install supervisor==3.3.3
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python get-pip.py && pip install supervisor==3.3.3
 COPY .deps/nbconfig /root/.jupyter/nbconfig
 COPY .deps/beakerx.json /root/.jupyter/beakerx.json
 COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
