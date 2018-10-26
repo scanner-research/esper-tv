@@ -238,3 +238,4 @@ class Pose(models.Model):
 
     class Meta:
         abstract = True
+
