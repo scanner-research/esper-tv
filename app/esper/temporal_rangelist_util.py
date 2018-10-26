@@ -1,8 +1,13 @@
 from esper.temporal_rangelist import TemporalRange, TemporalRangeList
+from operator import itemgetter, attrgetter
 
 '''
-Convert a dataframe to a collection of temporal rangelists. Returns a dict that
-maps from values of the groupby field to temporal rangelists.
+Convert an iterable collection of rows to a collection of temporal rangelists.
+Returns a dict that maps from values of the groupby field to temporal
+rangelists.
+
+@array is a list of rows of data, and @accessor takes in a row and a field name
+and returns the value. For example, accessor(row, 'id').
 
 For example, if groupby is "video_id", groups the dataframe rows by the
 video_id field and returns a dict matching each unique video_id to a temporal
@@ -10,32 +15,53 @@ rangelist.
 
 Schema defines how to get start, end, and label for each temporal range from
 a single row in the dataframe. In particular, for each row in the dataframe,
-creates TemporalRange((row[schema['start']], row[schema['end']],
-    row[schema['label']]).
+creates TemporalRange(accessor(row, schema['start']),
+                accessor(row, schema['end']),
+                accessor(row, schema['label']))
 '''
-def df_to_trlists(dataframe, groupby="video_id", schema=None):
+def iterable_to_trlists(iterable, accessor, groupby="video_id", schema=None):
     if schema is None:
         schema = {
             "start": "min_frame",
             "end": "max_frame",
             "label": "id"
         }
-    dfmaterialized = dataframe.collect()
     dictbykey = {}
-    for row in dfmaterialized:
-        if row[groupby] in dictbykey:
-            dictbykey[row[groupby]].append(row)
+    for row in iterable:
+        if accessor(row, groupby) in dictbykey:
+            dictbykey[accessor(row, groupby)].append(row)
         else:
-            dictbykey[row[groupby]] = [row]
+            dictbykey[accessor(row, groupby)] = [row]
     
     trlists = {}
     for key in dictbykey.keys():
         trlists[key] = TemporalRangeList([
-            TemporalRange(row[schema['start']], row[schema['end']],
-                row[schema['label']])
+            TemporalRange(accessor(row, schema['start']),
+                accessor(row, schema['end']),
+                accessor(row, schema['label']))
             for row in dictbykey[key]])
 
     return trlists
+
+'''
+Converts a Spark dataframe to a collection of temporal rangelists.
+'''
+def df_to_trlists(dataframe, groupby="video_id", schema=None):
+    dfmaterialized = dataframe.collect()
+
+    def row_accessor(row, field):
+        return row[field]
+
+    return iterable_to_trlists(dfmaterialized, row_accessor, groupby, schema)
+
+'''
+Converts a Django queryset to a collection of temporal rangelists.
+'''
+def qs_to_trlists(qs, groupby="video_id", schema=None):
+    def row_accessor(row, field):
+        return attrgetter(field)(row)
+
+    return iterable_to_trlists(qs, row_accessor, groupby, schema)
 
 '''
 Gets a result for the esper widget from a dict that maps video IDs to temporal
@@ -58,7 +84,8 @@ def trlists_to_result(trlists):
     groups = [{
         'type': 'contiguous',
         'label': '',
-        'elements': materialized_results[video]
+        'elements': sorted(materialized_results[video],
+            key=itemgetter('min_frame'))
     } for video in sorted(materialized_results.keys())]
 
     return {'result': groups, 'count': full_count, 'type': 'Video'}

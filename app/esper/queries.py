@@ -1080,3 +1080,39 @@ def shots_with_host_and_still_face():
         Face.objects.filter(shot__id__in=list(selected_shots)), 
         limit=100000
     )
+
+@query('Hand-labeled Interviews (Sandbox)')
+def handlabeled_interviews():
+    from query.models import LabeledInterview
+    from esper.temporal_rangelist_util import qs_to_trlists, trlists_to_result
+
+    interviews = LabeledInterview.objects \
+            .annotate(fps=F('video__fps')) \
+            .annotate(min_frame=F('fps') * F('start')) \
+            .annotate(max_frame=F('fps') * F('end'))
+
+    return trlists_to_result(qs_to_trlists(interviews))
+
+@query('Hand-labeled Panels (Sandbox)')
+def handlabeled_panels():
+    from query.models import LabeledPanel
+    from esper.temporal_rangelist_util import qs_to_trlists, trlists_to_result
+
+    panels = LabeledPanel.objects \
+            .annotate(fps=F('video__fps')) \
+            .annotate(min_frame=F('fps') * F('start')) \
+            .annotate(max_frame=F('fps') * F('end'))
+
+    return trlists_to_result(qs_to_trlists(panels))
+
+@query('Hand-labeled Commercials (Sandbox)')
+def handlabeled_interviews():
+    from query.models import LabeledCommercial
+    from esper.temporal_rangelist_util import qs_to_trlists, trlists_to_result
+
+    commercials = LabeledCommercial.objects \
+            .annotate(fps=F('video__fps')) \
+            .annotate(min_frame=F('fps') * F('start')) \
+            .annotate(max_frame=F('fps') * F('end'))
+
+    return trlists_to_result(qs_to_trlists(commercials))
