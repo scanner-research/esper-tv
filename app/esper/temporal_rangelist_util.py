@@ -1,5 +1,7 @@
 from esper.temporal_rangelist import TemporalRange, TemporalRangeList
+from esper.prelude import collect
 from operator import itemgetter, attrgetter
+from query.models import Video
 
 '''
 Convert an iterable collection of rows to a collection of temporal rangelists.
@@ -80,10 +82,14 @@ def trlists_to_result(trlists):
                 'max_frame': tr.get_end(), 'video': video}
             for tr in trlist]
         full_count += 1
+    videos = collect(Video.objects.filter(id__in=trlists.keys()).all(),
+            attrgetter('id'))
+    print(videos)
 
     groups = [{
         'type': 'contiguous',
-        'label': '',
+        'label': video,
+        'num_frames': videos[video][0].num_frames,
         'elements': sorted(materialized_results[video],
             key=itemgetter('min_frame'))
     } for video in sorted(materialized_results.keys())]
