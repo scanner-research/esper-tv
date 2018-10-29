@@ -1106,7 +1106,7 @@ def handlabeled_panels():
     return trlists_to_result(qs_to_trlists(panels))
 
 @query('Hand-labeled Commercials (Sandbox)')
-def handlabeled_interviews():
+def handlabeled_commercials():
     from query.models import LabeledCommercial
     from esper.temporal_rangelist_util import qs_to_trlists, trlists_to_result
 
@@ -1116,3 +1116,27 @@ def handlabeled_interviews():
             .annotate(max_frame=F('fps') * F('end'))
 
     return trlists_to_result(qs_to_trlists(commercials))
+
+@query('Multiple Timelines (Sandbox)')
+def multiple_timelines():
+    from query.models import LabeledInterview, LabeledPanel, LabeledCommercial
+    from esper.temporal_rangelist_util import qs_to_trlists, trlists_to_result, add_trlists_to_result
+
+    interviews = LabeledInterview.objects \
+            .annotate(fps=F('video__fps')) \
+            .annotate(min_frame=F('fps') * F('start')) \
+            .annotate(max_frame=F('fps') * F('end'))
+    panels = LabeledPanel.objects \
+            .annotate(fps=F('video__fps')) \
+            .annotate(min_frame=F('fps') * F('start')) \
+            .annotate(max_frame=F('fps') * F('end'))
+    commercials = LabeledCommercial.objects \
+            .annotate(fps=F('video__fps')) \
+            .annotate(min_frame=F('fps') * F('start')) \
+            .annotate(max_frame=F('fps') * F('end'))
+
+    result = trlists_to_result(qs_to_trlists(interviews))
+    add_trlists_to_result(result, qs_to_trlists(panels), color="blue")
+    add_trlists_to_result(result, qs_to_trlists(commercials), color="purple")
+
+    return result
