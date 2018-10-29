@@ -7,7 +7,7 @@ from pathlib import Path
 from esper.prelude import par_for
 from query.models import Video
 
-sys.path.append('/app/caption-index')
+sys.path.append('/app/deps/caption-index')
 
 import captions.util as caption_util
 from captions.index import Documents, Lexicon, InvertedIndex, DocumentData, MetadataIndex

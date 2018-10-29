@@ -1,9 +1,9 @@
-[submodule "app/caption-index"]
-	path = app/caption-index
-	url = https://github.com/scanner-research/caption-index.git
 [submodule "app/deps/vgrid"]
 	path = app/deps/vgrid
 	url = https://github.com/scanner-research/vgrid
 [submodule "app/deps/vgrid_jupyter"]
 	path = app/deps/vgrid_jupyter
 	url = https://github.com/scanner-research/vgrid_jupyter
+[submodule "app/deps/caption-index"]
+	path = app/deps/caption-index
+	url = https://github.com/scanner-research/caption-index.git
