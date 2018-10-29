@@ -70,7 +70,7 @@ Gets a result for the esper widget from a dict that maps video IDs to temporal
 rangelists. Assumes that the Temporal Ranges store start and end in terms of
 frames.
 '''
-def trlists_to_result(trlists):
+def trlists_to_result(trlists, color="red"):
     materialized_results = {}
     full_count = 0
     for video in trlists:
@@ -84,15 +84,82 @@ def trlists_to_result(trlists):
         full_count += 1
     videos = collect(Video.objects.filter(id__in=trlists.keys()).all(),
             attrgetter('id'))
-    print(videos)
 
     groups = [{
         'type': 'contiguous',
         'label': video,
         'num_frames': videos[video][0].num_frames,
-        'elements': sorted(materialized_results[video],
-            key=itemgetter('min_frame'))
+        'elements': [{
+            'video': video,
+            'segments': sorted(materialized_results[video], 
+                key=itemgetter('min_frame')),
+            'color': color
+        }]
     } for video in sorted(materialized_results.keys())]
 
     return {'result': groups, 'count': full_count, 'type': 'Video'}
+
+'''
+Add trlists to result as another set of segments to display. Modifies result.
+'''
+def add_trlists_to_result(result, trlists, color="red"):
+    # Get a base group to copy for new videos
+    base_group = result['result'][0]
+
+    # Put trlists into a good format
+    materialized_results = {}
+    full_count = 0
+    for video in trlists:
+        trlist = trlists[video].get_temporal_ranges()
+        if len(trlist) == 0:
+            continue
+        materialized_results[video] = [
+            {'track': tr.get_label(), 'min_frame': tr.get_start(),
+                'max_frame': tr.get_end(), 'video': video}
+            for tr in trlist]
+        full_count += 1
+    videos = collect(Video.objects.filter(id__in=trlists.keys()).all(),
+            attrgetter('id'))
+
+    for video in videos.keys():
+        matching_group = None
+        new_segments = {
+            'video': video,
+            'segments': sorted(materialized_results[video],
+                key=itemgetter('min_frame')),
+            'color': color
+        }
+        for group in result['result']:
+            if group['label'] == video:
+                matching_group = group
+                break
+        if matching_group is None:
+            new_elements = []
+            for element in base_group['elements']:
+                new_element = {
+                    'video': video,
+                    'segments': [],
+                    'color': element['color']
+                }
+                new_elements.append(new_element)
+            new_elements.append(new_segments)
+            result['result'].append({
+                'type': 'contiguous',
+                'label': video,
+                'num_frames': videos[video][0].num_frames,
+                'elements': new_elements
+            })
+            result['count'] += 1
+        else:
+            group['elements'].append(new_segments)
+
+    # add in empty segment lists for videos in results that don't appear in
+    # trlists
+    for group in result['result']:
+        if group['label'] not in videos.keys():
+            group['elements'].append({
+                'video': group['label'],
+                'segments': [],
+                'color': color
+            })
 

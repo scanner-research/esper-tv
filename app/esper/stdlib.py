@@ -128,7 +128,8 @@ def qs_to_result(result: QuerySet,
                  custom_order_by_id: List[int] = None,
                  frame_major: bool = True,
                  show_count: bool = False,
-                 limit: int = 100) -> Dict:
+                 limit: int = 100,
+                 color: str = "red") -> Dict:
 
     count = result.count() if show_count else 0
 
@@ -275,7 +276,11 @@ def qs_to_result(result: QuerySet,
             'type': 'contiguous',
             'label': video,
             'num_frames': videos[video][0].num_frames,
-            'elements': sorted(by_video[video], key=itemgetter('min_frame'))
+            'elements': [{
+                'video': video,
+                'segments': sorted(by_video[video], key=itemgetter('min_frame')),
+                'color': color
+            }]
         } for video in sorted(by_video.keys())]
     else:
         groups = [{'type': 'flat', 'label': '', 'elements': [r]} for r in materialized_result]
@@ -336,24 +341,31 @@ def result_with_metadata(result):
         for obj in group['elements']:
             video_ids.add(obj['video'])
 
-            if 'min_time' in obj:
-                video = Video.objects.get(id=obj['video'])
-                obj['min_frame'] = int(obj['min_time'] * video.fps)
+            if 'segments' in obj:
+                for segment in obj['segments']:
+                    frame_ids.add(segment['min_frame'])
+                    if 'max_frame' in segment:
+                        frame_ids.add(segment['max_frame'])
+            else:
+                if 'min_time' in obj:
+                    video = Video.objects.get(id=obj['video'])
+                    obj['min_frame'] = int(obj['min_time'] * video.fps)
 
-                if 'max_time' in obj:
-                    obj['max_frame'] = int(obj['max_time'] * video.fps)
+                    if 'max_time' in obj:
+                        obj['max_frame'] = int(obj['max_time'] * video.fps)
 
-            frame_ids.add(obj['min_frame'])
-            if 'max_frame' in obj:
-                frame_ids.add(obj['max_frame'])
+                frame_ids.add(obj['min_frame'])
+                if 'max_frame' in obj:
+                    frame_ids.add(obj['max_frame'])
 
-            if 'objects' in obj:
-                for bbox in obj['objects']:
-                    if 'labeler_id' in bbox:
-                        labeler_ids.add(bbox['labeler_id'])
+                if 'objects' in obj:
+                    for bbox in obj['objects']:
+                        if 'labeler_id' in bbox:
+                            labeler_ids.add(bbox['labeler_id'])
 
-                    if 'gender_id' in bbox:
-                        gender_ids.add(bbox['gender_id'])
+                        if 'gender_id' in bbox:
+                            gender_ids.add(bbox['gender_id'])
+
     def to_dict(qs):
         return {t['id']: t for t in list(qs.values())}
 
