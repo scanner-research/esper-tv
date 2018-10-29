@@ -269,9 +269,12 @@ def qs_to_result(result: QuerySet,
     ty_name = cls.__name__
     if group:
         by_video = collect(materialized_result, itemgetter('video'))
+        videos = collect(Video.objects.filter(id__in=by_video.keys()).all(),
+                attrgetter('id'))
         groups = [{
             'type': 'contiguous',
             'label': video,
+            'num_frames': videos[video][0].num_frames,
             'elements': sorted(by_video[video], key=itemgetter('min_frame'))
         } for video in sorted(by_video.keys())]
     else:

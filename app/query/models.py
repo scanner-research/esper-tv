@@ -135,3 +135,25 @@ class ScannerJob(models.Model):
 class Object(base.Noun, base.BoundingBox):
     label = models.IntegerField()
     probability = models.FloatField()
+
+class LabeledCommercial(models.Model):
+    video = models.ForeignKey(Video)
+    start = models.FloatField()
+    end = models.FloatField()
+
+class LabeledPanel(models.Model):
+    video = models.ForeignKey(Video)
+    start = models.FloatField()
+    end = models.FloatField()
+    num_panelists = models.IntegerField()
+
+class LabeledInterview(models.Model):
+    video = models.ForeignKey(Video)
+    start = models.FloatField()
+    end = models.FloatField()
+    interviewer1 = base.CharField(default=None, blank=True, null=True)
+    interviewer2 = base.CharField(default=None, blank=True, null=True)
+    guest1 = base.CharField(default=None, blank=True, null=True)
+    guest2 = base.CharField(default=None, blank=True, null=True)
+    original = models.BooleanField(default=True)
+    scattered_clips = models.BooleanField(default=False)
