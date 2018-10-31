@@ -37,6 +37,7 @@ import shutil
 import tempfile
 import random
 import socket
+import math
 from pathlib import Path
 from contextlib import contextmanager
 from collections import defaultdict
@@ -209,7 +210,7 @@ def par_for(f, l, process=False, workers=None, progress=True):
     Pool = ProcessPoolExecutor if process else ThreadPoolExecutor
     with Pool(max_workers=mp.cpu_count() if workers is None else workers) as executor:
         if progress:
-            return list(tqdm(executor.map(f, l), total=len(l)))
+            return list(tqdm(executor.map(f, l), total=len(l), smoothing=0.05))
         else:
             return list(executor.map(f, l))
 
@@ -291,7 +292,7 @@ class ScannerWrapper:
     def sql_config(self):
         return self.db.protobufs.SQLConfig(
             adapter='postgres',
-            hostaddr=socket.gethostbyname('db'),
+            hostaddr=socket.gethostbyname('db') if self.db._start_cluster else '127.0.0.1',
             port=5432,
             dbname='esper',
             user=os.environ['DJANGO_DB_USER'],
@@ -324,15 +325,16 @@ class ScannerWrapper:
         from query.models import Video
         return {'filter': '{}.id = {}'.format(Video._meta.db_table, video.id)}
 
-    def sql_sink(self, cls, input, videos, suffix, insert=True):
+    def sql_sink(self, cls, input, videos, suffix, insert=True, ignore_unique=True):
         from query.models import ScannerJob
         sink = self.db.sinks.SQL(
             config=self.sql_config(),
             input=input,
             table=cls._meta.db_table,
             job_table=ScannerJob._meta.db_table,
-            insert=insert)
-        args = [{'job_name': '{}_{}'.format(v.path, suffix) for v in videos}]
+            insert=insert,
+            ignore_unique=ignore_unique)
+        args = [{'job_name': '{}_{}'.format(v.path, suffix)} for v in videos]
         return st.BoundOp(op=sink, args=args)
 
     # Remove videos that don't have a table or have already been processed by the pipeline
@@ -360,6 +362,25 @@ class ScannerSQLTable(st.DataSource):
     def scanner_args(self, db):
         return ScannerWrapper(db).sql_source_args(self._video)
 
+
+class ScannerSQLPipeline:
+    json_kernel = None
+    db_class = None
+    _job_cache = None
+
+    def build_sink(self, db_videos):
+        self._json_kernel_instance = getattr(self._db.ops, self.json_kernel)(**self._output_ops)
+        return ScannerWrapper(self._db).sql_sink(
+            cls=self.db_class, input=self._json_kernel_instance, videos=db_videos, suffix=self.job_suffix, insert=True)
+
+    def committed(self, output):
+        from query.models import ScannerJob
+        if self._job_cache is None:
+            self._job_cache = set([r['name'] for r in ScannerJob.objects.all().values('name')])
+        return output['job_name'] in self._job_cache
+
+    def parse_output(self):
+        pass
 
 
 class Timer:
@@ -494,9 +515,9 @@ class QuerySetMixin(object):
 
     def exists(self):
         try:
-            next(self)
+            next(self.iterator())
             return True
-        except self.model.DoesNotExist:
+        except StopIteration:
             return False
 
     def values_with(self, *fields):

@@ -3,7 +3,7 @@ from . import base_models as base
 import math
 import numpy as np
 import tempfile
-
+import subprocess as sp
 
 class Identity(models.Model):
     name = base.CharField()
@@ -39,6 +39,12 @@ class Video(base.Video):
     def item_name(self):
         return '.'.join(self.path.split('/')[-1].split('.')[:-1])
 
+    def url(self, duration='1d'):
+        fetch_cmd = 'PYTHONPATH=/usr/lib/python2.7/dist-packages:$PYTHONPATH gsutil signurl -d {} /app/service-key.json gs://esper/{} ' \
+                    .format(duration, self.path)
+        url = sp.check_output(fetch_cmd, shell=True).decode('utf-8').split('\n')[1].split('\t')[-1]
+        return url
+
 
 class Tag(models.Model):
     name = base.CharField()
@@ -51,6 +57,7 @@ class VideoTag(models.Model):
 
 class Frame(base.Frame):
     tags = models.ManyToManyField(Tag)
+    shot_boundary = models.BooleanField()
 
 
 class Labeler(base.Labeler):
