@@ -15,18 +15,18 @@ For example, if groupby is "video_id", groups the dataframe rows by the
 video_id field and returns a dict matching each unique video_id to a temporal
 rangelist.
 
-Schema defines how to get start, end, and label for each temporal range from
+Schema defines how to get start, end, and payload for each temporal range from
 a single row in the dataframe. In particular, for each row in the dataframe,
 creates TemporalRange(accessor(row, schema['start']),
                 accessor(row, schema['end']),
-                accessor(row, schema['label']))
+                accessor(row, schema['payload']))
 '''
 def iterable_to_trlists(iterable, accessor, groupby="video_id", schema=None):
     if schema is None:
         schema = {
             "start": "min_frame",
             "end": "max_frame",
-            "label": "id"
+            "payload": "id"
         }
     dictbykey = {}
     for row in iterable:
@@ -40,7 +40,7 @@ def iterable_to_trlists(iterable, accessor, groupby="video_id", schema=None):
         trlists[key] = TemporalRangeList([
             TemporalRange(accessor(row, schema['start']),
                 accessor(row, schema['end']),
-                accessor(row, schema['label']))
+                accessor(row, schema['payload']))
             for row in dictbykey[key]])
 
     return trlists
@@ -78,7 +78,7 @@ def trlists_to_result(trlists, color="red"):
         if len(trlist) == 0:
             continue
         materialized_results[video] = [
-            {'track': tr.get_label(), 'min_frame': tr.get_start(),
+            {'track': tr.get_payload(), 'min_frame': tr.get_start(),
                 'max_frame': tr.get_end(), 'video': video}
             for tr in trlist]
         full_count += 1
@@ -114,11 +114,11 @@ def add_trlists_to_result(result, trlists, color="red"):
         if len(trlist) == 0:
             continue
         materialized_results[video] = [
-            {'track': tr.get_label(), 'min_frame': tr.get_start(),
+            {'track': tr.get_payload(), 'min_frame': tr.get_start(),
                 'max_frame': tr.get_end(), 'video': video}
             for tr in trlist]
         full_count += 1
-    videos = collect(Video.objects.filter(id__in=trlists.keys()).all(),
+    videos = collect(Video.objects.filter(id__in=materialized_results.keys()).all(),
             attrgetter('id'))
 
     for video in videos.keys():

@@ -1,7 +1,7 @@
 from esper.temporal_rangelist_common import Constants
 
 '''
-Binary s on Temporal Ranges.
+Binary predicates on Temporal Ranges.
 
 Before and After:
     These s optionally take a min_dist and max_dist. They check if

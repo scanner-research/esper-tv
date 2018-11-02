@@ -3,40 +3,40 @@ from esper.temporal_rangelist_common import Constants
 from esper.temporal_predicates import *
 
 '''
-A helper function that, given two objects, returns the label field of the first
+A helper function that, given two objects, returns the payload field of the first
 one.
 '''
-def tr1_label(tr1, tr2):
-    return tr1.label
+def tr1_payload(tr1, tr2):
+    return tr1.payload
 
 '''
-A helper function that, given two objects, returns the label field of the first
+A helper function that, given two objects, returns the payload field of the first
 one.
 '''
-def tr2_label(tr1, tr2):
-    return tr2.label
+def tr2_payload(tr1, tr2):
+    return tr2.payload
 
 '''
-A TemporalRange has a start time, end time, and label.
+A TemporalRange has a start time, end time, and payload.
 '''
 class TemporalRange:
     '''
-    Construct an temporal range from a start time, end time, and integer label.
+    Construct an temporal range from a start time, end time, and integer payload.
     '''
-    def __init__(self, start, end, label):
+    def __init__(self, start, end, payload):
         self.start = start
         self.end = end
-        self.label = label
+        self.payload = label
 
     def sort_key(tr):
-        return (tr.start, tr.end, tr.label)
+        return (tr.start, tr.end, tr.payload)
 
     def __repr__(self):
-        return "<Temporal Range start:{} end:{} label:{}>".format(self.start,
-                self.end, self.label)
+        return "<Temporal Range start:{} end:{} payload:{}>".format(self.start,
+                self.end, self.payload)
 
     def copy(self):
-        return TemporalRange(self.start, self.end, self.label)
+        return TemporalRange(self.start, self.end, self.payload)
 
     '''
     Computes the interval difference between self and other and returns results
@@ -45,21 +45,21 @@ class TemporalRange:
     If self is completely contained by other, [] is returned.
     Otherwise, returns a list l of intervals such that the members of l
     maximally cover self without overlapping other.
-    The labels of the members of l are determined by
-    label_producer_fn(self, other).
+    The payloads of the members of l are determined by
+    payload_producer_fn(self, other).
     '''
-    def minus(self, other, label_producer_fn=tr1_label):
+    def minus(self, other, payload_producer_fn=tr1_label):
         if overlaps()(self, other):
-            label = label_producer_fn(self, other)
+            payload = label_producer_fn(self, other)
             if during()(self, other) or equal()(self, other):
                 return []
             if overlaps_before()(self, other):
-                return [TemporalRange(self.start, other.start, label)]
+                return [TemporalRange(self.start, other.start, payload)]
             if overlaps_after()(self, other):
-                return [TemporalRange(other.end, self.end, label)]
+                return [TemporalRange(other.end, self.end, payload)]
             if during()(other, self):
-                return [TemporalRange(self.start, other.start, label),
-                        TemporalRange(other.end, self.end, label)]
+                return [TemporalRange(self.start, other.start, payload),
+                        TemporalRange(other.end, self.end, payload)]
             error_string = "Reached unreachable point in minus with {} and {}"
             error_string = error_string.format(self, other)
             assert False, error_string
@@ -70,19 +70,19 @@ class TemporalRange:
     Computes the interval overlap between self and other.
     If there is no overlap between self and other, returns None.
     Otherwise, it returns an interval that maximally overlaps both self and
-    other, with label produced by lable_producer_fn(self, other).
+    other, with payload produced by lable_producer_fn(self, other).
     '''
-    def overlap(self, other, label_producer_fn=tr1_label):
+    def overlap(self, other, payload_producer_fn=tr1_label):
         if overlaps()(self, other):
-            label = label_producer_fn(self, other)
+            payload = label_producer_fn(self, other)
             if during()(self, other) or equal()(self, other):
-                return TemporalRange(self.start, self.end, label)
+                return TemporalRange(self.start, self.end, payload)
             if overlaps_before()(self, other):
-                return TemporalRange(other.start, self.end, label)
+                return TemporalRange(other.start, self.end, payload)
             if overlaps_after()(self, other):
-                return TemporalRange(self.start, other.end, label)
+                return TemporalRange(self.start, other.end, payload)
             if during()(other, self):
-                return TemporalRange(other.start, other.end, label)
+                return TemporalRange(other.start, other.end, payload)
             error_string = "Reached unreachable point in minus with {} and {}"
             error_string = error_string.format(self, other)
             assert False, error_string
@@ -92,10 +92,10 @@ class TemporalRange:
     '''
     Computes the minimum interval that contains both self and other.
     '''
-    def merge(self, other, label_producer_fn=tr1_label):
-        label = label_producer_fn(self, other)
+    def merge(self, other, payload_producer_fn=tr1_label):
+        payload = label_producer_fn(self, other)
         return TemporalRange(min(self.start, other.start),
-                max(self.end, other.end), label)
+                max(self.end, other.end), payload)
 
     '''
     Getters.
@@ -104,8 +104,8 @@ class TemporalRange:
         return self.start
     def get_end(self):
         return self.end
-    def get_label(self):
-        return self.label
+    def get_payload(self):
+        return self.payload
 
 
 '''
@@ -133,6 +133,13 @@ class TemporalRangeList:
     def get_temporal_ranges(self):
         return self.trs
 
+    ''' Get total time. '''
+    def get_total_time(self):
+        total = 0
+        for tr in self.trs:
+            total += tr.end - tr.start
+        return total
+
     '''
     Combine the temporal ranges in self with the temporal ranges in other.
     '''
@@ -142,21 +149,21 @@ class TemporalRangeList:
     '''
     Recursively merge all overlapping or touching temporal ranges.
 
-    If require_same_label is True, then only merge ranges that have the same
-    label.
+    If require_same_payload is True, then only merge ranges that have the same
+    payload.
     '''
-    def coalesce(self, require_same_label=False):
+    def coalesce(self, require_same_payload=False):
         if len(self.trs) == 0:
             return self
         new_trs = []
-        first_by_label = {}
+        first_by_payload = {}
         for tr in self.trs:
-            if require_same_label:
-                label = tr.label
+            if require_same_payload:
+                payload = tr.label
             else:
-                label = 0
-            if label in first_by_label:
-                first = first_by_label[label]
+                payload = 0
+            if payload in first_by_label:
+                first = first_by_payload[label]
                 if tr.start >= first.start and tr.start <= first.end:
                     # tr overlaps with first
                     if tr.end > first.end:
@@ -164,11 +171,11 @@ class TemporalRangeList:
                         first.end = tr.end
                 else:
                     # tr does not overlap with first
-                    new_trs.append(first_by_label[label])
-                    first_by_label[label] = tr.copy()
+                    new_trs.append(first_by_payload[label])
+                    first_by_payload[label] = tr.copy()
             else:
-                first_by_label[label] = tr.copy()
-        for tr in first_by_label.values():
+                first_by_payload[label] = tr.copy()
+        for tr in first_by_payload.values():
             new_trs.append(tr)
 
         return TemporalRangeList(new_trs)
@@ -179,7 +186,7 @@ class TemporalRangeList:
     '''
     def dilate(self, window):
         return TemporalRangeList(
-            [TemporalRange(tr.start - window, tr.end + window, tr.label) 
+            [TemporalRange(tr.start - window, tr.end + window, tr.payload) 
                 for tr in self.trs])
 
     '''
@@ -249,12 +256,12 @@ class TemporalRangeList:
     If an interval in self overlaps no pairs in other such that the two
     satisfy predicate, then the interval is reproduced in the output.
 
-    Labels the resulting intervals with label_producer_fn. For recursive_diff,
-    the intervals passed in to the label producer function are the original
+    Labels the resulting intervals with payload_producer_fn. For recursive_diff,
+    the intervals passed in to the payload producer function are the original
     interval and the first interval that touches the output interval.
     '''
     def minus(self, other, recursive_diff = True, predicate = true_pred(),
-            label_producer_fn = tr1_label):
+            payload_producer_fn = tr1_label):
         if not recursive_diff:
             output = []
             for tr1 in self.trs:
@@ -334,8 +341,8 @@ class TemporalRangeList:
                     end = subsequence[1]
                     for tr in overlapping:
                         if tr.end == start or tr.start == end:
-                            label = label_producer_fn(tr1, tr)
-                            output.append(TemporalRange(start, end, label))
+                            payload = label_producer_fn(tr1, tr)
+                            output.append(TemporalRange(start, end, payload))
                             break
 
             return TemporalRangeList(output)
@@ -346,25 +353,25 @@ class TemporalRangeList:
 
     Only processes pairs that overlap and that satisfy predicate.
 
-    Labels the resulting intervals with label_producer_fn.
+    Labels the resulting intervals with payload_producer_fn.
     '''
-    def overlaps(self, other, predicate = true_pred(), label_producer_fn =
-            tr1_label):
-        return TemporalRangeList([tr1.overlap(tr2, label_producer_fn)
+    def overlaps(self, other, predicate = true_pred(), payload_producer_fn =
+            tr1_payload):
+        return TemporalRangeList([tr1.overlap(tr2, payload_producer_fn)
                 for tr1 in self.trs for tr2 in other.trs
                 if (overlaps()(tr1, tr2) and
                     predicate(tr1, tr2))])
 
     '''
-    Merges pairs of intervals in self and other that satisfy label_producer_fn.
+    Merges pairs of intervals in self and other that satisfy payload_producer_fn.
 
     Only processes pairs that satisfy predicate.
 
-    Labels the resulting intervals with label_producer_fn.
+    Labels the resulting intervals with payload_producer_fn.
     '''
-    def merge(self, other, predicate = true_pred(), label_producer_fn =
-            tr1_label):
-        return TemporalRangeList([tr1.merge(tr2, label_producer_fn)
+    def merge(self, other, predicate = true_pred(), payload_producer_fn =
+            tr1_payload):
+        return TemporalRangeList([tr1.merge(tr2, payload_producer_fn)
                 for tr1 in self.trs for tr2 in other.trs
                 if predicate(tr1, tr2)])
 
