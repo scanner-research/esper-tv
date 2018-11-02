@@ -171,6 +171,7 @@ def parse_interview_with_names(interview_string, video_id,
     clips_string = "clips of"
     if interview_string.startswith(clips_string):
         interview.scattered_clips = True
+        interview.original = False
         interview_string = interview_string[len(clips_string):].strip()
 
     unoriginal_string = "(originally from a different show) "
