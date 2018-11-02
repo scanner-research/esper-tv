@@ -11,22 +11,22 @@ class TestTemporalRange(unittest.TestCase):
 
         self.assertEqual(len(tr1minustr2), 1)
         self.assertEqual(tr1minustr2[0].__repr__(),
-                "<Temporal Range start:1.0 end:1.5 label:1>")
+                "<Temporal Range start:1.0 end:1.5 payload:1>")
 
-        tr1minustr2 = tr1.minus(tr2, label_producer_fn=lambda x, y: y.label)
+        tr1minustr2 = tr1.minus(tr2, payload_producer_fn=lambda x, y: y.payload)
 
         self.assertEqual(len(tr1minustr2), 1)
         self.assertEqual(tr1minustr2[0].__repr__(),
-                "<Temporal Range start:1.0 end:1.5 label:2>")
+                "<Temporal Range start:1.0 end:1.5 payload:2>")
 
         tr3 = TemporalRange(1.3, 1.6, 5)
 
         tr1minustr3 = tr1.minus(tr3)
         self.assertEqual(len(tr1minustr3), 2)
         self.assertEqual(tr1minustr3[0].__repr__(),
-                "<Temporal Range start:1.0 end:1.3 label:1>")
+                "<Temporal Range start:1.0 end:1.3 payload:1>")
         self.assertEqual(tr1minustr3[1].__repr__(),
-                "<Temporal Range start:1.6 end:2.0 label:1>")
+                "<Temporal Range start:1.6 end:2.0 payload:1>")
 
         tr4 = TemporalRange(0., 5., 1)
         self.assertEqual(tr1.minus(tr4), [])
@@ -36,38 +36,38 @@ class TestTemporalRange(unittest.TestCase):
         tr2 = TemporalRange(1.5, 2.5, 2)
         
         self.assertEqual(tr1.overlap(tr2).__repr__(),
-                "<Temporal Range start:1.5 end:2.0 label:1>")
+                "<Temporal Range start:1.5 end:2.0 payload:1>")
         self.assertEqual(tr1.overlap(tr2,
-            label_producer_fn=lambda x, y: y.label).__repr__(),
-                "<Temporal Range start:1.5 end:2.0 label:2>")
+            payload_producer_fn=lambda x, y: y.payload).__repr__(),
+                "<Temporal Range start:1.5 end:2.0 payload:2>")
 
         tr3 = TemporalRange(1.3, 1.6, 5)
 
         self.assertEqual(tr1.overlap(tr3).__repr__(),
-                "<Temporal Range start:1.3 end:1.6 label:1>")
+                "<Temporal Range start:1.3 end:1.6 payload:1>")
 
         tr4 = TemporalRange(0., 5., 1)
 
         self.assertEqual(tr1.overlap(tr4).__repr__(),
-                "<Temporal Range start:1.0 end:2.0 label:1>")
+                "<Temporal Range start:1.0 end:2.0 payload:1>")
 
     def test_merge(self):
         tr1 = TemporalRange(1., 2., 1)
         tr2 = TemporalRange(1.5, 2.5, 2)
         
         self.assertEqual(tr1.merge(tr2).__repr__(),
-                "<Temporal Range start:1.0 end:2.5 label:1>")
+                "<Temporal Range start:1.0 end:2.5 payload:1>")
         self.assertEqual(tr1.merge(tr2,
-            label_producer_fn=lambda x, y: y.label).__repr__(),
-                "<Temporal Range start:1.0 end:2.5 label:2>")
+            payload_producer_fn=lambda x, y: y.payload).__repr__(),
+                "<Temporal Range start:1.0 end:2.5 payload:2>")
 
         tr3 = TemporalRange(5., 7., 1)
         self.assertEqual(tr1.merge(tr3).__repr__(),
-                "<Temporal Range start:1.0 end:7.0 label:1>")
+                "<Temporal Range start:1.0 end:7.0 payload:1>")
 
         tr4 = TemporalRange(0., 0.5, 1)
         self.assertEqual(tr1.merge(tr4).__repr__(),
-                "<Temporal Range start:0.0 end:2.0 label:1>")
+                "<Temporal Range start:0.0 end:2.0 payload:1>")
 
 class TemporalRangeListTest(unittest.TestCase):
     def test_init(self):
@@ -76,15 +76,15 @@ class TemporalRangeListTest(unittest.TestCase):
 
         trl1 = TemporalRangeList([tr1, tr2])
         self.assertEqual(trl1.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:2.0 label:1>")
+                "<Temporal Range start:1.0 end:2.0 payload:1>")
         self.assertEqual(trl1.trs[1].__repr__(),
-                "<Temporal Range start:1.5 end:2.5 label:2>")
+                "<Temporal Range start:1.5 end:2.5 payload:2>")
 
         trl1 = TemporalRangeList([tr2, tr1])
         self.assertEqual(trl1.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:2.0 label:1>")
+                "<Temporal Range start:1.0 end:2.0 payload:1>")
         self.assertEqual(trl1.trs[1].__repr__(),
-                "<Temporal Range start:1.5 end:2.5 label:2>")
+                "<Temporal Range start:1.5 end:2.5 payload:2>")
 
     def test_set_union(self):
         tr1 = TemporalRange(1., 2., 1)
@@ -95,15 +95,15 @@ class TemporalRangeListTest(unittest.TestCase):
 
         trlu = trl1.set_union(trl2)
         self.assertEqual(trlu.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:2.0 label:1>")
+                "<Temporal Range start:1.0 end:2.0 payload:1>")
         self.assertEqual(trlu.trs[1].__repr__(),
-                "<Temporal Range start:1.5 end:2.5 label:2>")
+                "<Temporal Range start:1.5 end:2.5 payload:2>")
 
         trlu = trl2.set_union(trl1)
         self.assertEqual(trlu.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:2.0 label:1>")
+                "<Temporal Range start:1.0 end:2.0 payload:1>")
         self.assertEqual(trlu.trs[1].__repr__(),
-                "<Temporal Range start:1.5 end:2.5 label:2>")
+                "<Temporal Range start:1.5 end:2.5 payload:2>")
 
     def test_coalesce(self):
         tr1 = TemporalRange(1., 2., 1)
@@ -111,17 +111,17 @@ class TemporalRangeListTest(unittest.TestCase):
 
         trl1 = TemporalRangeList([tr1, tr2])
         trlcoalesced = trl1.coalesce()
-        trlcoalesced_samelabel = trl1.coalesce(require_same_label=True)
+        trlcoalesced_samepayload = trl1.coalesce(require_same_payload=True)
 
         self.assertEqual(len(trlcoalesced.trs), 1)
         self.assertEqual(trlcoalesced.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:2.5 label:1>")
+                "<Temporal Range start:1.0 end:2.5 payload:1>")
 
-        self.assertEqual(len(trlcoalesced_samelabel.trs), 2)
-        self.assertEqual(trlcoalesced_samelabel.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:2.0 label:1>")
-        self.assertEqual(trlcoalesced_samelabel.trs[1].__repr__(),
-                "<Temporal Range start:1.5 end:2.5 label:2>")
+        self.assertEqual(len(trlcoalesced_samepayload.trs), 2)
+        self.assertEqual(trlcoalesced_samepayload.trs[0].__repr__(),
+                "<Temporal Range start:1.0 end:2.0 payload:1>")
+        self.assertEqual(trlcoalesced_samepayload.trs[1].__repr__(),
+                "<Temporal Range start:1.5 end:2.5 payload:2>")
 
     def test_dilate(self):
         tr1 = TemporalRange(1., 2., 1)
@@ -129,9 +129,9 @@ class TemporalRangeListTest(unittest.TestCase):
 
         trl1 = TemporalRangeList([tr1, tr2]).dilate(0.2)
         self.assertEqual(trl1.trs[0].__repr__(),
-                "<Temporal Range start:0.8 end:2.2 label:1>")
+                "<Temporal Range start:0.8 end:2.2 payload:1>")
         self.assertEqual(trl1.trs[1].__repr__(),
-                "<Temporal Range start:1.3 end:2.7 label:2>")
+                "<Temporal Range start:1.3 end:2.7 payload:2>")
 
     def test_filter(self):
         tr1 = TemporalRange(1., 2., 1)
@@ -142,7 +142,7 @@ class TemporalRangeListTest(unittest.TestCase):
         trl1 = trl1.filter(lambda tr: tr.start > 1.1)
         self.assertEqual(len(trl1.trs), 1)
         self.assertEqual(trl1.trs[0].__repr__(),
-                "<Temporal Range start:1.5 end:2.5 label:2>")
+                "<Temporal Range start:1.5 end:2.5 payload:2>")
 
     def test_filter_length(self):
         tr1 = TemporalRange(1., 2., 1)
@@ -153,7 +153,7 @@ class TemporalRangeListTest(unittest.TestCase):
         trl1 = trl1.filter_length(min_length=1.1)
         self.assertEqual(len(trl1.trs), 1)
         self.assertEqual(trl1.trs[0].__repr__(),
-                "<Temporal Range start:1.5 end:3.5 label:2>")
+                "<Temporal Range start:1.5 end:3.5 payload:2>")
 
         trl1 = trl1.filter_length(max_length=1.8)
         self.assertEqual(len(trl1.trs), 0)
@@ -199,47 +199,47 @@ class TemporalRangeListTest(unittest.TestCase):
         trlminusrec = trllong.minus(trlshort)
         self.assertEqual(len(trlminusrec.trs), 7)
         self.assertEqual(trlminusrec.trs[0].__repr__(),
-            "<Temporal Range start:1.0 end:2.0 label:1>")
+            "<Temporal Range start:1.0 end:2.0 payload:1>")
         self.assertEqual(trlminusrec.trs[1].__repr__(),
-            "<Temporal Range start:2.7 end:2.9 label:1>")
+            "<Temporal Range start:2.7 end:2.9 payload:1>")
         self.assertEqual(trlminusrec.trs[2].__repr__(),
-            "<Temporal Range start:3.5 end:5.0 label:1>")
+            "<Temporal Range start:3.5 end:5.0 payload:1>")
         self.assertEqual(trlminusrec.trs[3].__repr__(),
-            "<Temporal Range start:3.5 end:5.0 label:2>")
+            "<Temporal Range start:3.5 end:5.0 payload:2>")
         self.assertEqual(trlminusrec.trs[4].__repr__(),
-            "<Temporal Range start:7.0 end:9.0 label:1>")
+            "<Temporal Range start:7.0 end:9.0 payload:1>")
         self.assertEqual(trlminusrec.trs[5].__repr__(),
-            "<Temporal Range start:7.0 end:9.0 label:2>")
+            "<Temporal Range start:7.0 end:9.0 payload:2>")
         self.assertEqual(trlminusrec.trs[6].__repr__(),
-            "<Temporal Range start:12.0 end:14.0 label:2>")
+            "<Temporal Range start:12.0 end:14.0 payload:2>")
 
         trlminusnonrec = trllong.minus(trlshort, recursive_diff = False)
         self.assertEqual(len(trlminusnonrec.trs), 15)
 
         trlminusrec = trllong.minus(trlshort,
-                label_producer_fn=lambda x, y: y.label)
+                payload_producer_fn=lambda x, y: y.payload)
         self.assertEqual(len(trlminusrec.trs), 7)
         self.assertEqual(trlminusrec.trs[0].__repr__(),
-            "<Temporal Range start:1.0 end:2.0 label:3>")
+            "<Temporal Range start:1.0 end:2.0 payload:3>")
         self.assertEqual(trlminusrec.trs[1].__repr__(),
-            "<Temporal Range start:2.7 end:2.9 label:4>")
+            "<Temporal Range start:2.7 end:2.9 payload:4>")
         self.assertEqual(trlminusrec.trs[2].__repr__(),
-            "<Temporal Range start:3.5 end:5.0 label:5>")
+            "<Temporal Range start:3.5 end:5.0 payload:5>")
         self.assertEqual(trlminusrec.trs[3].__repr__(),
-            "<Temporal Range start:3.5 end:5.0 label:5>")
+            "<Temporal Range start:3.5 end:5.0 payload:5>")
         self.assertEqual(trlminusrec.trs[4].__repr__(),
-            "<Temporal Range start:7.0 end:9.0 label:6>")
+            "<Temporal Range start:7.0 end:9.0 payload:6>")
         self.assertEqual(trlminusrec.trs[5].__repr__(),
-            "<Temporal Range start:7.0 end:9.0 label:6>")
+            "<Temporal Range start:7.0 end:9.0 payload:6>")
         self.assertEqual(trlminusrec.trs[6].__repr__(),
-            "<Temporal Range start:12.0 end:14.0 label:7>")
+            "<Temporal Range start:12.0 end:14.0 payload:7>")
 
         trlminusrec = trllong.minus(trlshort, predicate=overlaps_before())
         self.assertEqual(len(trlminusrec.trs), 2)
         self.assertEqual(trlminusrec.trs[0].__repr__(),
-            "<Temporal Range start:1.0 end:9.0 label:1>")
+            "<Temporal Range start:1.0 end:9.0 payload:1>")
         self.assertEqual(trlminusrec.trs[1].__repr__(),
-            "<Temporal Range start:3.0 end:14.0 label:2>")
+            "<Temporal Range start:3.0 end:14.0 payload:2>")
 
     def test_minus_against_nothing(self):
         trlong1 = TemporalRange(1., 10., 1)
@@ -253,9 +253,9 @@ class TemporalRangeListTest(unittest.TestCase):
         trlminusrec = trllong.minus(trlshort)
         self.assertEqual(len(trlminusrec.trs), 2)
         self.assertEqual(trlminusrec.trs[0].__repr__(),
-            "<Temporal Range start:1.0 end:10.0 label:1>")
+            "<Temporal Range start:1.0 end:10.0 payload:1>")
         self.assertEqual(trlminusrec.trs[1].__repr__(),
-            "<Temporal Range start:3.0 end:15.0 label:2>")
+            "<Temporal Range start:3.0 end:15.0 payload:2>")
 
 
     def test_overlaps(self):
@@ -274,35 +274,35 @@ class TemporalRangeListTest(unittest.TestCase):
         trloverlap = trla.overlaps(trlb)
         self.assertEqual(len(trloverlap.trs), 4)
         self.assertEqual(trloverlap.trs[0].__repr__(),
-                "<Temporal Range start:12.0 end:25.0 label:1>")
+                "<Temporal Range start:12.0 end:25.0 payload:1>")
         self.assertEqual(trloverlap.trs[1].__repr__(),
-                "<Temporal Range start:52.0 end:53.0 label:1>")
+                "<Temporal Range start:52.0 end:53.0 payload:1>")
         self.assertEqual(trloverlap.trs[2].__repr__(),
-                "<Temporal Range start:101.0 end:105.0 label:1>")
+                "<Temporal Range start:101.0 end:105.0 payload:1>")
         self.assertEqual(trloverlap.trs[3].__repr__(),
-                "<Temporal Range start:200.0 end:210.0 label:1>")
+                "<Temporal Range start:200.0 end:210.0 payload:1>")
 
         trloverlap = trlb.overlaps(trla)
         self.assertEqual(len(trloverlap.trs), 4)
         self.assertEqual(trloverlap.trs[0].__repr__(),
-                "<Temporal Range start:12.0 end:25.0 label:2>")
+                "<Temporal Range start:12.0 end:25.0 payload:2>")
         self.assertEqual(trloverlap.trs[1].__repr__(),
-                "<Temporal Range start:52.0 end:53.0 label:2>")
+                "<Temporal Range start:52.0 end:53.0 payload:2>")
         self.assertEqual(trloverlap.trs[2].__repr__(),
-                "<Temporal Range start:101.0 end:105.0 label:2>")
+                "<Temporal Range start:101.0 end:105.0 payload:2>")
         self.assertEqual(trloverlap.trs[3].__repr__(),
-                "<Temporal Range start:200.0 end:210.0 label:2>")
+                "<Temporal Range start:200.0 end:210.0 payload:2>")
 
         trloverlap = trla.overlaps(trlb, predicate=overlaps_before())
         self.assertEqual(len(trloverlap.trs), 1)
         self.assertEqual(trloverlap.trs[0].__repr__(),
-                "<Temporal Range start:12.0 end:25.0 label:1>")
+                "<Temporal Range start:12.0 end:25.0 payload:1>")
 
         trloverlap = trla.overlaps(trlb, predicate=overlaps_before(),
-                label_producer_fn=lambda x, y: y.label)
+                payload_producer_fn=lambda x, y: y.payload)
         self.assertEqual(len(trloverlap.trs), 1)
         self.assertEqual(trloverlap.trs[0].__repr__(),
-                "<Temporal Range start:12.0 end:25.0 label:2>")
+                "<Temporal Range start:12.0 end:25.0 payload:2>")
 
     def test_merge(self):
         tra1 = TemporalRange(1., 25., 1)
@@ -320,35 +320,35 @@ class TemporalRangeListTest(unittest.TestCase):
         trlmerge = trla.merge(trlb, predicate=overlaps())
         self.assertEqual(len(trlmerge.trs), 4)
         self.assertEqual(trlmerge.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:26.0 label:1>")
+                "<Temporal Range start:1.0 end:26.0 payload:1>")
         self.assertEqual(trlmerge.trs[1].__repr__(),
-                "<Temporal Range start:50.0 end:55.0 label:1>")
+                "<Temporal Range start:50.0 end:55.0 payload:1>")
         self.assertEqual(trlmerge.trs[2].__repr__(),
-                "<Temporal Range start:100.0 end:110.0 label:1>")
+                "<Temporal Range start:100.0 end:110.0 payload:1>")
         self.assertEqual(trlmerge.trs[3].__repr__(),
-                "<Temporal Range start:190.0 end:220.0 label:1>")
+                "<Temporal Range start:190.0 end:220.0 payload:1>")
 
         trlmerge = trlb.merge(trla, predicate=overlaps())
         self.assertEqual(len(trlmerge.trs), 4)
         self.assertEqual(trlmerge.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:26.0 label:2>")
+                "<Temporal Range start:1.0 end:26.0 payload:2>")
         self.assertEqual(trlmerge.trs[1].__repr__(),
-                "<Temporal Range start:50.0 end:55.0 label:2>")
+                "<Temporal Range start:50.0 end:55.0 payload:2>")
         self.assertEqual(trlmerge.trs[2].__repr__(),
-                "<Temporal Range start:100.0 end:110.0 label:2>")
+                "<Temporal Range start:100.0 end:110.0 payload:2>")
         self.assertEqual(trlmerge.trs[3].__repr__(),
-                "<Temporal Range start:190.0 end:220.0 label:2>")
+                "<Temporal Range start:190.0 end:220.0 payload:2>")
 
         trlmerge = trla.merge(trlb, predicate=overlaps_before())
         self.assertEqual(len(trlmerge.trs), 1)
         self.assertEqual(trlmerge.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:26.0 label:1>")
+                "<Temporal Range start:1.0 end:26.0 payload:1>")
 
         trlmerge = trla.merge(trlb, predicate=overlaps_before(),
-                label_producer_fn=lambda x, y: y.label)
+                payload_producer_fn=lambda x, y: y.payload)
         self.assertEqual(len(trlmerge.trs), 1)
         self.assertEqual(trlmerge.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:26.0 label:2>")
+                "<Temporal Range start:1.0 end:26.0 payload:2>")
 
         tra1 = TemporalRange(1., 25., 1)
         tra2 = TemporalRange(52., 55., 1)
@@ -365,12 +365,12 @@ class TemporalRangeListTest(unittest.TestCase):
         trlmerge = trla.merge(trlb, predicate=meets_before())
         self.assertEqual(len(trlmerge.trs), 1)
         self.assertEqual(trlmerge.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:31.0 label:1>")
+                "<Temporal Range start:1.0 end:31.0 payload:1>")
 
         trlmerge = trla.merge(trlb, predicate=before(0.1, 10.0))
         self.assertEqual(len(trlmerge.trs), 1)
         self.assertEqual(trlmerge.trs[0].__repr__(),
-                "<Temporal Range start:52.0 end:90.0 label:1>")
+                "<Temporal Range start:52.0 end:90.0 payload:1>")
 
     def test_cross(self):
         tra1 = TemporalRange(1., 25., 1)
@@ -393,4 +393,4 @@ class TemporalRangeListTest(unittest.TestCase):
         trludf = trla.cross_udf(trlb, myudf)
         self.assertEqual(len(trludf.trs), 1)
         self.assertEqual(trludf.trs[0].__repr__(),
-                "<Temporal Range start:1.0 end:100.0 label:25>")
+                "<Temporal Range start:1.0 end:100.0 payload:25>")
