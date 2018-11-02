@@ -29,3 +29,4 @@ wordcloud
 redis
 msgpack
 scapy
+python-constraint

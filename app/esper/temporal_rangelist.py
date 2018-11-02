@@ -26,7 +26,7 @@ class TemporalRange:
     def __init__(self, start, end, payload):
         self.start = start
         self.end = end
-        self.payload = label
+        self.payload = payload
 
     def sort_key(tr):
         return (tr.start, tr.end, tr.payload)
@@ -48,9 +48,9 @@ class TemporalRange:
     The payloads of the members of l are determined by
     payload_producer_fn(self, other).
     '''
-    def minus(self, other, payload_producer_fn=tr1_label):
+    def minus(self, other, payload_producer_fn=tr1_payload):
         if overlaps()(self, other):
-            payload = label_producer_fn(self, other)
+            payload = payload_producer_fn(self, other)
             if during()(self, other) or equal()(self, other):
                 return []
             if overlaps_before()(self, other):
@@ -72,9 +72,9 @@ class TemporalRange:
     Otherwise, it returns an interval that maximally overlaps both self and
     other, with payload produced by lable_producer_fn(self, other).
     '''
-    def overlap(self, other, payload_producer_fn=tr1_label):
+    def overlap(self, other, payload_producer_fn=tr1_payload):
         if overlaps()(self, other):
-            payload = label_producer_fn(self, other)
+            payload = payload_producer_fn(self, other)
             if during()(self, other) or equal()(self, other):
                 return TemporalRange(self.start, self.end, payload)
             if overlaps_before()(self, other):
@@ -92,8 +92,8 @@ class TemporalRange:
     '''
     Computes the minimum interval that contains both self and other.
     '''
-    def merge(self, other, payload_producer_fn=tr1_label):
-        payload = label_producer_fn(self, other)
+    def merge(self, other, payload_producer_fn=tr1_payload):
+        payload = payload_producer_fn(self, other)
         return TemporalRange(min(self.start, other.start),
                 max(self.end, other.end), payload)
 
@@ -159,11 +159,11 @@ class TemporalRangeList:
         first_by_payload = {}
         for tr in self.trs:
             if require_same_payload:
-                payload = tr.label
+                payload = tr.payload
             else:
                 payload = 0
-            if payload in first_by_label:
-                first = first_by_payload[label]
+            if payload in first_by_payload:
+                first = first_by_payload[payload]
                 if tr.start >= first.start and tr.start <= first.end:
                     # tr overlaps with first
                     if tr.end > first.end:
@@ -171,10 +171,10 @@ class TemporalRangeList:
                         first.end = tr.end
                 else:
                     # tr does not overlap with first
-                    new_trs.append(first_by_payload[label])
-                    first_by_payload[label] = tr.copy()
+                    new_trs.append(first_by_payload[payload])
+                    first_by_payload[payload] = tr.copy()
             else:
-                first_by_payload[label] = tr.copy()
+                first_by_payload[payload] = tr.copy()
         for tr in first_by_payload.values():
             new_trs.append(tr)
 
@@ -261,7 +261,7 @@ class TemporalRangeList:
     interval and the first interval that touches the output interval.
     '''
     def minus(self, other, recursive_diff = True, predicate = true_pred(),
-            payload_producer_fn = tr1_label):
+            payload_producer_fn = tr1_payload):
         if not recursive_diff:
             output = []
             for tr1 in self.trs:
@@ -341,7 +341,7 @@ class TemporalRangeList:
                     end = subsequence[1]
                     for tr in overlapping:
                         if tr.end == start or tr.start == end:
-                            payload = label_producer_fn(tr1, tr)
+                            payload = payload_producer_fn(tr1, tr)
                             output.append(TemporalRange(start, end, payload))
                             break
 
