@@ -99,6 +99,32 @@ def trlists_to_result(trlists, color="red"):
 
     return {'result': groups, 'count': full_count, 'type': 'Video'}
 
+''' Gets a result for trlists, assuming that the objects are bounding boxes. '''
+def trlists_to_result_bbox(trlists):
+    materialized_results = []
+    for video in trlists:
+        trlist = trlists[video].get_temporal_ranges()
+        if len(trlist) == 0:
+            continue
+        for tr in trlist:
+            materialized_results.append({
+                'video': video,
+                'min_frame': (tr.get_start() + tr.get_end()) / 2,
+                'objects': [{
+                        'id': video,
+                        'type': 'bbox',
+                        'bbox_x1': bbox['x1'],
+                        'bbox_x2': bbox['x2'],
+                        'bbox_y1': bbox['y1'],
+                        'bbox_y2': bbox['y2'],
+                    } for bbox in tr.get_payload()['objects']]
+                })
+
+    groups = [{'type': 'flat', 'label': '', 'elements': [r]}
+            for r in materialized_results]
+
+    return {'result': groups, 'count': len(list(trlists.keys())), 'type': 'Video'}
+
 '''
 Add trlists to result as another set of segments to display. Modifies result.
 '''
