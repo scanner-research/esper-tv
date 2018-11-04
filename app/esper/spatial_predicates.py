@@ -82,6 +82,14 @@ Node predicates:
     area_at_least(area) - area is at least some area
     area_at_most(area) - area is at most some area
     area_between(area1, area2) - area is between two values
+    width_exactly(width, epsilon=0.1) - width of the bbox is some width
+    width_at_least(width) - width is at least some width
+    width_at_most(width) - width is at most some width
+    width_between(width1, width2) - width is between two values
+    height_exactly(height, epsilon=0.1) - height of the bbox is some height
+    height_at_least(height) - height is at least some height
+    height_at_most(height) - height is at most some height
+    height_between(height1, height2) - height is between two values
     and_pred_node(pred1, pred2) - and
     or_pred_node(pred1, pred2) - or
 
@@ -93,6 +101,12 @@ Edge relationships:
     same_area(epsilon=0.1) - start and end have same area
     more_area() - start's area greater than end's area
     less_area() - start's area less than end's area
+    same_width(epsilon=0.1) - start and end have same width
+    more_width() - start's width greater than end's width
+    less_width() - start's width less than end's width
+    same_height(epsilon=0.1) - start and end have same height
+    more_height() - start's height greater than end's height
+    less_height() - start's height less than end's height
     same_value(value_name, epsilon=0.1) - start and end have the same value
         (one of x1, y1, x2, y2), +/- epsilon
     and_pred_edge(pred1, pred2) - and
@@ -136,6 +150,10 @@ def between(n1, n2):
 '''Node predicates'''
 def _area(bbox):
     return (bbox['x2'] - bbox['x1']) * (bbox['y2'] - bbox['y1'])
+def _width(bbox):
+    return bbox['x2'] - bbox['x1']
+def _height(bbox):
+    return bbox['y2'] - bbox['y1']
 def position(x1, y1, x2, y2, epsilon=0.1):
     return lambda bbox: (abs(bbox['x1'] - x1) < epsilon and
             abs(bbox['y1'] - y1) < epsilon and
@@ -151,6 +169,22 @@ def area_at_most(area):
     return lambda bbox: _area(bbox) <= area
 def area_between(area1, area2):
     return lambda bbox: _area(bbox) >= area1 and _area(bbox) <= area2
+def width_exactly(width, epsilon=0.1):
+    return lambda bbox: abs(_width(bbox) - width) < epsilon 
+def width_at_least(width):
+    return lambda bbox: _width(bbox) >= width
+def width_at_most(width):
+    return lambda bbox: _width(bbox) <= width
+def width_between(width1, width2):
+    return lambda bbox: _width(bbox) >= width1 and _width(bbox) <= width2
+def height_exactly(height, epsilon=0.1):
+    return lambda bbox: abs(_height(bbox) - height) < epsilon 
+def height_at_least(height):
+    return lambda bbox: _height(bbox) >= height
+def height_at_most(height):
+    return lambda bbox: _height(bbox) <= height
+def height_between(height1, height2):
+    return lambda bbox: _height(bbox) >= height1 and _height(bbox) <= height2
 def and_pred_node(pred1, pred2):
     return lambda bbox: pred1(bbox) and pred2(bbox)
 def or_pred_node(pred1, pred2):
@@ -171,6 +205,18 @@ def more_area():
     return lambda bbox1, bbox2: _area(bbox1) > _area(bbox2)
 def less_area():
     return lambda bbox1, bbox2: _area(bbox1) < _area(bbox2)
+def same_width(epsilon=0.1):
+    return lambda bbox1, bbox2: abs(_width(bbox1) - _width(bbox2)) < epsilon
+def more_width():
+    return lambda bbox1, bbox2: _width(bbox1) > _width(bbox2)
+def less_width():
+    return lambda bbox1, bbox2: _width(bbox1) < _width(bbox2)
+def same_height(epsilon=0.1):
+    return lambda bbox1, bbox2: abs(_height(bbox1) - _height(bbox2)) < epsilon
+def more_height():
+    return lambda bbox1, bbox2: _height(bbox1) > _height(bbox2)
+def less_height():
+    return lambda bbox1, bbox2: _height(bbox1) < _height(bbox2)
 def same_value(value_name, epsilon=0.1):
     return lambda bbox1, bbox2: abs(bbox1[value_name] - bbox2[value_name]) < epsilon
 def and_pred_edge(pred1, pred2):
@@ -179,21 +225,21 @@ def or_pred_edge(pred1, pred2):
     return lambda bbox1, bbox2: pred1(bbox1, bbox2) or pred2(bbox1, bbox2)
 
 '''Constructing regions'''
-def region(x1, y1, x2, y2):
+def make_region(x1, y1, x2, y2):
     return { 'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2 }
 def full_frame():
-    return region(0., 0., 1., 1.)
+    return make_region(0., 0., 1., 1.)
 def left_half(region=full_frame()):
-    return region(region['x1'], region['y1'],
+    return make_region(region['x1'], region['y1'],
             (region['x1'] + region['x2']) / 2., region['y2'])
 def right_half(region=full_frame()):
-    return region((region['x1'] + region['x2']) / 2., region['y1'],
+    return make_region((region['x1'] + region['x2']) / 2., region['y1'],
             region['x2'], region['y2'])
 def top_half(region=full_frame()):
-    return region(region['x1'], region['y1'],
+    return make_region(region['x1'], region['y1'],
             region['x2'], (region['y1'] + region['y2']) / 2.)
 def bottom_half(region=full_frame()):
-    return region(region['x1'], (region['y1'] + region['y2']) / 2.,
+    return make_region(region['x1'], (region['y1'] + region['y2']) / 2.,
             region['x2'], region['y2'])
 def top_left(region=full_frame()):
     return left_half(top_half(region))
@@ -213,10 +259,10 @@ def center(region=full_frame()):
 
 '''Scene graph predicates'''
 def _region_contains_bbox(region, bbox):
-    return (bbox['x1'] > region['x1'] and
-        bbox['x2'] < region['x2'] and
-        bbox['y1'] > region['y1'] and
-        bbox['y2'] < region['y2'])
+    return (bbox['x1'] >= region['x1'] and
+        bbox['x2'] <= region['x2'] and
+        bbox['y1'] >= region['y1'] and
+        bbox['y2'] <= region['y2'])
 
 def _bboxes_in_region(region, bboxes):
     return [bbox for bbox in bboxes if _region_contains_bbox(region, bbox)]
@@ -235,7 +281,9 @@ def _bboxes_satisfy_edge(bbox1, bbox2, edge):
 
 def region_contains(region, graph):
     def calculate_predicate(tr):
-        bbox_candidates = _bboxes_in_region(region, tr['objects'])
+        bbox_candidates = _bboxes_in_region(region, tr.payload['objects'])
+        if len(bbox_candidates) == 0:
+            return False
 
         '''
         This is a classic constraint satisfaction problem.
@@ -247,26 +295,31 @@ def region_contains(region, graph):
         '''
 
         problem = Problem()
+        variables = []
         for node in graph['nodes']:
-            problem.addVariable(graph['node']['name'],
-                    range(len(bbox_candidates)))
-        problem.addConstraint(AllDifferentConstraint())
-        # Check to make sure the bounding box satisfies the node predicate
-        for node in graph['nodes']:
-            problem.addConstraint(lambda bbox_index: _bbox_satisfies_node(
-                        bbox_candidates[bbox_index], node), (node['name']))
+            # Pre-compute per-node constraints
+            candidates = [i for (i, bbox) in enumerate(bbox_candidates)
+                    if _bbox_satisfies_node(bbox, node)]
+            if len(candidates) == 0:
+                return False
+            problem.addVariable(node['name'], candidates)
+            variables.append(node['name'])
+        # As of November 2018, the version of the csp solver on pip has some
+        # Python 3 bugs. Need to explicitly list out the variables for now.
+        problem.addConstraint(AllDifferentConstraint(), variables)
+        # Add edge constraints
         for edge in graph['edges']:
             problem.addConstraint(lambda bbox1, bbox2: _bboxes_satisfy_edge(
                 bbox_candidates[bbox1], bbox_candidates[bbox2], edge),
                 (edge['start'], edge['end']))
-        
+
         return problem.getSolution() is not None
 
     return calculate_predicate
 
 def region_is(region, graph):
     def right_number(tr):
-        num_bboxes = _bboxes_in_region(region, tr['objects'])
+        num_bboxes = len(_bboxes_in_region(region, tr.payload['objects']))
         return num_bboxes == len(graph['nodes'])
     return and_pred_spatial(region_contains(region, graph), right_number)
 
