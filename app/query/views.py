@@ -143,10 +143,9 @@ def save_frame_labels(groups):
     ]
     Frame.tags.through.objects.filter(frame__id__in=frame_ids, tag=labeled_tag).delete()
     Frame.tags.through.objects.filter(frame__id__in=frame_ids, tag=verified_tag).delete()
-    Face.objects.filter(person__frame__id__in=frame_ids, labeler=face_labeler).delete()
+    Face.objects.filter(frame__id__in=frame_ids, labeler=face_labeler).delete()
 
     all_tags = []
-    all_people = []
     all_faces = []
     all_genders = []
     all_identities = []
@@ -155,13 +154,12 @@ def save_frame_labels(groups):
         all_tags.append(Frame.tags.through(frame_id=frame.id, tag_id=labeled_tag.id))
         all_tags.append(Frame.tags.through(frame_id=frame.id, tag_id=verified_tag.id))
         for face in faces:
-            all_people.append(Person(frame=frame))
 
             face_params = {
                 # TODO: this became something else at some point. It interferes with saving labels.
                 # 'bbox_score': 1.0,
+                'frame': frame,
                 'labeler': face_labeler,
-                'person_id': None,
                 'shot_id': None,
                 'background': face['background']
             }
@@ -181,10 +179,6 @@ def save_frame_labels(groups):
 
     Frame.tags.through.objects.bulk_create(all_tags)
 
-    Person.objects.bulk_create(all_people)
-
-    for (p, f) in zip(all_people, all_faces):
-        f.person_id = p.id
     Face.objects.bulk_create(all_faces)
 
     for (f, g, i) in zip(all_faces, all_genders, all_identities):
@@ -329,3 +323,20 @@ def newthings(request):
         } for t in things]})
     except Exception:
         return JsonResponse({'success': False, 'error': traceback.format_exc()})
+
+
+def graph(request):
+    try:
+        params = json.loads(request.body.decode('utf-8'))
+        return JsonResponse({
+            'success': True,
+            'data': [
+                {'a': 'A', 'b': 1}, {'a': 'B', 'b': 3}
+            ]
+        })
+    except Exception:
+        return JsonResponse({'success': False, 'error': traceback.format_exc()})
+
+
+def serve_graph(request):
+    return render(request, 'graph.html', {'globals': '{}'})

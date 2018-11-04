@@ -179,9 +179,9 @@ def load_genders():
             duration=Cast(
                 (F('face__shot__max_frame') - F('face__shot__min_frame')) / F('face__shot__video__fps'),
                 models.FloatField()),
-            hour=Extract('face__person__frame__video__time', 'hour'),
-            week_day=Extract('face__person__frame__video__time', 'week_day')) \
-        .values('id', 'gender', 'height', 'duration', 'face__person__frame__video__channel', 'face__person__frame__video__show', 'face__person__frame__video__id', 'hour', 'face__id', 'face__shot', 'week_day', 'face__is_host'))
+            hour=Extract('face__frame__video__time', 'hour'),
+            0Aweek_day=Extract('face__frame__video__time', 'week_day')) \
+        .values('id', 'gender', 'height', 'duration', 'face__frame__video__channel', 'face__frame__video__show', 'face__frame__video__id', 'hour', 'face__id', 'face__shot', 'week_day', 'face__is_host'))
 
 
 def load_faces():
@@ -192,8 +192,8 @@ def load_faces():
             duration=Cast(
                 (F('shot__max_frame') - F('shot__min_frame')) / F('shot__video__fps'),
                 models.FloatField()),
-            hour=Extract('person__frame__video__time', 'hour')) \
-        .values('id', 'duration', 'person__frame__video__channel', 'person__frame__video__show', 'hour', 'shot', 'is_host'))
+            hour=Extract('frame__video__time', 'hour')) \
+        .values('id', 'duration', 'frame__video__channel', 'frame__video__show', 'hour', 'shot', 'is_host'))
 
 
 def filter_hosts(speakers2, faces, shots):

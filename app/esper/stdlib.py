@@ -20,7 +20,7 @@ import django.db.models as models
 from esper.prelude import collect, BUCKET
 from query.base_models import Track
 from query.models import \
-    Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Segment, Tag, Person, Object, \
+    Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Segment, Tag, Object, \
     Topic, Identity
 import django.apps
 
@@ -103,8 +103,8 @@ def simple_result(result: Dict, ty: str) -> Dict:
 def filter_poses(ty, fn, used_kps, poses=None):
     filtered = []
     if poses is None:
-        poses = Pose.objects.all().order_by('id').select_related('person__frame',
-                                                                 'person__frame__video')[:100000:10]
+        poses = Pose.objects.all().order_by('id').select_related('frame',
+                                                                 'frame__video')[:100000:10]
     for pose in poses:
         kps = getattr(pose, '{}_keypoints'.format(ty))()
         bad = False
@@ -151,17 +151,15 @@ def qs_to_result(result: QuerySet,
                 'objects': []
             })
 
-    elif bases[0] is base_models.Attribute or bases[0] is base_models.Noun:
+    elif cls is Face or cls is FaceGender or cls is FaceIdentity or cls is Object:
         if cls is FaceGender or cls is FaceIdentity:
-            frame_path = 'face__person__frame'
+            frame_path = 'face__frame'
             if cls is FaceGender:
                 result = result.select_related('face', 'gender')
             else:
                 result = result.select_related('face', 'identity')
-        elif cls is Object:
-            frame_path = 'frame'
         else:
-            frame_path = 'person__frame'
+            frame_path = 'frame'
         result = result.select_related(frame_path)
 
         if not shuffle and deterministic_order:
@@ -228,8 +226,8 @@ def qs_to_result(result: QuerySet,
         else:
             for inst in result[:limit * stride:stride]:
                 r = {
-                    'video': inst.person.frame.video.id,
-                    'min_frame': inst.person.frame.number,
+                    'video': inst.frame.video.id,
+                    'min_frame': inst.frame.number,
                     'objects': [fn(inst)]
                 }
                 materialized_result.append(r)

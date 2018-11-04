@@ -376,7 +376,9 @@ class ScannerSQLPipeline:
     def committed(self, output):
         from query.models import ScannerJob
         if self._job_cache is None:
-            self._job_cache = set([r['name'] for r in ScannerJob.objects.all().values('name')])
+            self._job_cache = set(
+                [r['name']
+                 for r in ScannerJob.objects.filter(name__contains=self.job_suffix).values('name')])
         return output['job_name'] in self._job_cache
 
     def parse_output(self):
@@ -618,8 +620,8 @@ def crop(img, bbox):
 
 
 def resize(img, w, h):
-    th = int(img.shape[0] * (tw / float(img.shape[1]))) if h is None else h
-    tw = int(img.shape[1] * (th / float(img.shape[0]))) if w is None else w
+    th = int(img.shape[0] * (w / float(img.shape[1]))) if h is None else int(h)
+    tw = int(img.shape[1] * (h / float(img.shape[0]))) if w is None else int(w)
     return cv2.resize(img, (tw, th))
 
 
@@ -664,7 +666,7 @@ def make_montage(video,
                  workers=16,
                  target_height=None,
                  progress=False):
-    target_width = width / num_cols
+    target_width = int(width / num_cols)
 
     bboxes = bboxes or [[] for _ in range(len(frames))]
     videos = video if isinstance(video, list) else [video for _ in range(len(frames))]
@@ -673,7 +675,7 @@ def make_montage(video,
         list(zip(videos, frames, bboxes)),
         progress=progress,
         workers=workers)
-    target_height = imgs[0].shape[0]
+    target_height = int(imgs[0].shape[0])
     num_rows = int(math.ceil(float(len(imgs)) / num_cols))
 
     montage = np.zeros((num_rows * target_height, width, 3), dtype=np.uint8)

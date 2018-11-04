@@ -65,11 +65,14 @@ class Labeler(base.Labeler):
     created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
 
+Labeled = base.Labeled(Labeler)
+
 class Gender(models.Model):
     name = base.CharField()
 
+Track = base.Track(Labeler)
 
-class Commercial(base.Track):
+class Commercial(Track):
     pass
 
 
@@ -77,29 +80,22 @@ class Topic(models.Model):
     name = base.CharField()
 
 
-class Segment(base.Track):
+class Segment(Track):
     topics = models.ManyToManyField(Topic)
     polarity = models.FloatField(null=True)
     subjectivity = models.FloatField(null=True)
 
 
-class Shot(base.Track):
+class Shot(Track):
     in_commercial = models.BooleanField(default=False)
 
 
-class Person(base.Noun):
-    pass
+class Pose(Labeled, base.Pose, models.Model):
+    frame = models.ForeignKey(Frame)
 
 
-class Pose(base.Pose, base.Attribute):
-    person = models.ForeignKey(Person)
-
-    class Meta:
-        unique_together = ('labeler', 'person')
-
-
-class Face(base.Attribute, base.BoundingBox):
-    person = models.ForeignKey(Person)
+class Face(Labeled, base.BoundingBox, models.Model):
+    frame = models.ForeignKey(Frame)
     shot = models.ForeignKey(Shot, null=True)
     background = models.BooleanField(default=False)
     is_host = models.BooleanField(default=False)
@@ -107,10 +103,10 @@ class Face(base.Attribute, base.BoundingBox):
     probability = models.FloatField(default=1.)
 
     class Meta:
-        unique_together = ('labeler', 'person')
+        unique_together = ('labeler', 'frame', 'bbox_x1', 'bbox_x2', 'bbox_y1', 'bbox_y2')
 
 
-class FaceGender(base.Attribute):
+class FaceGender(Labeled, models.Model):
     face = models.ForeignKey(Face)
     gender = models.ForeignKey(Gender)
     probability = models.FloatField(default=1.)
@@ -119,7 +115,7 @@ class FaceGender(base.Attribute):
         unique_together = ('labeler', 'face')
 
 
-class FaceIdentity(base.Attribute):
+class FaceIdentity(Labeled, models.Model):
     face = models.ForeignKey(Face)
     identity = models.ForeignKey(Identity)
     probability = models.FloatField(default=1.)
@@ -128,7 +124,7 @@ class FaceIdentity(base.Attribute):
         unique_together = ('labeler', 'face')
 
 
-class FaceFeatures(base.Attribute, base.Features):
+class FaceFeatures(Labeled, base.Features, models.Model):
     face = models.ForeignKey(Face)
 
     class Meta:
@@ -139,7 +135,8 @@ class ScannerJob(models.Model):
     name = base.CharField()
 
 
-class Object(base.Noun, base.BoundingBox):
+class Object(base.BoundingBox, models.Model):
+    frame = models.ForeignKey(Frame)
     label = models.IntegerField()
     probability = models.FloatField()
 

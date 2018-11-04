@@ -51,12 +51,12 @@ def man_left_of_woman():
     frames = []
     frames_qs = Frame.objects.annotate(
         c=Subquery(
-            Face.objects.filter(person__frame=OuterRef('pk')).values('person__frame').annotate(
+            Face.objects.filter(frame=OuterRef('pk')).values('frame').annotate(
                 c=Count('*')).values('c'))).filter(c__gt=0).order_by('id').select_related('video')
     for frame in frames_qs[:100000:10]:
         faces = list(
             FaceGender.objects.filter(
-                face__person__frame=frame, face__labeler__name='mtcnn',
+                face__frame=frame, face__labeler__name='mtcnn',
                 labeler__name='rudecarnie').select_related('face', 'gender'))
         good = None
         for face1 in faces:
@@ -89,13 +89,13 @@ def two_poses_with_two_hands_above_head():
     frames = []
     frames_qs = Frame.objects.annotate(
         c=Subquery(
-            Pose.objects.filter(person__frame=OuterRef('pk')).values('person__frame').annotate(
+            Pose.objects.filter(frame=OuterRef('pk')).values('frame').annotate(
                 c=Count('*')).values('c'))).filter(c__gt=0).order_by('id').select_related('video')
     for frame in frames_qs[:100000:10]:
         filtered = filter_poses(
             'pose',
             hands_above_head, [Pose.Nose, Pose.RWrist, Pose.LWrist],
-            poses=Pose.objects.filter(person__frame=frame))
+            poses=Pose.objects.filter(frame=frame))
         if len(filtered) >= 2:
             frames.append((frame, filtered))
 
@@ -116,7 +116,7 @@ def not_handlabeled():
     i = random.randint(0, FaceGender.objects.aggregate(Max('id'))['id__max'])
     return qs_to_result(
         FaceGender.objects.filter(labeler=l, id__gte=i).exclude(
-            Q(face__person__frame__tags=t)
+            Q(face__frame__tags=t)
             | Q(face__shot__in_commercial=True)
             | Q(face__shot__video__commercials_labeled=False)
             | Q(face__shot__isnull=True)),
@@ -253,14 +253,14 @@ def talking_heads_tracks():
 #@query("Faces on Poppy Harlow")
 def faces_on_poppy_harlow():
     return qs_to_result(
-        Face.objects.filter(person__frame__video__show='CNN Newsroom With Poppy Harlow'), stride=24)
+        Face.objects.filter(frame__video__show='CNN Newsroom With Poppy Harlow'), stride=24)
 
 
 #@query("Female faces on Poppy Harlow")
 def female_faces_on_poppy_harlow():
     return qs_to_result(
         Face.objects.filter(
-            person__frame__video__show__name='CNN Newsroom With Poppy Harlow',
+            frame__video__show__name='CNN Newsroom With Poppy Harlow',
             facegender__gender__name='F'),
         stride=24)
 
@@ -270,7 +270,7 @@ def talking_heads_on_poppy_harlow():
     return qs_to_result(
         Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
             height__gte=0.3,
-            person__frame__video__show='CNN Newsroom With Poppy Harlow',
+            frame__video__show='CNN Newsroom With Poppy Harlow',
             facegender__gender__name='female'),
         stride=24)
 
@@ -284,7 +284,7 @@ def two_female_faces_on_poppy_harlow():
                 faces = list(
                     Face.objects.annotate(height=F('bbox_y2') - F('bbox_y1')).filter(
                         labeler__name='mtcnn',
-                        person__frame=frame,
+                        frame=frame,
                         facegender__gender__name='F',
                         height__gte=0.2))
                 if len(faces) == 2:
@@ -324,10 +324,10 @@ def mtcnn_vs_handlabeled():
     for frame in Frame.objects.filter(
             Q(video__show='Situation Room With Wolf Blitzer') | \
             Q(video__show='Special Report With Bret Baier')) \
-        .filter(person__face__labeler__name='handlabeled') \
+        .filter(face__labeler__name='handlabeled') \
         .select_related('video') \
         .order_by('id')[:50000:5]:
-        faces = list(Face.objects.filter(person__frame=frame).select_related('labeler'))
+        faces = list(Face.objects.filter(frame=frame).select_related('labeler'))
         has_mtcnn = any([f.labeler.name == 'mtcnn' for f in faces])
         has_handlabeled = any([f.labeler.name == 'handlabeled' for f in faces])
         if not has_mtcnn or not has_handlabeled:
@@ -382,14 +382,14 @@ def mtcnn_vs_openpose():
     videos = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     frames = Frame.objects.all() \
         .annotate(c=Subquery(
-            Pose.objects.filter(person__frame=OuterRef('pk')).values('person__frame') \
+            Pose.objects.filter(frame=OuterRef('pk')).values('frame') \
             .annotate(c=Count('*')).values('c'), models.IntegerField())) \
         .filter(c__gt=0) \
         .select_related('video') \
         .order_by('id')
     for frame in frames[:50000:5]:
-        faces = list(Face.objects.filter(person__frame=frame))
-        poses = list(Pose.objects.filter(person__frame=frame))
+        faces = list(Face.objects.filter(frame=frame))
+        poses = list(Pose.objects.filter(frame=frame))
         for face in faces:
             videos[frame.video.id][frame.id]['mtcnn'].append(face)
         for pose in poses:
@@ -453,9 +453,9 @@ def people_sitting():
     frames_qs = Frame.objects.filter(video__channel='CNN') \
         .annotate(
             pose_count=Subquery(
-                Pose.objects.filter(person__frame=OuterRef('pk')).values('person__frame').annotate(c=Count('*')).values('c')),
+                Pose.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values('c')),
             woman_count=Subquery(
-                Face.objects.filter(person__frame=OuterRef('pk'), facegender__gender__name='female').values('person__frame').annotate(c=Count('*')).values('c'),
+                Face.objects.filter(frame=OuterRef('pk'), facegender__gender__name='female').values('frame').annotate(c=Count('*')).values('c'),
                 models.IntegerField())) \
         .filter(pose_count__gt=0, pose_count__lt=6, woman_count__gt=0).order_by('id').select_related('video')
 
@@ -464,7 +464,7 @@ def people_sitting():
         filtered = filter_poses(
             'pose',
             is_sitting, [Pose.LAnkle, Pose.LKnee, Pose.RAnkle, Pose.RKnee, Pose.RHip, Pose.LHip],
-            poses=Pose.objects.filter(person__frame=frame))
+            poses=Pose.objects.filter(frame=frame))
 
         if len(filtered) > 0:
             frames.append((frame, filtered))
@@ -484,8 +484,8 @@ def obama_pictures():
     id = 3938394
     FaceFeatures.compute_distances(id)
     sq = Face.objects.filter(
-        person__tracks=OuterRef('pk'), labeler__name='mtcnn',
-        facefeatures__distto__lte=1.0).values('person__tracks').annotate(c=Count('*'))
+        tracks=OuterRef('pk'), labeler__name='mtcnn',
+        facefeatures__distto__lte=1.0).values('tracks').annotate(c=Count('*'))
     out_tracks = []
 
     face_tracks = {}  #{t.id: (t, []) for t in tracks}
@@ -497,8 +497,8 @@ def obama_pictures():
         .filter(duration__gt=0, c__gt=0):
 
         faces = list(
-            Face.objects.filter(person__tracks=track,
-                                labeler__name='mtcnn').select_related('person__frame'))
+            Face.objects.filter(tracks=track,
+                                labeler__name='mtcnn').select_related('frame'))
         face_tracks[track.id] = (track, faces)
 
     for track, faces in list(face_tracks.values()):
@@ -524,10 +524,10 @@ def obama_pictures():
 @query("Frames with two women")
 def frames_with_two_women():
     face_qs = FaceGender.objects.filter(gender__name='F', face__shot__in_commercial=False)
-    frames = list(Frame.objects.annotate(c=qs_child_count(face_qs, 'face__person__frame')) \
+    frames = list(Frame.objects.annotate(c=qs_child_count(face_qs, 'face__frame')) \
         .filter(c=2)[:1000:10])
 
-    return qs_to_result(face_qs.filter(face__person__frame__in=frames))
+    return qs_to_result(face_qs.filter(face__frame__in=frames))
 
 def panels():
     from query.base_models import BoundingBox
@@ -539,15 +539,15 @@ def panels():
     face_qs = Face.objects.annotate(height=BoundingBox.height_expr()).filter(
         height__gte=0.25, labeler=mtcnn, shot__in_commercial=False)
     frames = Frame.objects.annotate(c=Subquery(
-        face_qs.filter(person__frame=OuterRef('pk')) \
-        .values('person__frame') \
+        face_qs.filter(frame=OuterRef('pk')) \
+        .values('frame') \
         .annotate(c=Count('*')) \
         .values('c'), IntegerField())) \
         .filter(c__gte=3, c__lte=3).order_by('id')
 
     output_frames = []
     for frame in frames[:10000:10]:
-        faces = list(face_qs.filter(person__frame=frame))
+        faces = list(face_qs.filter(frame=frame))
         y = faces[0].bbox_y1
         valid = True
         for i in range(1, len(faces)):
@@ -594,9 +594,9 @@ def animated_rachel_maddow():
 
     tracks = list(PersonTrack.objects.filter(video__path='tvnews/videos/MSNBC_20100827_060000_The_Rachel_Maddow_Show.mp4') \
         .annotate(c=Subquery(
-            Face.objects.filter(person__tracks=OuterRef('pk')) \
+            Face.objects.filter(tracks=OuterRef('pk')) \
             .filter(labeler__name='tinyfaces', facefeatures__distto__isnull=False, facefeatures__distto__lte=1.0) \
-            .values('person__tracks')
+            .values('tracks')
             .annotate(c=Count('*'))
             .values('c'), models.IntegerField()
             )) \
@@ -604,7 +604,7 @@ def animated_rachel_maddow():
 
     all_dists = []
     for track in tracks:
-        poses = list(Pose.objects.filter(person__tracks=track).order_by('person__frame__number'))
+        poses = list(Pose.objects.filter(tracks=track).order_by('frame__number'))
         dists = [pose_dist(poses[i], poses[i + 1]) for i in range(len(poses) - 1)]
         all_dists.append((track, np.mean(dists)))
     all_dists.sort(key=itemgetter(1), reverse=True)
@@ -620,7 +620,7 @@ def animated_rachel_maddow():
         Frame.objects.get(video=t.video, number=t.max_frame).id,
         'metadata': [['score', '{:.03f}'.format(score)]],
         'objects':
-        [bbox_to_dict(Face.objects.filter(person__frame__number=t.min_frame, person__tracks=t)[0])]
+        [bbox_to_dict(Face.objects.filter(frame__number=t.min_frame, tracks=t)[0])]
     } for t, score in all_dists], 'PersonTrack')
 
 
@@ -746,7 +746,7 @@ def groups_of_faces_by_distance_threshold():
         if len(face_ids) != 0:
             faces = face_qs.filter(
                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
-            ).distinct('person__frame__video')
+            ).distinct('frame__video')
             if faces.count() == 0:
                 continue
             results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
@@ -817,7 +817,7 @@ def face_search_by_id():
         if len(face_ids) != 0:
             faces = face_qs.filter(
                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
-            ).distinct('person__frame__video')
+            ).distinct('frame__video')
             if faces.count() == 0:
                 continue
             results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
@@ -886,7 +886,7 @@ def face_search_by_id():
 #         if len(face_ids) != 0:
 #             faces = face_qs.filter(
 #                 id__in=random.sample(face_ids, k=min(len(face_ids), max_results_per_group))
-#             ).distinct('person__frame__video')
+#             ).distinct('frame__video')
 #             if faces.count() == 0:
 #                 continue
 #             results = qs_to_result(faces, limit=max_results_per_group, custom_order_by_id=face_ids)
@@ -986,13 +986,13 @@ def identity_across_shows():
     from query.models import FaceIdentity
     from esper.stdlib import qs_to_result
     from esper.major_canonical_shows import MAJOR_CANONICAL_SHOWS
-    
+
     name='hillary clinton'
-    
+
     results = []
     for show in sorted(MAJOR_CANONICAL_SHOWS):
         qs = FaceIdentity.objects.filter(
-            identity__name=name, 
+            identity__name=name,
             face__shot__video__show__canonical_show__name=show,
             probability__gt=0.9
         )
@@ -1013,9 +1013,9 @@ def shots_with_host_and_still_face():
     probability_thresh = 0.9
     host_face_height_thresh = 0.2
     other_face_height_thresh = 0.1
-    host_to_other_size_ratio = 1.2 # 20% larger 
+    host_to_other_size_ratio = 1.2 # 20% larger
     max_other_faces = 2
-    
+
     shots_to_host = {
         x['face__shot__id']: (
             x['face__id'], x['face__bbox_x1'], x['face__bbox_x2'],
@@ -1023,7 +1023,7 @@ def shots_with_host_and_still_face():
         ) for x in FaceIdentity.objects.filter(
             identity__name=host_name, probability__gt=0.8,
         ).values(
-            'face__id', 'face__shot__id', 'face__bbox_x1', 'face__bbox_x2', 
+            'face__id', 'face__shot__id', 'face__bbox_x1', 'face__bbox_x2',
             'face__bbox_y1', 'face__bbox_y2',
         )
     }
@@ -1052,11 +1052,11 @@ def shots_with_host_and_still_face():
         shot_id = x['shot__id']
         bbox = (x['bbox_x1'], x['bbox_x2'], x['bbox_y1'], x['bbox_y2'])
         shots_to_other_faces[shot_id].append(bbox)
-        
+
     def shot_filter(bbox_list):
         if len(bbox_list) > max_other_faces:
             return False
-  
+
         result = False
         for x1, x2, y1, y2 in bbox_list:
             _, hx1, hx2, hy1, hy2 = shots_to_host[shot_id] # Host coordinates
@@ -1066,18 +1066,18 @@ def shots_with_host_and_still_face():
             # All other faces should be smaller than the host face
             if (hy2 - hy1) / (y2 - y1) < host_to_other_size_ratio:
                 return False
-            
+
             result |= y2 - y1 >= other_face_height_thresh
         return result
-    
-    selected_shots = { 
+
+    selected_shots = {
         shot_id for shot_id, bbox_list in shots_to_other_faces.items()
         if shot_filter(bbox_list)
-    }  
+    }
     assert len(selected_shots) > 0, 'No shots selected for display'
 
     return qs_to_result(
-        Face.objects.filter(shot__id__in=list(selected_shots)), 
+        Face.objects.filter(shot__id__in=list(selected_shots)),
         limit=100000
     )
 

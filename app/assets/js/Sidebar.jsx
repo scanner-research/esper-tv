@@ -122,7 +122,7 @@ class Options extends React.Component {
       name: 'Show gender as border',
       key: 'show_gender_as_border',
       type: 'radio',
-      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].gender_id
+      filter: (g) => g.elements[0].objects && g.elements[0].objects.length > 0 && g.elements[0].objects[0].gender_id
     },
     {
       name: 'Show inline metadata',
@@ -133,25 +133,25 @@ class Options extends React.Component {
       name: 'Show hands',
       key: 'show_hands',
       type: 'radio',
-      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
+      filter: (g) => g.elements[0].objects && g.elements[0].objects.length > 0 && g.elements[0].objects[0].type == 'pose'
     },
     {
       name: 'Show pose',
       key: 'show_pose',
       type: 'radio',
-      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
+      filter: (g) => g.elements[0].objects && g.elements[0].objects.length > 0 && g.elements[0].objects[0].type == 'pose'
     },
     {
       name: 'Show face',
       key: 'show_face',
       type: 'radio',
-      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
+      filter: (g) => g.elements[0].objects && g.elements[0].objects.length > 0 && g.elements[0].objects[0].type == 'pose'
     },
     {
       name: 'Show left/right (blue/red)',
       key: 'show_lr',
       type: 'radio',
-      filter: (g) => g.elements[0].objects && g.elements[0].objects[0].type == 'pose'
+      filter: (g) => g.elements[0].objects && g.elements[0].objects.length > 0 && g.elements[0].objects[0].type == 'pose'
     },
     {
       name: 'Show middle frame',

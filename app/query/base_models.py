@@ -87,6 +87,7 @@ class Frame(models.Model):
     class Meta:
         abstract = True
 
+
 class Labeler(models.Model):
     name = CharField()
 
@@ -94,37 +95,34 @@ class Labeler(models.Model):
         abstract = True
 
 
-class Noun(models.Model):
-    frame = models.ForeignKey(Frame)
+def Track(Labeler):
+    class Track(models.Model):
+        min_frame = models.IntegerField()
+        max_frame = models.IntegerField()
+        video = models.ForeignKey(Video)
+        labeler = models.ForeignKey(Labeler)
 
-    class Meta:
-        abstract = True
+        @staticmethod
+        def duration_expr():
+            return ExpressionWrapper(
+                Cast(F('max_frame') - F('min_frame'), models.FloatField()) / F('video__fps'),
+                models.FloatField())
 
+        def duration(self):
+            return (self.max_frame - self.min_frame) / int(self.video.fps)
 
-class Track(models.Model):
-    min_frame = models.IntegerField()
-    max_frame = models.IntegerField()
-    video = models.ForeignKey(Video)
-    labeler = models.ForeignKey(Labeler)
-
-    @staticmethod
-    def duration_expr():
-        return ExpressionWrapper(
-            Cast(F('max_frame') - F('min_frame'), models.FloatField()) / F('video__fps'),
-            models.FloatField())
-
-    def duration(self):
-        return (self.max_frame - self.min_frame) / int(self.video.fps)
-
-    class Meta:
-        abstract = True
+        class Meta:
+            abstract = True
+    return Track
 
 
-class Attribute(models.Model):
-    labeler = models.ForeignKey(Labeler)
+def Labeled(Labeler):
+    class Labeled(models.Model):
+        labeler = models.ForeignKey(Labeler)
 
-    class Meta:
-        abstract = True
+        class Meta:
+            abstract = True
+    return Labeled
 
 
 class BoundingBox(models.Model):
