@@ -7,3 +7,6 @@
 [submodule "app/deps/caption-index"]
 	path = app/deps/caption-index
 	url = https://github.com/scanner-research/caption-index.git
+[submodule "app/deps/rekall"]
+	path = app/deps/rekall
+	url = https://github.com/scanner-research/rekall.git
