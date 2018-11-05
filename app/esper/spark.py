@@ -180,7 +180,7 @@ def load_genders():
                 (F('face__shot__max_frame') - F('face__shot__min_frame')) / F('face__shot__video__fps'),
                 models.FloatField()),
             hour=Extract('face__frame__video__time', 'hour'),
-            0Aweek_day=Extract('face__frame__video__time', 'week_day')) \
+            week_day=Extract('face__frame__video__time', 'week_day')) \
         .values('id', 'gender', 'height', 'duration', 'face__frame__video__channel', 'face__frame__video__show', 'face__frame__video__id', 'hour', 'face__id', 'face__shot', 'week_day', 'face__is_host'))
 
 
