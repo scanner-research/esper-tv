@@ -1,7 +1,11 @@
-from esper.temporal_rangelist import TemporalRange, TemporalRangeList
-from esper.prelude import collect
 from operator import itemgetter, attrgetter
 from query.models import Video
+from esper.prelude import collect
+import sys
+
+sys.path.append('/app/deps/rekall')
+
+from rekall.interval_list import Interval, IntervalList
 
 '''
 Convert an iterable collection of rows to a collection of temporal rangelists.
@@ -17,11 +21,11 @@ rangelist.
 
 Schema defines how to get start, end, and payload for each temporal range from
 a single row in the dataframe. In particular, for each row in the dataframe,
-creates TemporalRange(accessor(row, schema['start']),
+creates Interval(accessor(row, schema['start']),
                 accessor(row, schema['end']),
                 accessor(row, schema['payload']))
 '''
-def iterable_to_trlists(iterable, accessor, groupby="video_id", schema=None):
+def iterable_to_intrvllists(iterable, accessor, groupby="video_id", schema=None):
     if schema is None:
         schema = {
             "start": "min_frame",
@@ -35,54 +39,54 @@ def iterable_to_trlists(iterable, accessor, groupby="video_id", schema=None):
         else:
             dictbykey[accessor(row, groupby)] = [row]
     
-    trlists = {}
+    intrvllists = {}
     for key in dictbykey.keys():
-        trlists[key] = TemporalRangeList([
-            TemporalRange(accessor(row, schema['start']),
+        intrvllists[key] = IntervalList([
+            Interval(accessor(row, schema['start']),
                 accessor(row, schema['end']),
                 accessor(row, schema['payload']))
             for row in dictbykey[key]])
 
-    return trlists
+    return intrvllists
 
 '''
 Converts a Spark dataframe to a collection of temporal rangelists.
 '''
-def df_to_trlists(dataframe, groupby="video_id", schema=None):
+def df_to_intrvllists(dataframe, groupby="video_id", schema=None):
     dfmaterialized = dataframe.collect()
 
     def row_accessor(row, field):
         return row[field]
 
-    return iterable_to_trlists(dfmaterialized, row_accessor, groupby, schema)
+    return iterable_to_intrvllists(dfmaterialized, row_accessor, groupby, schema)
 
 '''
 Converts a Django queryset to a collection of temporal rangelists.
 '''
-def qs_to_trlists(qs, groupby="video_id", schema=None):
+def qs_to_intrvllists(qs, groupby="video_id", schema=None):
     def row_accessor(row, field):
         return attrgetter(field)(row)
 
-    return iterable_to_trlists(qs, row_accessor, groupby, schema)
+    return iterable_to_intrvllists(qs, row_accessor, groupby, schema)
 
 '''
 Gets a result for the esper widget from a dict that maps video IDs to temporal
 rangelists. Assumes that the Temporal Ranges store start and end in terms of
 frames.
 '''
-def trlists_to_result(trlists, color="red"):
+def intrvllists_to_result(intrvllists, color="red"):
     materialized_results = {}
     full_count = 0
-    for video in trlists:
-        trlist = trlists[video].get_temporal_ranges()
-        if len(trlist) == 0:
+    for video in intrvllists:
+        intrvllist = intrvllists[video].get_temporal_ranges()
+        if len(intrvllist) == 0:
             continue
         materialized_results[video] = [
-            {'track': tr.get_payload(), 'min_frame': tr.get_start(),
-                'max_frame': tr.get_end(), 'video': video}
-            for tr in trlist]
+            {'track': intrvl.get_payload(), 'min_frame': intrvl.get_start(),
+                'max_frame': intrvl.get_end(), 'video': video}
+            for intrvl in intrvllist]
         full_count += 1
-    videos = collect(Video.objects.filter(id__in=trlists.keys()).all(),
+    videos = collect(Video.objects.filter(id__in=intrvllists.keys()).all(),
             attrgetter('id'))
 
     groups = [{
@@ -99,17 +103,17 @@ def trlists_to_result(trlists, color="red"):
 
     return {'result': groups, 'count': full_count, 'type': 'Video'}
 
-''' Gets a result for trlists, assuming that the objects are bounding boxes. '''
-def trlists_to_result_bbox(trlists):
+''' Gets a result for intrvllists, assuming that the objects are bounding boxes. '''
+def intrvllists_to_result_bbox(intrvllists):
     materialized_results = []
-    for video in trlists:
-        trlist = trlists[video].get_temporal_ranges()
-        if len(trlist) == 0:
+    for video in intrvllists:
+        intrvllist = intrvllists[video].get_temporal_ranges()
+        if len(intrvllist) == 0:
             continue
-        for tr in trlist:
+        for intrvl in intrvllist:
             materialized_results.append({
                 'video': video,
-                'min_frame': (tr.get_start() + tr.get_end()) / 2,
+                'min_frame': (intrvl.get_start() + intrvl.get_end()) / 2,
                 'objects': [{
                         'id': video,
                         'type': 'bbox',
@@ -117,32 +121,32 @@ def trlists_to_result_bbox(trlists):
                         'bbox_x2': bbox['x2'],
                         'bbox_y1': bbox['y1'],
                         'bbox_y2': bbox['y2'],
-                    } for bbox in tr.get_payload()['objects']]
+                    } for bbox in intrvl.get_payload()['objects']]
                 })
 
     groups = [{'type': 'flat', 'label': '', 'elements': [r]}
             for r in materialized_results]
 
-    return {'result': groups, 'count': len(list(trlists.keys())), 'type': 'Video'}
+    return {'result': groups, 'count': len(list(intrvllists.keys())), 'type': 'Video'}
 
 '''
-Add trlists to result as another set of segments to display. Modifies result.
+Add intrvllists to result as another set of segments to display. Modifies result.
 '''
-def add_trlists_to_result(result, trlists, color="red"):
+def add_intrvllists_to_result(result, intrvllists, color="red"):
     # Get a base group to copy for new videos
     base_group = result['result'][0]
 
-    # Put trlists into a good format
+    # Put intrvllists into a good format
     materialized_results = {}
     full_count = 0
-    for video in trlists:
-        trlist = trlists[video].get_temporal_ranges()
-        if len(trlist) == 0:
+    for video in intrvllists:
+        intrvllist = intrvllists[video].get_temporal_ranges()
+        if len(intrvllist) == 0:
             continue
         materialized_results[video] = [
-            {'track': tr.get_payload(), 'min_frame': tr.get_start(),
-                'max_frame': tr.get_end(), 'video': video}
-            for tr in trlist]
+            {'track': intrvl.get_payload(), 'min_frame': intrvl.get_start(),
+                'max_frame': intrvl.get_end(), 'video': video}
+            for intrvl in intrvllist]
         full_count += 1
     videos = collect(Video.objects.filter(id__in=materialized_results.keys()).all(),
             attrgetter('id'))
@@ -180,7 +184,7 @@ def add_trlists_to_result(result, trlists, color="red"):
             group['elements'].append(new_segments)
 
     # add in empty segment lists for videos in results that don't appear in
-    # trlists
+    # intrvllists
     for group in result['result']:
         if group['label'] not in videos.keys():
             group['elements'].append({

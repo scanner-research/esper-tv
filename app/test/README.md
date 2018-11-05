@@ -8,3 +8,6 @@ To add a test, add a new Python script and create classes that inherit from
 To run the tests:
 
 From the `esper/app` directory, run `python3 -m unittest discover test`.
+
+This directory currently has no tests, but it's still around for people to add
+tests in the future.
