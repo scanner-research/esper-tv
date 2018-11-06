@@ -8,7 +8,7 @@ sys.path.append('/app/deps/rekall')
 from rekall.interval_list import Interval, IntervalList
 
 '''
-Convert an iterable collection of rows to a collection of temporal rangelists.
+Convert an iterable collection of rows to a collection of intervallists.
 Returns a dict that maps from values of the groupby field to temporal
 rangelists.
 
@@ -19,7 +19,7 @@ For example, if groupby is "video_id", groups the dataframe rows by the
 video_id field and returns a dict matching each unique video_id to a temporal
 rangelist.
 
-Schema defines how to get start, end, and payload for each temporal range from
+Schema defines how to get start, end, and payload for each interval from
 a single row in the dataframe. In particular, for each row in the dataframe,
 creates Interval(accessor(row, schema['start']),
                 accessor(row, schema['end']),
@@ -50,7 +50,7 @@ def iterable_to_intrvllists(iterable, accessor, groupby="video_id", schema=None)
     return intrvllists
 
 '''
-Converts a Spark dataframe to a collection of temporal rangelists.
+Converts a Spark dataframe to a collection of intervallists.
 '''
 def df_to_intrvllists(dataframe, groupby="video_id", schema=None):
     dfmaterialized = dataframe.collect()
@@ -61,7 +61,7 @@ def df_to_intrvllists(dataframe, groupby="video_id", schema=None):
     return iterable_to_intrvllists(dfmaterialized, row_accessor, groupby, schema)
 
 '''
-Converts a Django queryset to a collection of temporal rangelists.
+Converts a Django queryset to a collection of intervallists.
 '''
 def qs_to_intrvllists(qs, groupby="video_id", schema=None):
     def row_accessor(row, field):
@@ -73,21 +73,29 @@ def qs_to_intrvllists(qs, groupby="video_id", schema=None):
 Gets a result for the esper widget from a dict that maps video IDs to temporal
 rangelists. Assumes that the Temporal Ranges store start and end in terms of
 frames.
+
+video_order is an optional list of video IDs to order the videos.
 '''
-def intrvllists_to_result(intrvllists, color="red"):
+def intrvllists_to_result(intrvllists, color="red", video_order=None):
     materialized_results = {}
+    keys = []
     full_count = 0
     for video in intrvllists:
-        intrvllist = intrvllists[video].get_temporal_ranges()
+        intrvllist = intrvllists[video].get_intervals()
         if len(intrvllist) == 0:
             continue
         materialized_results[video] = [
             {'track': intrvl.get_payload(), 'min_frame': intrvl.get_start(),
                 'max_frame': intrvl.get_end(), 'video': video}
             for intrvl in intrvllist]
+        keys.append(video)
         full_count += 1
     videos = collect(Video.objects.filter(id__in=intrvllists.keys()).all(),
             attrgetter('id'))
+    if video_order is not None:
+        keys = video_order
+    else:
+        keys = sorted(materialized_result.keys())
 
     groups = [{
         'type': 'contiguous',
@@ -99,7 +107,7 @@ def intrvllists_to_result(intrvllists, color="red"):
                 key=itemgetter('min_frame')),
             'color': color
         }]
-    } for video in sorted(materialized_results.keys())]
+    } for video in keys]
 
     return {'result': groups, 'count': full_count, 'type': 'Video'}
 
@@ -107,7 +115,7 @@ def intrvllists_to_result(intrvllists, color="red"):
 def intrvllists_to_result_bbox(intrvllists):
     materialized_results = []
     for video in intrvllists:
-        intrvllist = intrvllists[video].get_temporal_ranges()
+        intrvllist = intrvllists[video].get_intervals()
         if len(intrvllist) == 0:
             continue
         for intrvl in intrvllist:
@@ -140,7 +148,7 @@ def add_intrvllists_to_result(result, intrvllists, color="red"):
     materialized_results = {}
     full_count = 0
     for video in intrvllists:
-        intrvllist = intrvllists[video].get_temporal_ranges()
+        intrvllist = intrvllists[video].get_intervals()
         if len(intrvllist) == 0:
             continue
         materialized_results[video] = [
