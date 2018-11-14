@@ -140,19 +140,17 @@ def _scan_for_ngrams_in_parallel(video_id, verbose=None):
             print('No document for video id: {}'.format(video_id), file=sys.stderr)
         return ngram_intervals
     for interval in DOCUMENT_DATA.token_intervals(doc_id, 0, DOCUMENTS[doc_id].duration):
-        found_token = [[False for _ in ids] for ids in NGRAM_LEXICON_IDS]
+        cur_token_index = [0 for ids in NGRAM_LEXICON_IDS]
         for token in interval.tokens:
-            for i, ngram in enumerate(NGRAM_LEXICON_IDS):
-                for j, ngram_id in enumerate(ngram):
-                    if token == ngram_id:
-                        found_token[i][j] = True
-        for i, token_markers in enumerate(found_token):
-            found = True
-            for marker in token_markers:
-                if not marker:
-                    found = False
-                    break
-            if found:
+            for i, ngram_index in enumerate(cur_token_index):
+                if ngram_index >= len(NGRAM_LEXICON_IDS[i]):
+                    continue
+                elif token == NGRAM_LEXICON_IDS[i][ngram_index]:
+                    cur_token_index[i] = ngram_index + 1
+                else:
+                    cur_token_index[i] = 0
+        for i, token_index in enumerate(cur_token_index):
+            if token_index >= len(NGRAM_LEXICON_IDS[i]):
                 ngram_intervals[i].append((interval.start, interval.end))
 
     return ngram_intervals
