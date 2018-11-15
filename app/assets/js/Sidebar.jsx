@@ -171,6 +171,11 @@ class Options extends React.Component {
       type: 'radio',
       filter: (g) => g.type == 'contiguous'
     },
+    {
+      name: 'Spinner dev mode',
+      key: 'spinner_dev_mode',
+      type: 'radio'
+    },
   ]
 
   render() {
