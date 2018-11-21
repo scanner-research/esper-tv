@@ -3,6 +3,7 @@ from esper.stdlib import *
 from esper.major_canonical_shows import *
 from query.models import *
 from esper.plot_util import *
+from esper.face_embeddings import knn, kmeans
 
 try:
     from IPython.display import clear_output
@@ -360,9 +361,10 @@ def load_and_select_faces_from_images(img_dir):
     return selected_crops
 
 
-def face_search_by_embeddings(embs, increment=0.05, min_thresh=0., max_thresh=1.2,
+def face_search_by_embeddings(embs, increment=0.05, max_thresh=1.2,
                               exclude_labeled=False):
-    face_sims = face_knn(targets=embs, min_threshold=min_thresh, max_threshold=max_thresh)
+    min_thresh = 0.
+    face_sims = knn(targets=embs, max_threshold=max_thresh)
     
     face_ids_to_score = {}
     results_by_bucket = {}
@@ -1161,7 +1163,7 @@ def get_other_people_who_are_on_screen(model, precision_thresh=0.8, k=25, n_exam
         ).exclude(id__in=selected_faces).values('id')
     ]
     clusters = defaultdict(list)
-    for (i, c) in face_kmeans(other_face_ids, k=k):
+    for (i, c) in kmeans(other_face_ids, k=k):
         clusters[c].append(i)
     
     results = []

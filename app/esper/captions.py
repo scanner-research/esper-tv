@@ -7,10 +7,8 @@ from pathlib import Path
 from esper.prelude import par_for
 from query.models import Video
 
-sys.path.append('/app/deps/caption-index')
-
 import captions.util as caption_util
-from captions.index import Documents, Lexicon, InvertedIndex, DocumentData, MetadataIndex
+from captions import Documents, Lexicon, InvertedIndex, DocumentData, MetadataIndex
 
 
 INDEX_DIR = '/app/data/index10'
@@ -130,7 +128,9 @@ def get_lowercase_segments(video_ids=None):
         results = pool.map(_get_lowercase_segments, video_ids)
     return zip(video_ids, results)
 
+
 NGRAM_LEXICON_IDS = None
+
 
 def _scan_for_ngrams_in_parallel(video_id, verbose=None):
     ngram_intervals = [[] for _ in NGRAM_LEXICON_IDS]
@@ -154,6 +154,7 @@ def _scan_for_ngrams_in_parallel(video_id, verbose=None):
                 ngram_intervals[i].append((interval.start, interval.end))
 
     return ngram_intervals
+
 
 def scan_for_ngrams_in_parallel(ngram_list, video_ids=None):
     """

@@ -38,6 +38,7 @@ import tempfile
 import random
 import socket
 import math
+import csv
 from pathlib import Path
 from contextlib import contextmanager
 from collections import defaultdict
@@ -554,7 +555,6 @@ def print_sql(self):
 
 setattr(QuerySet, 'print_sql', print_sql)
 
-import csv
 def bulk_create_copy(self, objects, keys, table=None):
     meta = self.model._meta
     fname = '/app/rows.csv'
@@ -829,76 +829,12 @@ def imshow(img):
     plt.axis('off')
 
 
-# def lowercase_segments():
-#     from query.models import Video
-#     video_ids = {v.item_name(): v.id for v in Video.objects.all()}
-#     r = requests.get('http://localhost:8111/lowercase')
-
-#     def item_name(path):
-#         return '.'.join(os.path.basename(path).split('.')[:-2])
-
-#     return [(video_ids[item_name(k)], t1, t2) for (k, t1, t2) in r.json()]
-
-
-def mutual_info(p):
-    # TODO: reimplement this
-    r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p]})
-    return r.json()
-
-
-def face_knn(target=None, targets=None, ids=None, k=None,
-             min_threshold=-1.0, max_threshold=1000.0,
-             not_ids=[], not_id_penalty=0.2):
-    r = requests.post(
-        'http://localhost:8111/facesearch',
-        json={
-            'exemplar': target.tolist() if target is not None else [],
-            'exemplars': [x.tolist() for x in targets] if targets is not None else [],
-            'ids': ids if ids is not None else [],
-            'k': k if k is not None else -1,
-            'min_threshold': min_threshold,
-            'max_threshold': max_threshold,
-            'non_targets': not_ids,
-            'non_target_penalty': not_id_penalty
-        })
-    return r.json()
-
-
-def face_svm(pos_ids, neg_ids=[], neg_samples=1000, pos_samples=500,
-             min_threshold=-2.0, max_threshold=2.0):
-    r = requests.post(
-        'http://localhost:8111/facesearch_svm',
-        json={
-            'pos_ids': pos_ids,
-            'neg_ids': neg_ids,
-            'pos_samples': pos_samples,
-            'neg_samples': neg_samples,
-            'min_threshold': min_threshold,
-            'max_threshold': max_threshold
-        })
-    return r.json()
-
-
-def face_kmeans(ids, k=25):
-    r = requests.post(
-        'http://localhost:8111/face_kmeans',
-        json={
-            'k': k,
-            'ids': ids,
-        })
-    return r.json()
-
-
-def face_features(ids):
-    r = requests.post('http://localhost:8111/facefeatures', json={'ids': ids})
-    return [np.array(a) for a in r.json()]
-
-
 def frange(x, y, jump):
     while x < y:
         yield x
         x += jump
 
+        
 def esper_widget(result, **kwargs):
     from esper.stdlib import result_with_metadata, esper_js_globals
     import vgrid_jupyter
@@ -909,13 +845,16 @@ def esper_widget(result, **kwargs):
         jsglobals=esper_js_globals(),
         settings=kwargs)
 
+
 def ring():
     print('\a')
 
+    
 def batch(l, n):
     for i in range(0, len(l), n):
         yield l[i:i+n]
 
+        
 class Notifier:
     def __init__(self):
         import redis
