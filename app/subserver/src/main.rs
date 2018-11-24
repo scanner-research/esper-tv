@@ -33,6 +33,7 @@ use text::corpus::{Corpus, Map};
 use features::{Features, Target};
 use util::{ProgressIterator, BlockTimer};
 use rocket_contrib::Json;
+use std::collections::HashMap;
 
 lazy_static! {
     static ref CORPUS: Corpus<text::index::LinearSearch>  = {
@@ -79,24 +80,63 @@ fn mutual_info(input: Json<SubSearchInput>) -> Json<Vec<(String, f64)>> {
     Json(CORPUS.all_mutual_info(input.phrases[0].clone()))
 }
 
+#[post("/getdoc", format="application/json", data="<input>")]
+fn get_doc(input: Json<SubSearchInput>) -> Json<Vec<String>> {
+    Json(CORPUS.get_doc(input.phrases[0].clone()))
+}
+
+
+#[get("/wordcounts")]
+fn word_counts() -> Json<HashMap<String, usize>> {
+    Json(CORPUS.word_counts())
+}
+
+#[get("/doclen")]
+fn doc_len() -> Json<HashMap<String, usize>> {
+    Json(CORPUS.doc_len())
+}
+
+
+#[get("/videos")]
+fn videos() -> Json<Vec<String>> {
+    Json(CORPUS.videos())
+}
+
 #[derive(Serialize, Deserialize)]
 struct FindSegmentsInput {
     lexicon: Vec<(String, f64)>,
     threshold: f64,
     window_size: usize,
     merge_overlaps: bool,
-    docs: Vec<String>
+    docs: Vec<String>,
+    stride: usize
 }
 
 #[post("/findsegments", format="application/json", data="<input>")]
-fn find_segments(input: Json<FindSegmentsInput>) -> Json<Vec<(String, (f32, f32), f64, Map<String, usize>)>> {
+fn find_segments(input: Json<FindSegmentsInput>) -> Json<Vec<(String, (f32, f32), usize, f64, Map<String, usize>)>> {
     Json(
         CORPUS.find_segments(
-            input.lexicon.clone(), input.window_size, input.threshold, input.merge_overlaps,
+            input.lexicon.clone(), input.stride, input.window_size, input.threshold, input.merge_overlaps,
             input.docs.iter().cloned().collect()
     ))
 }
 
+
+#[derive(Serialize, Deserialize)]
+struct ComputeVectorsInput {
+    vocabulary: Vec<String>,
+    window_size: usize,
+    stride: usize,
+    docs: Vec<String>,
+}
+
+#[post("/computevectors", format="application/json", data="<input>")]
+fn compute_vectors(input: Json<ComputeVectorsInput>) {
+    CORPUS.compute_vectors(
+        input.vocabulary.clone(), input.window_size, input.stride,
+        input.docs.iter().cloned().collect()
+    );
+}
 
 #[derive(Serialize, Deserialize)]
 struct FaceSearchInput {
@@ -172,5 +212,5 @@ fn main() {
         .port(8111)
         .workers(1)
         .unwrap();
-    rocket::custom(config, true).mount("/", routes![lowercase, sub_search, sub_count, mutual_info, find_segments, face_search, face_search_svm, face_features, face_kmeans]).launch();
+    rocket::custom(config, true).mount("/", routes![lowercase, sub_search, sub_count, mutual_info, find_segments, face_search, face_search_svm, face_features, face_kmeans, get_doc, word_counts, videos, doc_len, compute_vectors]).launch();
 }

@@ -22,9 +22,7 @@ RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python get-pip.py
 COPY .deps/nbconfig /root/.jupyter/nbconfig
 COPY .deps/beakerx.json /root/.jupyter/beakerx.json
 COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
-RUN jupyter nbextension install --sys-prefix --py vega && \
-    jupyter nbextension enable vega --py --sys-prefix && \
-    jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
+RUN jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
     jupyter contrib nbextension install --user && \
     jupyter nbextensions_configurator enable --user && \
     jupyter nbextension enable hide_input/main && \

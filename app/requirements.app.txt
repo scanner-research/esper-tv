@@ -10,7 +10,6 @@ beakerx
 matplotlib==2.1.0
 seaborn==0.8.1
 django-extensions==1.9.6
-vega==0.5.0
 jupyter_contrib_nbextensions==0.3.3
 jupyter_nbextensions_configurator==0.2.8
 autopep8
@@ -18,8 +17,6 @@ pysrt==1.1.1
 sqlparse==0.2.4
 internetarchive
 pyspark
-textacy
-gensim
 pyopenssl
 statsmodels
 scikit-learn
@@ -29,3 +26,8 @@ psutil
 wordcloud
 redis
 msgpack
+pyro-ppl
+
+#vega==0.5.0
+#textacy
+#gensim

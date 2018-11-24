@@ -1,14 +1,18 @@
 use rayon::prelude::*;
 use std::time::Duration;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::fs;
 use rayon;
-use datatypes::{Document, Document_Word as Word, Document_PartOfSpeech as POS};
-use protobuf::{Message, CodedInputStream};
-use util::{CollectByKey, Merge, ParallelProgressIterator};
+use datatypes::{
+    Document, Document_Word as Word, Document_PartOfSpeech as POS,
+    DocsVectors, DocsVectors_DocVectors as DocVectors, DocsVectors_DocVectors_Vector as SegVector};
+use protobuf::{Message, CodedInputStream, CodedOutputStream, RepeatedField};
+use util::{CollectByKey, Merge, ProgressIterator, ParallelProgressIterator};
 use text::index::Indexed;
+use byteorder::{LittleEndian, WriteBytesExt};
+use std::io::Write;
 
 // use std::collections::HashMap;
 // pub type Map<K, V> = HashMap<K, V>;
@@ -46,22 +50,23 @@ fn _duration_to_float(d: Duration) -> f64 {
 static SUB_CACHE_DIR: &'static str = "/app/data/subs";
 static VALID_POS: &'static [POS] = {
     use self::POS::*;
-    &[NN, NNS, NNP, NNPS, JJ, JJR, JJS, VB, VBD, VBG, VBN, VBP, VBZ, MD, FW, GW, SYM]
+    //&[NN, NNS, NNP, NNPS, JJ, JJR, JJS, VB, VBD, VBG, VBN, VBP, VBZ, MD, FW, GW, SYM]
+    &[NN, NNS, NNP, NNPS]
 };
 
 impl<Index: Indexed + Send> Corpus<Index> {
     pub fn new(paths: Vec<String>) -> Corpus<Index> {
         // For each subtitle file, load the corresponding flattened transcript and
-        let path_iter = paths.par_iter();
-        //let path_iter = paths.par_iter().take(10000);
+        // let path_iter = paths.par_iter();
+        let path_iter = paths.par_iter().take(10000);
         let docs: Map<_, _> = path_iter.progress_count(paths.len()).map(|path| {
-            let item_name = path.split("/").last().unwrap().split(".").next().unwrap();
+            let item_name = path.split("/").last().unwrap().split(".").next().unwrap().to_string();
             let meta_path = format!("{}/meta/{}.bin", SUB_CACHE_DIR, item_name);
             let flat_path = format!("{}/flat/{}.txt", SUB_CACHE_DIR, item_name);
 
             // Ignore files that don't have metadata yet
             if !Path::new(&meta_path).exists() {
-                return (path.clone(), None);
+                return (item_name.clone(), None);
             }
 
             let doc: IndexedDocument<Index> = {
@@ -90,10 +95,20 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 }
             };
 
-            (path.clone(), Some(doc))
+            (item_name.clone(), Some(doc))
         }).filter(|(_, doc)| doc.is_some()).map(|(path, doc)| (path, doc.expect("Unreachable"))).collect();
 
         Corpus { docs }
+    }
+
+    pub fn videos(&self) -> Vec<String> {
+        let mut v: Vec<_> = self.docs.keys().cloned().collect();
+        v.sort();
+        v
+    }
+
+    pub fn doc_len(&self) -> HashMap<String, usize> {
+        self.docs.iter().map(|(key, doc)| (key.clone(), doc.meta.words.len())).collect()
     }
 
     fn find_with<T, F>(&self, s: String, f: F) -> Map<String, Vec<T>>
@@ -133,34 +148,70 @@ impl<Index: Indexed + Send> Corpus<Index> {
         }
     }
 
-    fn _unique_words(&self) {
-        let sets = self.docs.par_iter().progress_count(self.docs.len()).map(|(_, doc)| {
+    pub fn word_counts(&self) -> HashMap<String, usize> {
+        let counts: Vec<HashMap<String, usize>> = self.docs.par_iter().progress_count(self.docs.len()).map(|(_, doc)| {
             doc.meta.words.iter()
-                //.filter(|word| VALID_POS.contains(&word.pos))
-                .map(|word| word.on_slice(&doc.text))
-                .collect::<HashSet<_>>()
-        }).collect::<Vec<_>>();
+                .filter(|word| VALID_POS.contains(&word.pos))
+                .map(|word| word.lemma.as_str())
+                .fold(HashMap::new(), |mut map, w| {
+                    *map.entry(w.to_string()).or_insert(0) += 1;
+                    map
+                })
+        }).collect();
 
-        let words = self.par_merge(&sets, &|a, b| &a | &b);
-        println!("{}", words.len());
+        self.par_merge(&counts, &|a, b| {
+            let mut a = a.clone();
+            for (k, v) in b {
+                *a.entry(k).or_insert(0) += v;
+            }
+            a
+        })
     }
 
     fn ngram_to_str(&self, ngram: &[Word]) -> String {
         ngram.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>().join(" ")
     }
 
-    pub fn find_segments(&self, lexicon: Vec<(String, f64)>, window_size: usize, min_score_threshold: f64,
+    pub fn get_doc(&self, doc: String) -> Vec<String> {
+        self.docs[&doc].meta.words.iter().map(|word| word.lemma.as_str().to_string()).collect::<Vec<String>>()
+    }
+
+    pub fn compute_vectors(&self, vocabulary: Vec<String>, window_size: usize, stride: usize, docs: Vec<String>) {
+        let mut f = fs::File::create(format!("/app/data/segvectors.bin")).unwrap();
+        for doc_name in docs.iter().progress_count(docs.len()) {
+            let doc = &self.docs[doc_name];
+            let vec = doc.meta.words
+                .windows(window_size).step_by(stride)
+                .flat_map(|window| {
+                    let max_ngram = 3;
+                    let word_bag = (1..=max_ngram)
+                        .flat_map(|n| {
+                            window.windows(n).map(|ngram| self.ngram_to_str(ngram))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<HashSet<_>>();
+                    vocabulary.iter()
+                        .map(|w| if word_bag.contains(w) { 1u8 } else { 0 })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            f.write_all(&vec).unwrap();
+        }
+    }
+
+    pub fn find_segments(&self, lexicon: Vec<(String, f64)>, stride: usize, window_size: usize, min_score_threshold: f64,
                          merge_overlaps: bool, doc_set: HashSet<String>
-    ) -> Vec<(String, (f32, f32), f64, Map<String, usize>)>
+    ) -> Vec<(String, (f32, f32), usize, f64, Map<String, usize>)>
     {
         let max_ngram = 3;
-        let stride = 50;
         let target_scores = lexicon.iter().map(|(s, score)| (s.as_str(), score)).collect::<Map<_, _>>();
 
         #[derive(Clone)]
         struct Segment {
             time_start: f32,
             time_end: f32,
+            word_start: usize,
             count: f64,
             words: Map<String, usize>
         }
@@ -174,8 +225,9 @@ impl<Index: Indexed + Send> Corpus<Index> {
             // For each segment window, convolve with lexicon to produce segment score
             let matches = doc.meta.words
                 .windows(window_size)
+                .enumerate()
                 .step_by(stride)
-                .map(|window| {
+                .map(|(idx, window)| {
                     let (words, counts): (Vec<_>, Vec<_>) = (1..=max_ngram).flat_map(|n| {
                         window.windows(n).map(|ngram| {
                             let ngram_str = self.ngram_to_str(ngram);
@@ -196,6 +248,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                     Segment {
                         time_start: window.first().unwrap().time_start,
                         time_end: window.last().unwrap().time_end,
+                        word_start: idx,
                         count: counts.into_iter().sum::<f64>(),
                         words: word_count
                     }
@@ -230,6 +283,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                     Segment {
                         time_start: segs.first().unwrap().time_start,
                         time_end: segs.last().unwrap().time_end,
+                        word_start: segs.first().unwrap().word_start,
                         count: segs.iter().map(|seg| seg.count).sum::<f64>() / (segs.len() as f64),
                         words: words
                     }
@@ -259,14 +313,14 @@ impl<Index: Indexed + Send> Corpus<Index> {
                     matches
                 };
 
-                reduced_segs.into_iter().map(|seg| (path.clone(), (seg.time_start, seg.time_end), seg.count, seg.words))
+                reduced_segs.into_iter().map(|seg| (path.clone(), (seg.time_start, seg.time_end), seg.word_start, seg.count, seg.words))
                     .collect::<Vec<_>>()
             }
 
         }).collect::<Vec<_>>();
 
         // Return top k segments
-        all_matches.sort_unstable_by(|(_, _, n1, _), (_, _, n2, _)| n2.partial_cmp(n1).unwrap());
+        all_matches.sort_unstable_by(|(_, _, _, n1, _), (_, _, _, n2, _)| n2.partial_cmp(n1).unwrap());
         all_matches
     }
 
@@ -377,7 +431,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                                 &interval2.time_start).unwrap());
 
             let mut smashed_vector : Vec<(String, f64, f64)> = Vec::new();
-            if (segments.len() > 0) {
+            if segments.len() > 0 {
                 let mut first = segments[0];
                 for segment in segments {
                     if segment.time_start >= first.time_start
@@ -389,7 +443,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                         }
                     } else {
                         // segment does not overlap with first
-                        smashed_vector.push((path.clone(), first.time_start, 
+                        smashed_vector.push((path.clone(), first.time_start,
                                              first.time_end));
                         first = segment;
                     }
@@ -397,7 +451,7 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 smashed_vector.push((path.clone(), first.time_start,
                     first.time_end));
             }
-            
+
             if smashed_vector.len() > 0 {
                 Some(smashed_vector)
             } else {
