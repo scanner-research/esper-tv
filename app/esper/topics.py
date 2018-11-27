@@ -1,7 +1,7 @@
 from esper.prelude import *
 from esper.stdlib import *
 from esper.major_canonical_shows import *
-from esper.topics import *
+from esper.captions import *
 from esper.plot_util import *
 from query.models import *
 
@@ -147,13 +147,14 @@ def get_overlap_between_topics(topic_to_segments):
 
 
 def get_caption_mentions_by_show(phrases, show_count=False):
-    result = caption_search(phrases)[0]
+    result = topic_search(phrases, dilate=0)
+    result = {d.id: len([l for l in d.locations]) for d in result.documents}
     show_to_mentions = defaultdict(int)
     
     if show_count:
         video_count_by_show = {
             x['show__canonical_show__name'] : x['count'] for x in
-            Video.objects.filter(id__in=set(result.keys())).values(
+            Video.objects.filter(id__in=result.keys()).values(
                 'show__canonical_show'
             ).annotate(
                 count=Count('id')
@@ -164,12 +165,12 @@ def get_caption_mentions_by_show(phrases, show_count=False):
     else:
         video_to_show = {
             x['id'] : x['show__canonical_show__name'] for x in
-            Video.objects.filter(id__in=set(result.keys())).values(
+            Video.objects.filter(id__in=result.keys()).values(
                 'id', 'show__canonical_show__name'
             )
         }
         for k, v in result.items():
-            show_to_mentions[video_to_show[k]] += len(v)
+            show_to_mentions[video_to_show[k]] += v
     
     return show_to_mentions
 

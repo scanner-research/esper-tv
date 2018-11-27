@@ -18,6 +18,16 @@ if [ $NO_TEST != 1 ]; then
         pytest -v test
 fi
 
+# Model server
+cd $DEPS_DIR
+echo "Installing Model-Server"
+cd esper-model-server
+./extract_data.sh
+pip3 install -r requirements.txt
+if [ $NO_TEST != 1 ]; then
+        pytest -v tests
+fi
+
 # Caption-Index
 cd $DEPS_DIR
 echo "Installing Caption-Index"
