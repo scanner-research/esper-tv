@@ -27,6 +27,31 @@ def _load():
 _EMB_DATA = _load()
 
 
+def get(ids):
+    return _EMB_DATA.get(ids)
+
+
+def sample(k):
+    return _EMB_DATA.sample(k)
+
+
+def exists(ids):
+    return _EMB_DATA.exists(ids)
+
+
+def dist(ids, targets=None, target_ids=None):
+    if targets is not None:
+        targets = [
+            [float(z) for z in x.tolist()] 
+            if not isinstance(x, list) else x for x in targets
+        ]
+        return _EMB_DATA.dist(targets, ids)
+    elif target_ids is not None:
+        return _EMB_DATA.dist_by_id(target_ids, ids)
+    else:
+        raise ValueError('No targets given')
+
+
 def knn(targets=None, ids=None, k=2 ** 31, max_threshold=100.):
     if targets is not None:
         targets = [
