@@ -34,7 +34,7 @@ echo "Installing Caption-Index"
 cd caption-index
 pip3 install -r requirements.txt
 ./get_models.sh
-python3 setup.py install
+python3 setup.py install --user
 if [ $NO_TEST != 1 ]; then
 	pytest -v tests
 fi
@@ -46,10 +46,10 @@ cd rs-embed
 rustup update
 rustup override set nightly
 pip3 install -r requirements.txt
-python3 setup.py install
+python3 setup.py install --user
 if [ $NO_TEST != 1 ]; then
-        echo 'Skipping Rs-Embed tests... This is a TODO due to env issues'
-	# TODO: fix env issues
-	# pytest -v tests
+        #echo 'Skipping Rs-Embed tests... This is a TODO due to env issues'
+	cd tests
+	pytest -v .
 fi
 
