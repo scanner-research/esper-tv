@@ -43,6 +43,9 @@ from pathlib import Path
 from contextlib import contextmanager
 from collections import defaultdict
 
+# Add rekall to path
+sys.path.append('/app/deps/rekall')
+
 # Access to Scanner protobufs
 cfg = Config()
 proto = ProtobufGenerator(cfg)

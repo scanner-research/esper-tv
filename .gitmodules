@@ -13,3 +13,6 @@
 [submodule "app/deps/rs-embed"]
 	path = app/deps/rs-embed
 	url = https://github.com/scanner-research/rs-embed.git
+[submodule "app/deps/esper-model-server"]
+	path = app/deps/esper-model-server
+	url = https://github.com/scanner-research/esper-model-server.git
