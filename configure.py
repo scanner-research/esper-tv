@@ -11,7 +11,7 @@ import os
 
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
-TF_VERSION = '1.5.0'
+TF_VERSION = '1.12.0'
 
 cores = multiprocessing.cpu_count()
 
@@ -138,6 +138,7 @@ def main():
     parser.add_argument('--base-only', action='store_true')
     parser.add_argument('--no-pull', action='store_true')
     parser.add_argument('--hostname')
+    parser.add_argument('--build-remote', action='store_true')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -282,7 +283,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                     ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
             shell=True)
 
-        if 'google' in base_config:
+        if 'google' in base_config and args.build_remote:
             base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
             sp.check_call(
                 'docker tag esper-base:{device} {base_url}/esper-base:{device} && \
