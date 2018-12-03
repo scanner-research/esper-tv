@@ -194,7 +194,7 @@ def intrvllists_to_result_bbox(intrvllists, limit=None, stride=1):
         for intrvl in intrvllist[::stride]:
             materialized_results.append({
                 'video': video,
-                'min_frame': (intrvl.get_start() + intrvl.get_end()) / 2,
+                'min_frame': int((intrvl.get_start() + intrvl.get_end()) / 2),
                 'objects': [{
                         'id': video,
                         'type': 'bbox',
@@ -202,7 +202,7 @@ def intrvllists_to_result_bbox(intrvllists, limit=None, stride=1):
                         'bbox_x2': bbox['x2'],
                         'bbox_y1': bbox['y1'],
                         'bbox_y2': bbox['y2'],
-                    } for bbox in intrvl.get_payload()['objects']]
+                    } for bbox in intrvl.get_payload()]
                 })
 
     if limit is None:
