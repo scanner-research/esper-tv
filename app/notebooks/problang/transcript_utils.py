@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import requests
 from query.models import Video
 from timeit import default_timer as now
+from esper.prelude import pcache
 
 SEGMENT_SIZE = 200
 SEGMENT_STRIDE = 100
@@ -52,6 +53,24 @@ def small_video_sample():
         id += 1
     return videos
 
+def word_counts():
+    r = requests.get('http://localhost:8111/wordcounts')
+    return r.json()
+
+VOCAB_THRESHOLD = 100
+
+def load_vocab():
+    counts = word_counts()
+    print('Full vocabulary size: {}'.format(len(counts)))
+
+    vocabulary = sorted([word for (word, count) in counts.items() if count > VOCAB_THRESHOLD])
+    print('Filtered vocabulary size: {}'.format(len(vocabulary)))
+
+    return vocabulary
+
+vocabulary = pcache.get('vocabulary', load_vocab)
+vocab_size = len(vocabulary)
+
 
 class SegmentTextDataset(Dataset):
     def __init__(self, docs, vocabulary=None, segment_size=SEGMENT_SIZE, segment_stride=SEGMENT_STRIDE, use_cuda=False):
@@ -80,9 +99,13 @@ class SegmentTextDataset(Dataset):
         return self._forward_index[(doc, word)]
 
     def _text_to_vector(self, words):
-        words = set(words)
-        return torch.tensor([1 if word in words else 0 for word in self._vocabulary],
-                            dtype=torch.float32)
+        counts = defaultdict(int)
+        for w in words:
+            counts[w] += 1
+        t = torch.tensor([counts[word] for word in self._vocabulary], dtype=torch.float32)
+        t /= torch.sum(t)
+        return t
+
 
     def __len__(self):
         return self._num_segs.sum()
@@ -147,6 +170,7 @@ class SegmentVectorDataset(Dataset):
             'Invalid read at index {}, offset {}. Expected {} bytes, got {}'.format(idx, offset, self._vocab_size, len(byts))
         npbuf = np.frombuffer(byts, dtype=np.uint8)
         tbuf = torch.from_numpy(npbuf).float()
+        tbuf /= torch.sum(tbuf)
         if self._use_cuda:
             tbuf = tbuf.cuda()
         return tbuf

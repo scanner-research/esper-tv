@@ -1,12 +1,12 @@
 from scannertools import shot_detection, kube
-from esper.prelude import ScannerWrapper, ScannerSQLTable, Timer, Notifier, now, pcache, log
+from esper.scannerutil import ScannerWrapper, ScannerSQLTable
+from esper.prelude import Timer, Notifier, now, pcache, log
 from query.models import Video
-from esper.kube import cloud_config
+from esper.kube import make_cluster
 from threading import Thread, Condition
 from attr import attrs, attrib
 from pprint import pprint
 from storehouse import StorehouseException
-import random
 import traceback
 import subprocess as sp
 import pandas as pd
@@ -27,7 +27,9 @@ class TestFailure(Exception):
     pass
 
 
-def bench(name, videos, run_pipeline, configs, sample_size=15, force=False, no_delete=False):
+def bench(name, args, run_pipeline, configs, force=False, no_delete=False):
+
+    sample_size = len(args['videos'])
 
     def run_name(cluster_config, job_config):
         worker_type = cluster_config.worker.type
@@ -42,54 +44,51 @@ def bench(name, videos, run_pipeline, configs, sample_size=15, force=False, no_d
             svwk=cluster_config.num_save_workers,
             vid=sample_size)
 
-    def run_config(videos, cluster, job_config):
-        db_wrapper = ScannerWrapper.create(cluster=cluster, enable_watchdog=False)
+    def run_config(args, db_wrapper, job_config):
         db = db_wrapper.db
 
         # Start the Scanner job
         log.info('Starting Scanner job')
-        run_pipeline(db, videos, detach=True, batch=job_config.batch, run_opts={
+        run_pipeline(db, detach=True, run_opts={
             'io_packet_size': job_config.io_packet_size,
             'work_packet_size': job_config.work_packet_size,
-        })
+        }, **args)
 
         # Wait until it succeeds or crashes
         start = now()
         log.info('Monitoring cluster')
-        result, metrics = cluster.monitor(db)
+        result, metrics = db_wrapper.cluster.monitor(db)
         end = now() - start
 
         # If we crashed:
         if not result:
 
             # Restart the cluster if it's in a bad state
-            cluster.start()
+            db_wrapper.cluster.start()
 
             raise TestFailure("Out of memory")
 
         # Write out profile if run succeeded
-        outputs = run_pipeline(db, videos, no_execute=True)
+        outputs = run_pipeline(db, no_execute=True, **args)
         try:
             outputs[0]._column._table.profiler().write_trace(
-                '/app/data/traces/{}.trace'.format(run_name(cluster.config(), job_config)))
+                '/app/data/traces/{}.trace'.format(run_name(db_wrapper.cluster.config(), job_config)))
         except Exception:
             log.error('Failed to write trace')
             traceback.print_exc()
 
         return end, pd.DataFrame(metrics)
 
-    def test_config(videos, cluster, job_config):
-        time, metrics = run_config(videos, cluster, job_config)
+    def test_config(args, db_wrapper, cluster_config, job_config):
+        time, metrics = run_config(args, db_wrapper, job_config)
 
         if time is not None:
-            price_per_hour = cluster.config().price()
+            price_per_hour = cluster_config.price(no_master=True)
             price_per_video = (time / 3600.0) * price_per_hour / float(sample_size)
             return price_per_video, metrics
         else:
             return None
 
-    sample = range(sample_size)
-    N = len(videos)
     results = []
 
     for (cluster_config, job_configs) in configs:
@@ -99,16 +98,19 @@ def bench(name, videos, run_pipeline, configs, sample_size=15, force=False, no_d
             results.append([pcache.get(run_name(cluster_config, job_config)) for job_config in job_configs])
 
         else:
-            with kube.Cluster(cloud_config, cluster_config, no_delete=no_delete) as cluster:
+            with make_cluster(cluster_config, no_delete=no_delete) as db_wrapper:
                 log.info('Cluster config: {}'.format(cluster_config))
 
                 def try_config(job_config):
                     log.info('Job config: {}'.format(job_config))
                     try:
-                        return test_config([videos[i] for i in sample], cluster, job_config)
+                        return test_config(
+                            args, db_wrapper, cluster_config, job_config)
                     except TestFailure as e:
+                        print(e)
                         return (str(e), None)
                     except Exception as e:
+                        traceback.print_exc()
                         return (traceback.format_exc(), None)
 
                 def try_config_cached(job_config):
@@ -159,7 +161,7 @@ def bench(name, videos, run_pipeline, configs, sample_size=15, force=False, no_d
             block = '''
             <div>
               <h3>{name}</h3>
-              <p>${result:.04f}/video, estimated ${total:d} total</p>
+              <p>${result:.05f}/video</p>
               <div>
                 {cpu}
                 {mem}
@@ -168,14 +170,13 @@ def bench(name, videos, run_pipeline, configs, sample_size=15, force=False, no_d
             '''.format(
                 name=run_name(cluster_config, job_config),
                 result=job_result,
-                total=int(job_result * N),
                 cpu=cpu,
                 mem=mem)
             blocks += block
 
     report = report_template.format(report=blocks)
 
-    with open('/app/data/benchmarks/benchmark-{}.html'.format(strftime('%Y-%m-%d-%H-%M')), 'w') as f:
+    with open('/app/data/benchmarks/{}-{}.html'.format(name, strftime('%Y-%m-%d-%H-%M')), 'w') as f:
         f.write(report)
 
     # Collect all traces into a tarfile

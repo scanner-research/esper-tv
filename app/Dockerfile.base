@@ -2,7 +2,7 @@ ARG tag
 FROM scannerresearch/scannertools:${tag}-latest
 # ARGS before FROM aren't accessible after the FROM, so we need to replicate the device arg.
 ARG build_tf=off
-ARG tf_version=1.5.0
+ARG tf_version=1.12.0
 ARG device=cpu
 ARG cores=1
 
