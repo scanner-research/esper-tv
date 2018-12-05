@@ -1,9 +1,6 @@
 from operator import itemgetter, attrgetter
 from query.models import Video
 from esper.prelude import collect
-import sys
-
-sys.path.append('/app/deps/rekall')
 
 from rekall.interval_list import Interval, IntervalList
 
@@ -184,7 +181,7 @@ def intrvllists_to_result(intrvllists, color="red", video_order=None):
 
     return {'result': groups, 'count': full_count, 'type': 'Video'}
 
-def intrvllists_to_result_bbox(intrvllists):
+def intrvllists_to_result_bbox(intrvllists, limit=None, stride=1):
     """ Gets a result for intrvllists, assuming that the objects are bounding boxes.
     """
     materialized_results = []
@@ -192,10 +189,12 @@ def intrvllists_to_result_bbox(intrvllists):
         intrvllist = intrvllists[video].get_intervals()
         if len(intrvllist) == 0:
             continue
-        for intrvl in intrvllist:
+        if limit is not None and len(materialized_results) > limit:
+            break
+        for intrvl in intrvllist[::stride]:
             materialized_results.append({
                 'video': video,
-                'min_frame': (intrvl.get_start() + intrvl.get_end()) / 2,
+                'min_frame': int((intrvl.get_start() + intrvl.get_end()) / 2),
                 'objects': [{
                         'id': video,
                         'type': 'bbox',
@@ -203,8 +202,12 @@ def intrvllists_to_result_bbox(intrvllists):
                         'bbox_x2': bbox['x2'],
                         'bbox_y1': bbox['y1'],
                         'bbox_y2': bbox['y2'],
-                    } for bbox in intrvl.get_payload()['objects']]
+                    } for bbox in intrvl.get_payload()]
                 })
+
+    if limit is None:
+        limit = len(materialized_results)
+    materialized_results = materialized_results[:limit]
 
     groups = [{'type': 'flat', 'label': '', 'elements': [r]}
             for r in materialized_results]

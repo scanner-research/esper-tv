@@ -10,17 +10,18 @@ if [ "$build_tf" = "on" ]; then
     apt-get update && apt-get install -y bazel
 
     # Install python deps
-    pip3 install six numpy wheel
+    # keras_*: https://github.com/bazelbuild/continuous-integration/issues/305
+    pip3 install six numpy wheel keras_applications keras_preprocessing
 
     git clone -b v${tf_version} https://github.com/tensorflow/tensorflow/
     cd tensorflow
     updatedb
 
-    if [ "$device2" = "cpu" ]; then
+    if [ "$device" = "cpu" ]; then
         # TODO(wcrichto): getting internal errors w/ MKL on GCE
 
         PYTHON_BIN_PATH=$(which python3) \
-                       PYTHON_LIB_PATH=/usr/local/lib/python3.5/site-packages \
+                       PYTHON_LIB_PATH=/usr/local/lib/python3.5/dist-packages \
                        TF_NEED_MKL=0 \
                        CC_OPT_FLAGS=-march=core-avx2 \
                        TF_NEED_JEMALLOC=1 \
@@ -33,11 +34,18 @@ if [ "$build_tf" = "on" ]; then
                        TF_NEED_VERBS=0 \
                        TF_NEED_OPENCL=0 \
                        TF_NEED_CUDA=0 \
+                       TF_NEED_IGNITE=0 \
+                       TF_NEED_OPENCL_SYCL=0 \
+                       TF_NEED_ROCM=0 \
+                       TF_DOWNLOAD_CLANG=0 \
+                       TF_SET_ANDROID_WORKSPACE=0 \
                        ./configure
 
+        # ares: https://github.com/tensorflow/tensorflow/issues/23402#issuecomment-436932197
         bazel build \
               --config=opt \
-              --incompatible_load_argument_is_label=false \
+              --define=grpc_no_ares=true \
+              --incompatible_remove_native_http_archive=false \
               //tensorflow/tools/pip_package:build_pip_package
     else
         echo "No GPU TF support yet"

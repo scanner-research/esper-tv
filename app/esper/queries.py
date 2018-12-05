@@ -1078,3 +1078,119 @@ def multiple_timelines():
     add_intrvllists_to_result(result, qs_to_intrvllists(commercials), color="purple")
 
     return result
+
+@query('Interview with person X (rekall, sandbox)')
+def interview_with_person_x():
+    from query.models import LabeledCommercial, FaceIdentity
+    from rekall.video_interval_collection import VideoIntervalCollection
+    from rekall.temporal_predicates import before, after, overlaps
+    from rekall.logical_predicates import or_pred
+    from esper.rekall import intrvllists_to_result
+
+    # Get list of sandbox video IDs
+    sandbox_videos = [
+        row.video_id
+        for row in LabeledCommercial.objects.distinct('video_id')
+    ]
+
+    guest_name = "bernie sanders"
+
+    # Load hosts and instances of guest from SQL
+    identities = FaceIdentity.objects.filter(face__shot__video_id__in=sandbox_videos)
+    hosts_qs = identities.filter(face__is_host=True)
+    guest_qs = identities.filter(identity__name=guest_name).filter(probability__gt=0.7)
+
+    # Put bounding boxes in SQL
+    hosts = VideoIntervalCollection.from_django_qs(
+        hosts_qs.annotate(video_id=F("face__shot__video_id"),
+            min_frame=F("face__shot__min_frame"),
+            max_frame=F("face__shot__max_frame"))
+        )
+    guest = VideoIntervalCollection.from_django_qs(
+        guest_qs.annotate(video_id=F("face__shot__video_id"),
+        min_frame=F("face__shot__min_frame"),
+        max_frame=F("face__shot__max_frame"))
+    )
+
+    # Get all shots where the guest and a host are on screen together
+    guest_with_host = guest.overlaps(hosts).coalesce()
+
+    # This temporal predicate defines A overlaps with B, or A before by less than 10 frames,
+    #   or A after B by less than 10 frames
+    overlaps_before_or_after_pred = or_pred(
+            or_pred(overlaps(), before(max_dist=10), arity=2),
+            after(max_dist=10), arity=2)
+
+    # This code finds sequences of:
+    #   guest with host overlaps/before/after host OR
+    #   guest with host overlaps/before/after guest
+    interview_candidates = guest_with_host \
+            .merge(hosts, predicate=overlaps_before_or_after_pred) \
+            .set_union(guest_with_host.merge(
+                guest, predicate=overlaps_before_or_after_pred)) \
+            .coalesce()
+
+    # Sequences may be interrupted by shots where the guest or host don't
+    #   appear, so dilate and coalesce to merge neighboring segments
+    interviews = interview_candidates \
+            .dilate(600) \
+            .coalesce() \
+            .dilate(-600) \
+            .filter_length(min_length=1350)
+
+    # Return intervals
+    return intrvllists_to_result(interviews.get_allintervals())
+
+@query('Panels (rekall, sandbox)')
+def panels_rekall():
+    from query.models import LabeledCommercial, Face
+    from rekall.video_interval_collection import VideoIntervalCollection
+    from rekall.parsers import in_array, bbox_payload_parser
+    from rekall.merge_ops import payload_plus
+    from rekall.bbox_predicates import height_at_least, same_value, left_of
+    from rekall.spatial_predicates import scene_graph
+    from rekall.payload_predicates import payload_satisfies
+    from esper.rekall import intrvllists_to_result_bbox
+
+    # Get list of sandbox video IDs
+    sandbox_videos = [
+        row.video_id
+        for row in LabeledCommercial.objects.distinct('video_id')
+    ]
+
+    faces_qs = Face.objects.filter(shot__video_id__in=sandbox_videos).annotate(
+        video_id=F("shot__video_id"),
+        min_frame=F("shot__min_frame"),
+        max_frame=F("shot__max_frame")
+    )
+
+    # One interval for each face
+    faces = VideoIntervalCollection.from_django_qs(
+            faces_qs,
+            with_payload=in_array(
+                bbox_payload_parser(
+                    VideoIntervalCollection.django_accessor)))
+
+    # Merge shots
+    faces = faces.coalesce(payload_merge_op=payload_plus)
+
+    # Define a scene graph for things that look like panels
+    three_faces_scene_graph = {
+        'nodes': [
+            { 'name': 'face1', 'predicates': [ height_at_least(0.3) ] },
+            { 'name': 'face2', 'predicates': [ height_at_least(0.3) ] },
+            { 'name': 'face3', 'predicates': [ height_at_least(0.3) ] }
+        ],
+        'edges': [
+            { 'start': 'face1', 'end': 'face2',
+                'predicates': [ same_value('y1', epsilon=0.05), left_of() ] }, 
+            { 'start': 'face2', 'end': 'face3',
+                'predicates': [ same_value('y1', epsilon=0.05), left_of() ] }, 
+        ]
+    }
+
+    panels = faces.filter(payload_satisfies(
+        scene_graph(three_faces_scene_graph, exact=True)
+    ))
+
+    return intrvllists_to_result_bbox(panels.get_allintervals())
