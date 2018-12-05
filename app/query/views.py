@@ -95,9 +95,9 @@ def schema(request):
 
 
 # Convert captions in SRT format to WebVTT (for displaying in web UI)
-def srt_to_vtt(s):
+def srt_to_vtt(s, shift):
     subs = pysrt.from_string(s)
-    subs.shift(seconds=-5)  # Seems like TV news captions are delayed by a few seconds
+    subs.shift(shift)  # Seems like TV news captions are delayed by a few seconds
 
     entry_fmt = '{position}\n{start} --> {end}\n{text}'
 
@@ -122,7 +122,7 @@ def subtitles(request):
     sub_path = '/app/data/subs/orig/{}.{}.srt'.format(video.item_name(), srt)
 
     s = open(sub_path, 'rb').read().decode('utf-8')
-    vtt = srt_to_vtt(s)
+    vtt = srt_to_vtt(s, -5)
 
     return HttpResponse(vtt, content_type="text/vtt")
 
