@@ -54,18 +54,16 @@ if False:
         bench('face', {'videos': videos, 'frames': [[f['number'] for f in Frame.objects.filter(video=v).values('number').order_by('number')] for v in videos]},
               run_pipeline, configs, no_delete=True, force=True)
 
-videos = videos[6000:7000]
+videos = videos
 
 with Timer('run'):
     cfg = cluster_config(
-        num_workers=5,
+        num_workers=80,
         worker=worker_config('n1-standard-32'),
         workers_per_node=8,
         num_load_workers=1,
         num_save_workers=1)
     with make_cluster(cfg, sql_pool=4, no_delete=True) as db_wrapper:
-
-        exit()
 
     # if True:
     #     db_wrapper = ScannerWrapper.create(enable_watchdog=False)
@@ -82,7 +80,8 @@ with Timer('run'):
             videos=[v.for_scannertools() for v in videos],
             db_videos=videos,
             frames=frames,
-            frame_ids=[ScannerSQLTable(Frame, v) for v in videos],
+            frame_ids=[ScannerSQLTable(Frame, v, num_elements=len(f))
+                       for v, f in zip(videos, frames)],
             run_opts={
                 'io_packet_size': 1000,
                 'work_packet_size': 20

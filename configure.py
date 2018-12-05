@@ -293,7 +293,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                 shell=True)
 
         if not args.base_only:
-            sp.check_call('docker-compose build', shell=True)
+            sp.check_call('docker-compose build app', shell=True)
 
     print('Successfully configured Esper. To start Esper, run:')
     print('$ docker-compose up -d')

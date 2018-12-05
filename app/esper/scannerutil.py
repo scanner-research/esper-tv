@@ -110,9 +110,12 @@ class ScannerWrapper:
                 table='{} {}'.format(table, ' '.join(joins(Frame) + joins(Video)))
             ))
 
-    def sql_source_args(self, video):
+    def sql_source_args(self, video, num_elements=0):
         from query.models import Video
-        return {'filter': '{}.id = {}'.format(Video._meta.db_table, video.id)}
+        return {
+            'filter': '{}.id = {}'.format(Video._meta.db_table, video.id),
+            'num_elements': num_elements
+        }
 
     def sql_sink(self, cls, input, videos, suffix, insert=True, ignore_conflicts=True):
         from query.models import ScannerJob
@@ -141,15 +144,16 @@ class ScannerWrapper:
 
 
 class ScannerSQLTable(st.DataSource):
-    def __init__(self, cls, video):
+    def __init__(self, cls, video, num_elements=None):
         self._cls = cls
         self._video = video
+        self._num_elements = num_elements
 
     def scanner_source(self, db):
         return ScannerWrapper(db).sql_source(self._cls)
 
     def scanner_args(self, db):
-        return ScannerWrapper(db).sql_source_args(self._video)
+        return ScannerWrapper(db).sql_source_args(self._video, num_elements=self._num_elements)
 
 
 class ScannerSQLPipeline:
