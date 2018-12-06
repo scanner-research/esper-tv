@@ -201,9 +201,9 @@ class LabeledSegmentDataset(Dataset):
         tbuf, _ = self._ds[seg_idx]
         return tbuf, label, seg_idx
 
-def label_widget(dataset, indices):
+def label_widget(dataset, indices, done_callback):
     from IPython.display import display, clear_output
-    from ipywidgets import Text, HTML
+    from ipywidgets import Text, HTML, Button
 
     labels = []
     i = 0
@@ -219,7 +219,12 @@ def label_widget(dataset, indices):
         box.value = ''
     box.on_submit(on_submit)
 
+    finished = False
+    btn_finished = Button(description='Finished')
+    def on_click(b):
+        done_callback(labels)
+    btn_finished.on_click(on_click)
+
     display(transcript)
     display(box)
-
-    return labels
+    display(btn_finished)
