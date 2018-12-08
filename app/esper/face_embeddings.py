@@ -31,6 +31,12 @@ def get(ids):
     return _EMB_DATA.get(ids)
 
 
+def features(ids):
+    result = _EMB_DATA.get(ids)
+    assert len(result) == len(ids)
+    return [np.array(v) for _, v in result]
+
+
 def sample(k):
     return _EMB_DATA.sample(k)
 
@@ -69,7 +75,8 @@ def kmeans(ids, k=25):
     return _EMB_DATA.kmeans(ids, k)
 
 
-def features(ids):
-    result = _EMB_DATA.get(ids)
-    assert len(result) == len(ids)
-    return [np.array(v) for _, v in result]
+def logreg(ids, labels, min_thresh=0., max_thresh=1., num_epochs=10, 
+           learning_rate=1., l2_penalty=0., l1_penalty=0.):
+    return _EMB_DATA.logreg(
+        ids, labels, min_thresh, max_thresh, num_epochs,
+        learning_rate, l2_penalty, l1_penalty)

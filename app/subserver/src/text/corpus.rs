@@ -184,15 +184,19 @@ impl<Index: Indexed + Send> Corpus<Index> {
                 .windows(window_size).step_by(stride)
                 .flat_map(|window| {
                     let max_ngram = 3;
-                    let word_bag = (1..=max_ngram)
+                    let mut map = HashMap::new();
+                    let word_iter = (1..=max_ngram)
                         .flat_map(|n| {
                             window.windows(n).map(|ngram| self.ngram_to_str(ngram))
                                 .collect::<Vec<_>>()
-                        })
-                        .collect::<HashSet<_>>();
-                    vocabulary.iter()
-                        .map(|w| if word_bag.contains(w) { 1u8 } else { 0 })
-                        .collect::<Vec<_>>()
+                        });
+                    for word in word_iter {
+                        *map.entry(word).or_insert(0) += 1;
+                    }
+
+                    vocabulary.iter().map(|w| {
+                        map.get(w).map(|n| *n).unwrap_or(0)
+                    }).collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
 

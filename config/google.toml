@@ -6,6 +6,7 @@ zone = "us-east1-d"
 type = "google"
 bucket = "esper"
 path = "public"
+base_image_name = "esper-base"
 
 [database]
 # type = "local"

@@ -1,6 +1,7 @@
 [storage]
 type = "local"       # Video/image files stored on the local machine
 path = "/var/esper"  # Currently unused, ignore
+base_image_name = "esper-base" # Docker base image name
 
 [database]
 type = "local"       # Database is stored/run locally
