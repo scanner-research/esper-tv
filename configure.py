@@ -298,8 +298,8 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
         if 'google' in base_config and args.build_remote:
             base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
             sp.check_call(
-                'docker tag {base_name}:{device} {base_url}/esper-base:{device} && \
-                gcloud docker -- push {base_url}/esper-base:{device}'.format(
+                'docker tag {base_name}:{device} {base_url}/{base_name}:{device} && \
+                gcloud docker -- push {base_url}/{base_name}:{device}'.format(
                     device=args.build_device,
                     base_name=base_name,
                     base_url=base_url),
