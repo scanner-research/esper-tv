@@ -1,12 +1,12 @@
 [storage]
 type = "local"       # Video/image files stored on the local machine
 path = "/var/esper"  # Currently unused, ignore
+base_image_name = "esper-base" # Docker base image name
 
 [database]
 type = "local"       # Database is stored/run locally
 user = "will"        # Username
 password = "foobar"  # Password
-base_image_name = "esper-base" # Docker base image name
 
 [compute]
 gpu = false          # Whether or not you have a GPU on the local machine
