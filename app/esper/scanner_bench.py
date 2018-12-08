@@ -22,6 +22,7 @@ class ScannerJobConfig:
     io_packet_size = attrib(type=int)
     work_packet_size = attrib(type=int)
     batch = attrib(type=int, default=1)
+    pipelines_per_worker = attrib(type=int, default=-1)
 
 class TestFailure(Exception):
     pass
@@ -49,10 +50,16 @@ def bench(name, args, run_pipeline, configs, force=False, no_delete=False):
 
         # Start the Scanner job
         log.info('Starting Scanner job')
-        run_pipeline(db, detach=True, run_opts={
+
+        run_opts = {
             'io_packet_size': job_config.io_packet_size,
             'work_packet_size': job_config.work_packet_size,
-        }, **args)
+        }
+        ppw = job_config.pipelines_per_worker
+        if ppw != -1:
+            run_opts['pipeline_instances_per_node'] = ppw
+
+        run_pipeline(db, detach=True, run_opts=run_opts, **args)
 
         # Wait until it succeeds or crashes
         start = now()

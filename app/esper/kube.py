@@ -4,8 +4,9 @@ import os
 import shlex
 from contextlib import contextmanager
 
-image_path = 'gcr.io/{project}/esper-base:{device}'.format(
+image_path = 'gcr.io/{project}/{base_name}:{device}'.format(
     project=os.environ['GOOGLE_PROJECT'],
+    base_name=os.environ['BASE_IMAGE_NAME'],
     device='cpu')
 
 cloud_config = kube.CloudConfig(project=os.environ['GOOGLE_PROJECT'])
@@ -13,18 +14,18 @@ cloud_config = kube.CloudConfig(project=os.environ['GOOGLE_PROJECT'])
 master_config = kube.MachineConfig(
     image=image_path,
     type=kube.MachineTypeName(name='n1-highmem-32'),
-    disk=100)
+    disk=250)
 
 def worker_config(machine_type):
     return kube.MachineConfig(
         image=image_path,
         type=kube.MachineTypeName(name=machine_type),
-        disk=100,
+        disk=250,
         preemptible=True)
 
 def cluster_config(**kwargs):
     return kube.ClusterConfig(
-        id='wc-test',
+        id='wc-test2',
         autoscale=True,
         master=master_config,
         **kwargs)

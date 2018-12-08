@@ -18,7 +18,7 @@ def join_path(src_cls, dest_cls):
         edge_fields = defaultdict(dict)
         for model in models:
             for field in model._meta.get_fields():
-                if field.is_relation and hasattr(field, 'column'):
+                if field.is_relation and hasattr(field, 'column') and not field.null:
                     edges[key(model)].append(key(field.related_model))
                     edge_fields[key(model)][key(field.related_model)] = field
 
@@ -107,14 +107,14 @@ class ScannerWrapper:
                 ]),
                 id='{}.id'.format(Frame._meta.db_table),
                 group='{}.number'.format(Frame._meta.db_table),
-                table='{} {}'.format(table, ' '.join(joins(Frame) + joins(Video)))
+                table='{} {}'.format(table, ' '.join(joins(Video)))
             ))
 
-    def sql_source_args(self, video, num_elements=0):
+    def sql_source_args(self, video, num_elements=None):
         from query.models import Video
         return {
             'filter': '{}.id = {}'.format(Video._meta.db_table, video.id),
-            'num_elements': num_elements
+            'num_elements': num_elements if num_elements is not None else 0
         }
 
     def sql_sink(self, cls, input, videos, suffix, insert=True, ignore_conflicts=True):

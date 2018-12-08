@@ -253,6 +253,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                 'BUCKET={}'.format(base_config.storage.bucket),
                 'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
                 'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
+                'BASE_IMAGE_NAME={}'.format(base_config.google.base_image_name)
             ])
 
         service.environment.extend(env_vars)
@@ -266,6 +267,13 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
 
     # Build Docker images where necessary
     if not args.no_build:
+
+        if args.build_tf:
+            print("""wcrichto 12-7-18: observed that custom built TF version 1.11.0
+            was causing a ~10x slowdown versus pip installed. Shouldn't use custom build
+            until that's debugged.""")
+            exit(1)
+
         build_args = {
             'cores': cores,
             'tag': 'cpu' if args.build_device == 'cpu' else 'gpu-9.1-cudnn7',
@@ -274,10 +282,13 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             'build_tf': 'on' if args.build_tf else 'off'
         }
 
+        base_name = base_config.google.base_image_name
+
         sp.check_call(
-            'docker build {pull} -t esper-base:{device} {build_args} -f app/Dockerfile.base app'.
+            'docker build {pull} -t {base_name}:{device} {build_args} -f app/Dockerfile.base app'.
             format(
                 device=args.build_device,
+                base_name=base_name,
                 pull='--pull' if not args.no_pull else '',
                 build_args=' '.join(
                     ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
@@ -286,9 +297,10 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
         if 'google' in base_config and args.build_remote:
             base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
             sp.check_call(
-                'docker tag esper-base:{device} {base_url}/esper-base:{device} && \
+                'docker tag {base_name}:{device} {base_url}/esper-base:{device} && \
                 gcloud docker -- push {base_url}/esper-base:{device}'.format(
                     device=args.build_device,
+                    base_name=base_name,
                     base_url=base_url),
                 shell=True)
 

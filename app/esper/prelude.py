@@ -51,6 +51,7 @@ proto = ProtobufGenerator(cfg)
 # Logging config
 log = logging.getLogger('esper')
 log.setLevel(logging.DEBUG)
+log.propagate = False # https://stackoverflow.com/questions/11820338/replace-default-handler-of-python-logger
 if not log.handlers:
 
     class CustomFormatter(logging.Formatter):
