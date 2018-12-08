@@ -245,7 +245,9 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
     for service in list(config.services.values()):
         env_vars = [
             'ESPER_ENV={}'.format(base_config.storage.type),
-            'DATA_PATH={}'.format(base_config.storage.path), 'HOSTNAME={}'.format(hostname)
+            'DATA_PATH={}'.format(base_config.storage.path),
+            'HOSTNAME={}'.format(hostname),
+            'BASE_IMAGE_NAME={}'.format(base_config.storage.base_image_name)
         ]
 
         if base_config.storage.type == 'google':
@@ -253,7 +255,6 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                 'BUCKET={}'.format(base_config.storage.bucket),
                 'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
                 'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
-                'BASE_IMAGE_NAME={}'.format(base_config.google.base_image_name)
             ])
 
         service.environment.extend(env_vars)
@@ -282,7 +283,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             'build_tf': 'on' if args.build_tf else 'off'
         }
 
-        base_name = base_config.google.base_image_name
+        base_name = base_config.storage.base_image_name
 
         sp.check_call(
             'docker build {pull} -t {base_name}:{device} {build_args} -f app/Dockerfile.base app'.

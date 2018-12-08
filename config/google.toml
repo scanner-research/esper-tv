@@ -1,12 +1,12 @@
 [google]
 project = "visualdb-1046"
 zone = "us-east1-d"
-base_image_name = "esper-base"
 
 [storage]
 type = "google"
 bucket = "esper"
 path = "public"
+base_image_name = "esper-base"
 
 [database]
 # type = "local"
