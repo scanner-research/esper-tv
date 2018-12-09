@@ -51,6 +51,9 @@ COPY .deps/esper-run .deps/esper-ipython /usr/bin/
 COPY .deps/common.sh /tmp
 RUN cat /tmp/common.sh >> /root/.bashrc
 
+# Fix google cloud storage url
+RUN unset PYTHONPATH && pip2 install cryptography
+
 ENV GLOG_minloglevel 1
 ENV GOOGLE_APPLICATION_CREDENTIALS ${APPDIR}/service-key.json
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/lib:/usr/local/lib/python3.5/dist-packages/hwang

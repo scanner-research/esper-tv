@@ -15,6 +15,11 @@ COPY ./requirements.base.txt ./
 RUN ./scripts/build-tf.sh
 RUN pip3 install -r requirements.base.txt
 
+RUN git clone https://github.com/scanner-research/gentle && \
+    cd gentle && \
+    bash ./install.sh && \
+    cd /app
+
 COPY ./.deps/.dummy scannerpatc[h] ./
 RUN if [ -f /app/scannerpatch ]; then \
     cd /opt/scanner && \
