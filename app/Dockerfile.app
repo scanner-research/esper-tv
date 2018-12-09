@@ -1,5 +1,6 @@
+ARG base_name
 ARG device=cpu
-FROM esper-base:${device}
+FROM ${base_name}:${device}
 ARG cores=1
 ENV DJANGO_CONFIGURATION Docker
 ENV TERM=xterm
