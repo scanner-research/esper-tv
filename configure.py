@@ -164,6 +164,8 @@ def main():
     else:
         device = 'cpu'
 
+    config.services.app.build.args.base_name = base_config.storage.base_image_name
+
     config.services.app.build.args.device = device
     if device == 'gpu':
         config.services.app.runtime = 'nvidia'
