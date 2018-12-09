@@ -23,7 +23,7 @@ SEG_LENGTH = 60
 def main():
     # set test video list
 #     video_list = ['CNNW_20161116_200000_CNN_Newsroom_With_Brooke_Baldwin']
-    video_list = pickle.load(open('/app/data/tvnews_std_sample.pkl', '_St_sample_'))['three_year'][:500]
+    video_list = pickle.load(open('/app/data/tvnews_std_sample.pkl', 'rb'))['three_year'][:500]
     
     # remove videos whose result is already dumped
     # todo
