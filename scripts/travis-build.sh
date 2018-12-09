@@ -12,12 +12,14 @@ build_docker() {
     python -c "import fcntl; fcntl.fcntl(1, fcntl.F_SETFL, 0)"
 
     python3 configure.py -c config/local.toml
-    docker build -f app/Dockerfile.app -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
+    docker-compose build app
 
-    if [ $PUSH -eq 0 ]; then
-        docker push $DOCKER_REPO:$1
-        docker rmi -f $DOCKER_REPO:$1
-    fi
+    #docker build -f app/Dockerfile.app -t $DOCKER_REPO:$1 --build-arg device=$1 --build-arg device2=$1 app
+
+    # if [ $PUSH -eq 0 ]; then
+    #     docker push $DOCKER_REPO:$1
+    #     docker rmi -f $DOCKER_REPO:$1
+    # fi
 }
 
 if [ $PUSH -eq 0 ]; then
