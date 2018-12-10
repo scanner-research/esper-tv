@@ -18,7 +18,7 @@ def join_path(src_cls, dest_cls):
         edge_fields = defaultdict(dict)
         for model in models:
             for field in model._meta.get_fields():
-                if field.is_relation and hasattr(field, 'column'):
+                if field.is_relation and hasattr(field, 'column') and not field.null:
                     edges[key(model)].append(key(field.related_model))
                     edge_fields[key(model)][key(field.related_model)] = field
 
@@ -107,12 +107,15 @@ class ScannerWrapper:
                 ]),
                 id='{}.id'.format(Frame._meta.db_table),
                 group='{}.number'.format(Frame._meta.db_table),
-                table='{} {}'.format(table, ' '.join(joins(Frame) + joins(Video)))
+                table='{} {}'.format(table, ' '.join(joins(Video)))
             ))
 
-    def sql_source_args(self, video):
+    def sql_source_args(self, video, num_elements=None):
         from query.models import Video
-        return {'filter': '{}.id = {}'.format(Video._meta.db_table, video.id)}
+        return {
+            'filter': '{}.id = {}'.format(Video._meta.db_table, video.id),
+            'num_elements': num_elements if num_elements is not None else 0
+        }
 
     def sql_sink(self, cls, input, videos, suffix, insert=True, ignore_conflicts=True):
         from query.models import ScannerJob
@@ -141,15 +144,16 @@ class ScannerWrapper:
 
 
 class ScannerSQLTable(st.DataSource):
-    def __init__(self, cls, video):
+    def __init__(self, cls, video, num_elements=None):
         self._cls = cls
         self._video = video
+        self._num_elements = num_elements
 
     def scanner_source(self, db):
         return ScannerWrapper(db).sql_source(self._cls)
 
     def scanner_args(self, db):
-        return ScannerWrapper(db).sql_source_args(self._video)
+        return ScannerWrapper(db).sql_source_args(self._video, num_elements=self._num_elements)
 
 
 class ScannerSQLPipeline:

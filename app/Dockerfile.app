@@ -1,5 +1,6 @@
+ARG base_name
 ARG device=cpu
-FROM esper-base:${device}
+FROM ${base_name}:${device}
 ARG cores=1
 ENV DJANGO_CONFIGURATION Docker
 ENV TERM=xterm
@@ -49,6 +50,9 @@ RUN git clone https://github.com/scanner-research/vgrid_jupyter /opt/vgrid_jupyt
 COPY .deps/esper-run .deps/esper-ipython /usr/bin/
 COPY .deps/common.sh /tmp
 RUN cat /tmp/common.sh >> /root/.bashrc
+
+# Fix google cloud storage url
+RUN unset PYTHONPATH && pip2 install cryptography
 
 ENV GLOG_minloglevel 1
 ENV GOOGLE_APPLICATION_CREDENTIALS ${APPDIR}/service-key.json

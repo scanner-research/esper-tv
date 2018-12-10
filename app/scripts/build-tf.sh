@@ -24,7 +24,6 @@ if [ "$build_tf" = "on" ]; then
                        PYTHON_LIB_PATH=/usr/local/lib/python3.5/dist-packages \
                        TF_NEED_MKL=0 \
                        CC_OPT_FLAGS=-march=core-avx2 \
-                       TF_NEED_JEMALLOC=1 \
                        TF_NEED_GCP=0 \
                        TF_NEED_S3=0 \
                        TF_NEED_GDR=0 \

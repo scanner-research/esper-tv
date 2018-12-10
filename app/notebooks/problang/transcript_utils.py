@@ -5,6 +5,7 @@ import requests
 from query.models import Video
 from timeit import default_timer as now
 from esper.prelude import pcache
+import random
 
 SEGMENT_SIZE = 200
 SEGMENT_STRIDE = 100
@@ -138,14 +139,18 @@ class SegmentTextDataset(Dataset):
 
 import mmap
 class SegmentVectorDataset(Dataset):
-    def __init__(self, docs, vocab_size, segment_size=SEGMENT_SIZE, segment_stride=SEGMENT_STRIDE, use_cuda=False):
+    def __init__(self, docs, vocab_size, segment_size=SEGMENT_SIZE, segment_stride=SEGMENT_STRIDE, use_cuda=False, inmemory=False):
         self._ds = SegmentTextDataset(docs, segment_size=segment_size, segment_stride=segment_stride)
         self._doc_names = docs
         self._vocab_size = vocab_size
         self._use_cuda = use_cuda
+        self._inmemory = inmemory
         self._file_handle = open('/app/data/segvectors.bin', 'r+b')
         self._file = mmap.mmap(self._file_handle.fileno(), 0)
         self._byte_offsets = []
+
+        if self._inmemory:
+            self._buffer = self._file.read()
 
         # Compute prefix sum of document offsets
         for i, doc in enumerate(self._doc_names):
@@ -164,16 +169,20 @@ class SegmentVectorDataset(Dataset):
 
     def __getitem__(self, idx):
         offset = self._byte_offset(idx)
-        self._file.seek(offset)
-        byts = self._file.read(self._vocab_size)
+        if self._inmemory:
+            byts = self._buffer[offset:offset+self._vocab_size]
+        else:
+            self._file.seek(offset)
+            byts = self._file.read(self._vocab_size)
         assert len(byts) == self._vocab_size, \
             'Invalid read at index {}, offset {}. Expected {} bytes, got {}'.format(idx, offset, self._vocab_size, len(byts))
+
         npbuf = np.frombuffer(byts, dtype=np.uint8)
         tbuf = torch.from_numpy(npbuf).float()
         tbuf /= torch.sum(tbuf)
         if self._use_cuda:
             tbuf = tbuf.cuda()
-        return tbuf
+        return tbuf, idx
 
 class LabeledSegmentDataset(Dataset):
     def __init__(self, unlabeled_dataset, labels, categories):
@@ -189,4 +198,33 @@ class LabeledSegmentDataset(Dataset):
         label = torch.tensor([1 if label == i else 0 for i in range(self._categories)], dtype=torch.float32)
         if self._ds._use_cuda:
             label = label.cuda()
-        return self._ds[seg_idx], label
+        tbuf, _ = self._ds[seg_idx]
+        return tbuf, label, seg_idx
+
+def label_widget(dataset, indices, done_callback):
+    from IPython.display import display, clear_output
+    from ipywidgets import Text, HTML, Button
+
+    labels = []
+    i = 0
+
+    transcript = HTML(dataset[indices[0]]['segment'])
+    box = Text(placeholder='y/n')
+    def on_submit(text):
+        nonlocal i
+        label = 1 if text.value == 'y' else 0
+        labels.append((indices[i], label))
+        i += 1
+        transcript.value = dataset[indices[i]]['segment']
+        box.value = ''
+    box.on_submit(on_submit)
+
+    finished = False
+    btn_finished = Button(description='Finished')
+    def on_click(b):
+        done_callback(labels)
+    btn_finished.on_click(on_click)
+
+    display(transcript)
+    display(box)
+    display(btn_finished)
