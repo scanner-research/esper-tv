@@ -1,4 +1,4 @@
-from esper.prelude import Timer
+from esper.prelude import Timer, unzip, par_for
 from query.models import Video, Frame, Face, FaceGender, Labeler, Gender
 from scannertools import kube, gender_detection
 from esper.kube import make_cluster, cluster_config, worker_config
@@ -18,33 +18,13 @@ gender_ids = {g.name: g.id for g in Gender.objects.all()}
 def genders_to_json(config, genders: bytes, faces: bytes) -> bytes:
     genders = pickle.loads(genders)
     faces = json.loads(faces.decode('utf-8'))
-    print([
+    return json.dumps([
         {'face_id': face['id'],
          'gender_id': gender_ids[gender_str],
-         'probability': score,
+         'probability': score.item(),
          'labeler_id': labeler_id}
         for ((gender_str, score), face) in zip(genders, faces)
     ])
-    return json.dumps([])
-    # return json.dumps([
-    #     {'face_id': face_id,
-    #      'gender_id': gender_ids[gender_str],
-    #      'probability': score,
-    #      'labeler_id': labeler_id}
-    #     for ((gender_str, score), face_id) in zip(genders, face_id)
-    # ])
-
-@scannerpy.register_python_op(name='BboxesFromJson')
-def bboxes_from_json(config, bboxes: bytes) -> bytes:
-    bboxes = json.loads(bboxes.decode('utf-8'))
-    return writers.bboxes([
-        config.protobufs.BoundingBox(
-            x1=bb['bbox_x1'],
-            x2=bb['bbox_x2'],
-            y1=bb['bbox_y1'],
-            y2=bb['bbox_y2'])
-        for bb in bboxes
-    ], config.protobufs)
 
 class GenderDetectionPipeline(ScannerSQLPipeline, gender_detection.GenderDetectionPipeline):
     db_class = FaceGender
@@ -72,12 +52,13 @@ def frames_for_video(video):
             .filter(c__gte=1)
             .values('number').order_by('number')]
 
-if True:
+if False:
     with Timer('benchmark'):
         videos = videos[:50]
         def run_pipeline(db, videos, frames, **kwargs):
             return detect_genders(
                 db,
+                db_videos=videos,
                 videos=[v.for_scannertools() for v in videos],
                 frames=frames,
                 faces=[ScannerSQLTable(Face, v) #num_elements=len(f))
@@ -85,7 +66,8 @@ if True:
                 cache=False,
                 **kwargs)
 
-        cfg = cluster_config(num_workers=5, worker=worker_config('n1-standard-32'))
+        cfg = cluster_config(
+            num_workers=5, worker=worker_config('n1-standard-32'), pipelines=[GenderDetectionPipeline])
         configs = [(cfg, [
             ScannerJobConfig(io_packet_size=1000, work_packet_size=20, pipelines_per_worker=4),
             ScannerJobConfig(io_packet_size=1000, work_packet_size=20, pipelines_per_worker=8),
@@ -95,26 +77,32 @@ if True:
               run_pipeline, configs, no_delete=True, force=True)
 
 
-exit()
+    exit()
 
-videos = videos[:1]
+videos = videos
+cfg = cluster_config(
+    num_workers=50, worker=worker_config('n1-standard-32'),
+    pipelines=[gender_detection.GenderDetectionPipeline])
 
-
-# with make_cluster(no_delete=True) as cluster:
-#     db_wrapper = ScannerWrapper.create(cluster=cluster, enable_watchdog=False)
-if True:
-    db_wrapper = ScannerWrapper.create()
+with make_cluster(cfg, sql_pool=4, no_delete=True) as db_wrapper:
     db = db_wrapper.db
 
+# if True:
+#     db_wrapper = ScannerWrapper.create()
+
+    frames = par_for(frames_for_video, videos, workers=8)
+    videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames) if len(f) > 0])
+    videos = list(videos)
+    frames = list(frames)
     detect_genders(
         db,
         videos=[v.for_scannertools() for v in videos],
         db_videos=videos,
-        frames=[frames_for_video(v) for v in videos],
-        faces=[ScannerSQLTable(Face, v) #num_elements=len(f))
+        frames=frames,
+        faces=[ScannerSQLTable(Face, v, num_elements=len(f))
                for v, f in zip(videos, frames)],
         run_opts={
-            'io_packet_size': 10,
-            'work_packet_size': 10
-        },
-        cache=False)
+            'io_packet_size': 500,
+            'work_packet_size': 20,
+            'pipeline_instances_per_node': 4
+        })

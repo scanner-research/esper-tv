@@ -1,5 +1,5 @@
 import scannertools as st
-from scannerpy import Database
+from scannerpy import Database, register_python_op
 import os
 import socket
 import subprocess as sp
@@ -176,3 +176,16 @@ class ScannerSQLPipeline:
 
     def parse_output(self):
         pass
+
+
+@register_python_op(name='BboxesFromJson')
+def bboxes_from_json(config, bboxes: bytes) -> bytes:
+    bboxes = json.loads(bboxes.decode('utf-8'))
+    return writers.bboxes([
+        config.protobufs.BoundingBox(
+            x1=bb['bbox_x1'],
+            x2=bb['bbox_x2'],
+            y1=bb['bbox_y1'],
+            y2=bb['bbox_y2'])
+        for bb in bboxes
+    ], config.protobufs)
