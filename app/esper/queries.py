@@ -1093,6 +1093,10 @@ def interview_with_person_x():
         for row in LabeledCommercial.objects.distinct('video_id')
     ]
 
+    TWENTY_SECONDS = 600
+    FORTY_FIVE_SECONDS = 1350
+    EPSILON = 10
+
     guest_name = "bernie sanders"
 
     # Load hosts and instances of guest from SQL
@@ -1118,8 +1122,8 @@ def interview_with_person_x():
     # This temporal predicate defines A overlaps with B, or A before by less than 10 frames,
     #   or A after B by less than 10 frames
     overlaps_before_or_after_pred = or_pred(
-            or_pred(overlaps(), before(max_dist=10), arity=2),
-            after(max_dist=10), arity=2)
+            or_pred(overlaps(), before(max_dist=EPSILON), arity=2),
+            after(max_dist=EPSILON), arity=2)
 
     # This code finds sequences of:
     #   guest with host overlaps/before/after host OR
@@ -1133,10 +1137,10 @@ def interview_with_person_x():
     # Sequences may be interrupted by shots where the guest or host don't
     #   appear, so dilate and coalesce to merge neighboring segments
     interviews = interview_candidates \
-            .dilate(600) \
+            .dilate(TEN_SECONDS) \
             .coalesce() \
-            .dilate(-600) \
-            .filter_length(min_length=1350)
+            .dilate(-1 * TEN_SECONDS) \
+            .filter_length(min_length=FORTY_FIVE_SECONDS)
 
     # Return intervals
     return intrvllists_to_result(interviews.get_allintervals())
@@ -1151,6 +1155,9 @@ def panels_rekall():
     from rekall.spatial_predicates import scene_graph
     from rekall.payload_predicates import payload_satisfies
     from esper.rekall import intrvllists_to_result_bbox
+
+    MIN_FACE_HEIGHT = 0.3
+    EPSILON = 0.05
 
     # Get list of sandbox video IDs
     sandbox_videos = [
@@ -1177,15 +1184,15 @@ def panels_rekall():
     # Define a scene graph for things that look like panels
     three_faces_scene_graph = {
         'nodes': [
-            { 'name': 'face1', 'predicates': [ height_at_least(0.3) ] },
-            { 'name': 'face2', 'predicates': [ height_at_least(0.3) ] },
-            { 'name': 'face3', 'predicates': [ height_at_least(0.3) ] }
+            { 'name': 'face1', 'predicates': [ height_at_least(MIN_FACE_HEIGHT) ] },
+            { 'name': 'face2', 'predicates': [ height_at_least(MIN_FACE_HEIGHT) ] },
+            { 'name': 'face3', 'predicates': [ height_at_least(MIN_FACE_HEIGHT) ] }
         ],
         'edges': [
             { 'start': 'face1', 'end': 'face2',
-                'predicates': [ same_value('y1', epsilon=0.05), left_of() ] }, 
+                'predicates': [ same_value('y1', epsilon=EPSILON), left_of() ] }, 
             { 'start': 'face2', 'end': 'face3',
-                'predicates': [ same_value('y1', epsilon=0.05), left_of() ] }, 
+                'predicates': [ same_value('y1', epsilon=EPSILON), left_of() ] }, 
         ]
     }
 

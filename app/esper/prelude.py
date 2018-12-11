@@ -273,19 +273,18 @@ class PyCache:
                 else:
                     raise Exception("Invalid cache method {}".format(method))
 
-        with Timer('Saving to cache: {}'.format(k)):
-            gc.disable()  # https://stackoverflow.com/a/36699998/356915
-            if (isinstance(v, list) or isinstance(v, tuple)) and len(v) >= NUM_CHUNKS:
-                n = len(v)
-                chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
-                par_for(
-                    save_chunk,
-                    [(i, v[(i * chunk_size):((i + 1) * chunk_size)]) for i in range(NUM_CHUNKS)],
-                    progress=False,
-                    workers=1)
-            else:
-                save_chunk((0, v))
-            gc.enable()
+        gc.disable()  # https://stackoverflow.com/a/36699998/356915
+        if (isinstance(v, list) or isinstance(v, tuple)) and len(v) >= NUM_CHUNKS:
+            n = len(v)
+            chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
+            par_for(
+                save_chunk,
+                [(i, v[(i * chunk_size):((i + 1) * chunk_size)]) for i in range(NUM_CHUNKS)],
+                progress=False,
+                workers=1)
+        else:
+            save_chunk((0, v))
+        gc.enable()
 
     def get(self, k, fn=None, force=False, method=DEFAULT_CACHE_METHOD, **kwargs):
         if not (all([self.has(k2, 0, m2) for k2, m2 in zip(k, method)])
@@ -324,16 +323,15 @@ class PyCache:
                     else:
                         raise Exception("Invalid cache method {}".format(method))
 
-            with Timer('Loading from cache: {}'.format(k)):
-                gc.disable()
-                if self.has(k, 1, method):
-                    loaded = flatten(
-                        par_for(
-                            load_chunk, list(range(NUM_CHUNKS)), workers=NUM_CHUNKS,
-                            progress=False))
-                else:
-                    loaded = load_chunk(0)
-                gc.enable()
+            gc.disable()
+            if self.has(k, 1, method):
+                loaded = flatten(
+                    par_for(
+                        load_chunk, list(range(NUM_CHUNKS)), workers=NUM_CHUNKS,
+                        progress=False))
+            else:
+                loaded = load_chunk(0)
+            gc.enable()
 
             return loaded
 

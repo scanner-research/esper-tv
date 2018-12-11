@@ -1,4 +1,4 @@
-# Data/build/debug directories
+# Datbuildebug directories
 scanner_db
 node_modules
 data
@@ -22,13 +22,14 @@ service-key.json
 npm-debug.log
 supervisord.conf
 video-analysis
+.env
 
 # File kinds
-db.bk.*
-yapf*.py
-*.sql
-*.bin
-*.mkv
-*.mp4
+**/db.bk.*
+**/yapf*.py
+**/*.sql
+**/*.bin
+**/*.mkv
+**/*.mp4
 **/*.pkl
 **/*_pb2.py
