@@ -122,7 +122,7 @@ def subtitles(request):
     sub_path = '/app/data/subs/orig/{}.{}.srt'.format(video.item_name(), srt)
 
     s = open(sub_path, 'rb').read().decode('utf-8')
-    vtt = srt_to_vtt(s, -5)
+    vtt = srt_to_vtt(s, 0)
 
     return HttpResponse(vtt, content_type="text/vtt")
 
