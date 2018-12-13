@@ -1,6 +1,8 @@
-import esper.rekall
+from esper.prelude import *
 from rekall.interval_list import IntervalList
-from rekall.temporal_predicates import not_pred, overlaps, or_pred, equal, before, after
+from rekall.logical_predicates import not_pred, or_pred
+from rekall.temporal_predicates import overlaps, equal, before, after
+import pysrt
 
 """
 All thresholds 
@@ -29,9 +31,32 @@ MAX_COMMERCIAL_GAP = 90
 MIN_COMMERCIAL_TIME_FINAL = 30
 MAX_ISOLATED_BLANK_TIME = 90
 
+"""
+Help functions
+"""
 def fid2second(fid, fps):
     second = 1. * fid / fps
     return second
+
+def time2second(time):
+    if len(time) == 3:
+        return time[0]*3600 + time[1]*60 + time[2]
+    elif len(time) == 4:
+        return time[0]*3600 + time[1]*60 + time[2] + time[3] / 1000.0
+
+def second2time(second, sep=','):
+    h, m, s, ms = int(second) // 3600, int(second % 3600) // 60, int(second) % 60, int((second - int(second)) * 1000)
+    return '{:02d}:{:02d}:{:02d}{:s}{:03d}'.format(h, m, s, sep, ms)
+
+def load_transcript(transcript_path):
+    """"
+    Load transcript from *.srt file
+    """
+    transcript = []
+    subs = pysrt.open(transcript_path)
+    for sub in subs:
+        transcript.append((sub.text, time2second(tuple(sub.start)[:3]), time2second(tuple(sub.end)[:3])))
+    return transcript
 
 def get_blackframe_list(histogram, video_desp):
     """
@@ -68,36 +93,49 @@ def get_lowercase_intervals(transcript):
 
     return IntervalList([
         (start_sec, end_sec, 0)
-        for text, start_sec, end_sec in trascript
+        for text, start_sec, end_sec in transcript
         if is_lower_text(text)]) \
             .dilate(MAX_LOWERWINDOW_GAP / 2) \
             .coalesce() \
             .dilate(-1 * MAX_LOWERWINDOW_GAP / 2) \
-            .filter_length(min_length=MIN_LOWER_WINDOW)
+            .filter_length(min_length=MIN_LOWERWINDOW)
 
-def detect_commercial(video_desp, histogram, transcript):
+def detect_commercial(video, transcript_path, blackframe_list=None, histogram=None, verbose=True):
     """
     API for detecting commercial blocks from TV news video
-    Input:  video_desp (dict of fps, video_length, video_frames, frame_w, frame_h); 
-            histogram (list of histogram 16x3 bin for each frame);  
-            transcript (list of tuple(text, start_sec, end_sec));
+    
+    @video: django query set
+    @transcript_path: transcript_path
+    @blackframe_list: list of black frames index
+    @histogram: list of histogram 16x3 bin for each frame, not used if blackframe_list is provided  
+    
     Return: commercial_list (list of tuple((start_fid, start_sec), (end_fid, end_sec)), None if failed)
-            error_str (error message if failed, otherwise "")
     """
-    blackframe_list = get_blackframe_list(histogram)
-    black_windows = blackframe_list \
-            .dilate(1. / video_desp['fps']) \
+    transcript = load_transcript(transcript_path)
+    if blackframe_list is None:
+        blackframe_intervallist = get_blackframe_list(histogram)
+    else:
+        blackframe_intervallist = IntervalList([(fid2second(fid, video.fps),
+                                                fid2second(fid + 1, video.fps),
+                                                0) for fid in blackframe_list])
+    if verbose:
+        print("Load transcript and black frame list done")
+    
+    black_windows = blackframe_intervallist \
+            .dilate(1. / video.fps) \
             .coalesce() \
-            .dilate(-1. / video_desp['fps']) \
-            .filter(min_length=MIN_BLACKWINDOW * 1. / video_desp.fps)
-
+            .dilate(-1. / video.fps) \
+            .filter_length(min_length=MIN_BLACKWINDOW * 1. / video.fps)
+    if verbose:
+        print("Get black windows done")
+    
     # get all instances of >>, Announcer:, and  >> Announcer: in transcript
     arrow_text = get_text_intervals(">>", transcript)
     announcer_text = get_text_intervals("Announcer:", transcript)
-    arrow_announcer_text = get_text_intervals(">> Announcer:", tarnscript)
+    arrow_announcer_text = get_text_intervals(">> Announcer:", transcript)
     
     # get an interval for the whole video
-    whole_video = IntervalList([(0., video_desp['video_length'], 0)])
+    whole_video = IntervalList([(0., video.num_frames/video.fps, 0)])
 
     # whole video minus black windows to get segments in between black windows
     # then filter out anything that overlaps with ">>" as long as it's not
@@ -108,7 +146,7 @@ def detect_commercial(video_desp, histogram, transcript):
             stack.append(interval)
         else:
             last = stack.pop()
-            if or_pred(overlaps(), after(max_dist=.1)(interval, last))(interval, last):
+            if or_pred(overlaps(), after(max_dist=.1), arity=2)(interval, last):
                 if last.union(interval).length() > MAX_COMMERCIAL_TIME:
                     if last.length() > MAX_COMMERCIAL_TIME:
                         stack.append(Interval(
@@ -122,16 +160,19 @@ def detect_commercial(video_desp, histogram, transcript):
                     stack.append(last.union(interval))
             else:
                 stack.append(interval)
+        return stack
     commercials = whole_video \
             .minus(black_windows) \
             .filter_against(
                 arrow_text.filter_against(arrow_announcer_text,
-                    predicate=not_pred(overlaps())),
-                predicate=not_pred(overlaps())
+                    predicate=not_pred(overlaps(), arity=2)),
+                predicate=not_pred(overlaps(), arity=2)
             ) \
             .set_union(black_windows) \
             .fold_list(fold_fn, []) \
             .filter_length(min_length = MIN_COMMERCIAL_TIME)
+    if verbose:
+        print("Get commercial from black windows done")
     
     # add in lowercase intervals
     lowercase_intervals = get_lowercase_intervals(transcript)
@@ -140,25 +181,42 @@ def detect_commercial(video_desp, histogram, transcript):
             .dilate(MIN_COMMERCIAL_GAP / 2) \
             .coalesce() \
             .dilate(MIN_COMMERCIAL_GAP / 2)
+    if verbose:
+        print("Add commercial from lowercase transcript done")
+        
+    if verbose:
+        print(whole_video)
+        print(IntervalList([
+            (start_sec - TRANSCRIPT_DELAY, end_sec - TRANSCRIPT_DELAY, 0)
+            for text, start_sec, end_sec in transcript
+        ]).coalesce().size())
 
     # get blank intervals
     blank_intervals = whole_video.minus(IntervalList([
-        (start_sec, end_sec - TRANSCRIPT_DELAY, 0)
+        (start_sec - TRANSCRIPT_DELAY, end_sec - TRANSCRIPT_DELAY, 0)
         for text, start_sec, end_sec in transcript
-    ])).coalesce().filter_length(
+    ]).coalesce()).coalesce().filter_length(
             min_length=MIN_BLANKWINDOW, max_length=MAX_BLANKWINDOW)
+    
+    if verbose:
+        print("Got blank intervals")
+        print(blank_intervals.size())
+        print(commercials.size())
 
     # add in blank intervals, but only if adding in the new intervals doesn't
     #   get too long
     commercials = commercials.merge(blank_intervals,
             predicate=or_pred(before(max_dist=MAX_MERGE_GAP),
-                after(max_dist=MAX_MERGE_GAP))
+                after(max_dist=MAX_MERGE_GAP), arity=2),
+            working_window=MAX_MERGE_GAP
             ) \
             .filter_length(max_length=MAX_MERGE_DURATION) \
             .set_union(commercials) \
             .dilate(MIN_COMMERCIAL_GAP / 2) \
             .coalesce() \
             .dilate(MIN_COMMERCIAL_GAP / 2)
+    if verbose:
+        print("Add commercial from blank transcript done")
 
     # post-process commercials to get rid of gaps, small commercials, and
     #   islated blocks
@@ -168,8 +226,13 @@ def detect_commercial(video_desp, histogram, transcript):
             .filter_against(
                     arrow_text.filter_against(
                         announcer_text,
-                        predicate=not_pred(overlaps())
-                    ), predicate=not_pred(overlaps()))
+                        predicate=not_pred(overlaps()),
+                        working_window=1.0
+                    ), predicate=not_pred(overlaps()),
+                    working_window=1.0)
+    
+    if verbose:
+        print("Done with small gaps")
 
     # merge with small gaps, but only if that doesn't make things too long
     commercials = commercials \
@@ -182,12 +245,13 @@ def detect_commercial(video_desp, histogram, transcript):
     # get isolated commercials
     not_isolated_commercials = commercials.filter_against(commercials,
             predicate=or_pred(before(max_dist=MAX_COMMERCIAL_TIME),
-                after(max_dist=MAX_COMMERCIAL_TIME)))
+                after(max_dist=MAX_COMMERCIAL_TIME), arity=2),
+            working_window=MAX_COMMERCIAL_TIME)
     isolated_commercials = commercials.minus(not_isolated_commercials)
     commercials_to_delete = isolated_commercials \
             .filter_length(max_length=MIN_COMMERCIAL_TIME_FINAL) \
             .set_union(isolated_commercials \
-                .filter_against(blank_intervals, predicate=equals()) \
+                .filter_against(blank_intervals, predicate=equal()) \
                 .filter_length(max_length=MAX_ISOLATED_BLANK_TIME))
 
     commercials = commercials.minus(commercials_to_delete)

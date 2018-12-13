@@ -9,51 +9,20 @@ import math
 import tempfile
 import re
 
-def get_audio_length(video):
-    url = video.url()
-    log = tempfile.NamedTemporaryFile(suffix='.txt').name
-    cmd = 'ffprobe -show_streams -i ' + \
-        '\"' + url + '\"' + ' > ' + log
-    os.system(cmd)
-    format_str = open(log, 'r').read()
-    return float(re.findall(r'\nduration=(.*)', format_str)[1])
-
 SEG_LENGTH = 60
 
 def main():
     # set test video list
-#     video_list = ['CNNW_20161116_200000_CNN_Newsroom_With_Brooke_Baldwin']
-    video_list = pickle.load(open('/app/data/tvnews_std_sample.pkl', 'rb'))['three_year'][:500]
-    
-    # remove videos whose result is already dumped
-    # todo
-    
-    # load videos from database
-    videos = [Video.objects.filter(path__contains=video_name)[0] for video_name in video_list]
-#     videos = []
-#     video_list_copy = video_list.copy()
-#     for video_name in video_list_copy:
-#         video_filter = Video.objects.filter(path__contains=video_name)
-#         if len(video_filter) > 0:
-#             videos.append(video_filter[0])
-#         else:
-#             video_list.remove(video_name)
+#     video_list = ['CNNW_20160107_180000_Wolf']
+
+    videos = Video.objects.filter(threeyears_dataset=True).all()
+    addtional_field = pickle.load(open('/app/data/addtional_field.pkl', 'rb'))
+    videos = [video for video in videos if addtional_field[video.id]['valid_transcript']]
+    videos = videos[300:2500]
+
+    # todo: remove videos whose result is already dumped
     
     # get audio length
-    audio_length = []
-    pkl_path = '/app/data/audio_length_dict.pkl'
-    if os.path.exists(pkl_path):
-        audio_length_dict = pickle.load(open(pkl_path, 'rb'))
-    else:
-        audio_length_dict = {}
-    for video_name, video in zip(video_list, videos):
-        if video_name in audio_length_dict:
-            audio_length += [audio_length_dict[video_name]]
-        else:
-            audio_length += [get_audio_length(video)]
-            audio_length_dict[video_name] = audio_length[-1]
-    pickle.dump(audio_length_dict, open(pkl_path, 'wb'))
-    
 #     pkl_path = '/app/data/audio_length_dict.pkl'
 #     audio_length_dict = pickle.load(open(pkl_path, 'rb'))
 #     audio_length = [audio_length_dict[video_name] for video_name in video_list]
@@ -62,31 +31,39 @@ def main():
     audios = [audio.AudioSource(video.for_scannertools(), frame_size=SEG_LENGTH) for video in videos]
     
     # set up transcripts 
-    captions = [audio.CaptionSource('tvnews/subs10/'+video_name, max_time=length , window_size=SEG_LENGTH) 
-                for video_name, length in zip(video_list, audio_length)]
+    captions = [audio.CaptionSource('tvnews/subs10/'+video.item_name(), 
+                                    max_time=addtional_field[video.id]['audio_duration'] , 
+                                    window_size=SEG_LENGTH) 
+                for video in videos]
     
-    # set up run ops
-    run_opts = {'pipeline_instances_per_node': 1}
+    # set up run opts
+    run_opts = {'pipeline_instances_per_node': 32, 'checkpoint_frequency': 5}
     
-    # local run
-    db = scannerpy.Database(workers_per_node=64)
+    # set up align opts
+    align_opts = {'seg_length' : 60,
+                  'max_misalign' : 10,
+                  'num_thread' : 1,
+                  'exhausted' : False,
+                  'align_dir' : None,
+                  'res_path' : None,
+#                   'align_dir' : '/app/data/subs/orig/',
+#                   'res_path' : '/app/result/test_align_3y.pkl',
+    }
     
-    # kubernete run
-#     cfg = cluster_config(
-#         num_workers=5,
-#         worker=worker_config('n1-standard-32'))
-#     with make_cluster(cfg, no_delete=True) as db_wrapper:
-#         db = db_wrapper.db
-
-    transcript_alignment.align_transcript_pipeline(db=db, audio=audios, captions=captions, cache=True, run_opts=run_opts)
-#     transcript_alignment.align_transcript(db, video_list=video_list, audio=audios, caption=captions, 
-#                                           cache=True, 
-#                                           run_opts={'pipeline_instances_per_node': 64},
-#                                           align_dir=None,
-#                                           res_path=None)
-#                                                    align_dir='/app/result/aligned_transcript_1000',
-#                                                    res_path='/app/result/test_align_1000.pkl')
+    '''local run'''
+#     db = scannerpy.Database()
+#     transcript_alignment.align_transcript(db, videos, audios, captions, run_opts, align_opts, cache=False) 
     
+    '''kubernete run'''
+    cfg = cluster_config(
+        num_workers=50,
+        worker=worker_config('n1-standard-32'))
+    
+    with make_cluster(cfg, no_delete=True) as db_wrapper:
+        db = db_wrapper.db
+        transcript_alignment.align_transcript(db, videos, audios, captions, run_opts, align_opts, cache=False) 
+                                          
+                                         
 if __name__ == "__main__": 
     main()
     
