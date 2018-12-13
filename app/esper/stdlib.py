@@ -313,7 +313,7 @@ UnlabeledFace = _UnlabeledFace()
 
 
 def esper_js_globals():
-    import esper.queries as queries
+    import esper.queries.queries as queries
 
     def get_fields(cls):
         fields = cls._meta.get_fields()

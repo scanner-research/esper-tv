@@ -49,7 +49,7 @@ if False:
         def run_pipeline(db, videos, frames, **kwargs):
             return face_detection.detect_faces(db, videos=[v.for_scannertools() for v in videos], frames=frames, cache=False, **kwargs)
 
-        cfg = cluster_config(num_workers=5, worker=worker_config('n1-standard-32'), workers_per_node=8)
+        cfg = cluster_config(num_workers=5, worker=worker_config('n1-standard-32'))
         configs = [(cfg, [ScannerJobConfig(io_packet_size=1000, work_packet_size=20, batch=1)])]
         bench('face', {'videos': videos, 'frames': [[f['number'] for f in Frame.objects.filter(video=v).values('number').order_by('number')] for v in videos]},
               run_pipeline, configs, no_delete=True, force=True)
