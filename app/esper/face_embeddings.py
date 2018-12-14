@@ -31,6 +31,10 @@ def get(ids):
     return _EMB_DATA.get(ids)
 
 
+def mean(ids):
+    return _EMB_DATA.mean(ids)
+
+
 def features(ids):
     result = _EMB_DATA.get(ids)
     assert len(result) == len(ids)

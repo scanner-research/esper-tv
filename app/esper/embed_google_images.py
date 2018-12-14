@@ -24,10 +24,7 @@ if not os.path.exists(TMP_DOWNLOAD_DIR):
 IMG_CACHE_DIR = '/app/data/google_images'
 if not os.path.exists(IMG_CACHE_DIR):
     os.makedirs(IMG_CACHE_DIR)
-    
 
-# MTCNN_MODEL_DIR = '/app/deps/facenet/src/align'
-# FACENET_MODEL_DIR = '/app/deps/facenet/models/20170512-110547'
 
 BoundingBox = namedtuple('BoundingBox', ['x1', 'x2', 'y1', 'y2'])
 

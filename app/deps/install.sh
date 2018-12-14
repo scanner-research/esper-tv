@@ -36,7 +36,7 @@ pip3 install -r requirements.txt
 ./get_models.sh
 python3 setup.py install --user
 if [ $NO_TEST != 1 ]; then
-	pytest -v tests
+        pytest -v tests
 fi
 
 # Rs-Embed
@@ -49,7 +49,8 @@ pip3 install -r requirements.txt
 python3 setup.py install --user
 if [ $NO_TEST != 1 ]; then
         #echo 'Skipping Rs-Embed tests... This is a TODO due to env issues'
-	cd tests
-	pytest -v .
+        cd tests
+        pytest -v .
 fi
 
+echo "SUCCESS! All dependencies installed"
