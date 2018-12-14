@@ -682,6 +682,8 @@ def esper_widget(result, **kwargs):
     import vgrid_jupyter
     if not 'select_mode' in kwargs:
         kwargs['select_mode'] = 1
+    if not 'disable_playback' in kwargs:
+        kwargs['disable_playback'] = False
     return vgrid_jupyter.VGridWidget(
         result=result_with_metadata(result),
         jsglobals=esper_js_globals(),
