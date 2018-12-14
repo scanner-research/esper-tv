@@ -84,3 +84,7 @@ def logreg(ids, labels, min_thresh=0., max_thresh=1., num_epochs=10,
     return _EMB_DATA.logreg(
         ids, labels, min_thresh, max_thresh, num_epochs,
         learning_rate, l2_penalty, l1_penalty)
+
+
+def logreg_predict(weights, min_thresh=-1, max_thresh=2):
+    return _EMB_DATA.logreg_predict(weights, min_thresh, max_thresh)
