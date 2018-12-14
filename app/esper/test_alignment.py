@@ -18,7 +18,7 @@ def main():
     videos = Video.objects.filter(threeyears_dataset=True).all()
     addtional_field = pickle.load(open('/app/data/addtional_field.pkl', 'rb'))
     videos = [video for video in videos if addtional_field[video.id]['valid_transcript']]
-    videos = videos[300:2500]
+    videos = videos[20000:30000]
 
     # todo: remove videos whose result is already dumped
     
@@ -28,11 +28,14 @@ def main():
 #     audio_length = [audio_length_dict[video_name] for video_name in video_list]
     
     # load audios from videos
-    audios = [audio.AudioSource(video.for_scannertools(), frame_size=SEG_LENGTH) for video in videos]
+    audios = [audio.AudioSource(video.for_scannertools(), 
+                                frame_size=SEG_LENGTH, 
+                                duration=addtional_field[video.id]['audio_duration']) 
+              for video in videos]
     
     # set up transcripts 
     captions = [audio.CaptionSource('tvnews/subs10/'+video.item_name(), 
-                                    max_time=addtional_field[video.id]['audio_duration'] , 
+                                    max_time=addtional_field[video.id]['audio_duration'], 
                                     window_size=SEG_LENGTH) 
                 for video in videos]
     
@@ -56,14 +59,15 @@ def main():
     
     '''kubernete run'''
     cfg = cluster_config(
-        num_workers=50,
+        num_workers=100,
         worker=worker_config('n1-standard-32'))
     
     with make_cluster(cfg, no_delete=True) as db_wrapper:
         db = db_wrapper.db
-        transcript_alignment.align_transcript(db, videos, audios, captions, run_opts, align_opts, cache=False) 
-                                          
-                                         
+        transcript_alignment.align_transcript_pipeline(db=db, audio=audios, captions=captions, cache=False, 
+                                                       run_opts=run_opts, align_opts=align_opts)
+
+        
 if __name__ == "__main__": 
     main()
     
