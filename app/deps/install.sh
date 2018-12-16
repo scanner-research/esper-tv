@@ -4,7 +4,7 @@
 NO_TEST=${NO_TEST:=0}
 
 # Fail fast
-set -e 
+set -e
 
 DEPS_DIR=$(pwd)
 
@@ -13,9 +13,9 @@ DEPS_DIR=$(pwd)
 cd $DEPS_DIR
 echo "Installing Rekall"
 cd rekall
-pip3 install -r requirements.txt
+pip3 install -e --user .
 if [ $NO_TEST != 1 ]; then
-        pytest -v test
+        python3 setup.py test
 fi
 
 # Model server
