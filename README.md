@@ -34,7 +34,8 @@ $ pip3 install -r requirements.txt
 $ python3 configure.py --config config/local.toml
 $ docker-compose up -d
 $ docker-compose exec app ./deps/install-rust.sh
-$ docker-compose exec app ./deps/install.sh
+$ docker-compose exec app bash -c "source /root/.cargo/env && ./deps/install.sh"
+$ docker-compose exec app bash -c "npm install && npm run build"
 ```
 
 If you run into an error `Directory '.' is not installable. File 'setup.py' not found.`, then you did not clone with the `--recursive` flag. You need to run:
