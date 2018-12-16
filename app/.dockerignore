@@ -1,1 +1,35 @@
-.gitignore
+# Datbuildebug directories
+scanner_db
+node_modules
+data
+deps
+google_images
+nets
+.cache
+spark-data
+pg
+subs
+tmp
+assets/bundles
+assets/thumbnails
+assets/audio
+.ipynb_checkpoints
+rust-scripts/target
+rust-scripts/build
+esper_jupyter
+# Specific files
+service-key.json
+npm-debug.log
+supervisord.conf
+video-analysis
+.env
+
+# File kinds
+**/db.bk.*
+**/yapf*.py
+**/*.sql
+**/*.bin
+**/*.mkv
+**/*.mp4
+**/*.pkl
+**/*_pb2.py

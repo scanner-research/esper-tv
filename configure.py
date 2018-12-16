@@ -76,9 +76,6 @@ services:
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ${{HOME}}/.esper/.local:/root/.local
-      - ${{HOME}}/scannertools:/opt/scannertools
-      - ${{HOME}}/vgrid:/opt/vgrid
-      - ${{HOME}}/vgrid_jupyter:/opt/vgrid_jupyter
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:
@@ -129,16 +126,24 @@ ports: ["5432"]
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', required=True)
-    parser.add_argument('--extra-processes', nargs='*', default=[], choices=extra_processes.keys())
-    parser.add_argument('--extra-services', nargs='*', default=[], choices=extra_services.keys())
-    parser.add_argument('--no-build', action='store_true')
-    parser.add_argument('--build-tf', action='store_true')
-    parser.add_argument('--build-device', default='cpu')
-    parser.add_argument('--base-only', action='store_true')
-    parser.add_argument('--no-pull', action='store_true')
-    parser.add_argument('--hostname')
-    parser.add_argument('--build-remote', action='store_true')
+    parser.add_argument('--config', '-c', required=True,
+                        help='Path to Esper configuration TOML, e.g. config/default.toml')
+    parser.add_argument('--extra-processes', nargs='*', default=[], choices=extra_processes.keys(),
+                        help='Optional processes to run by default in application container')
+    parser.add_argument('--extra-services', nargs='*', default=[], choices=extra_services.keys(),
+                        help='Optional Docker containers to run')
+    parser.add_argument('--no-build', action='store_true', help='Don\'t build any Docker images')
+    parser.add_argument('--build-tf', action='store_true', help='Build TensorFlow from scratch')
+    parser.add_argument('--build-device', choices=['cpu', 'gpu'],
+                        help='Override to build Docker image for particular device')
+    parser.add_argument('--base-only', action='store_true',
+                        help='Only build base image, not application image')
+    parser.add_argument('--no-pull', action='store_true',
+                        help='Don\'t automatically pull latest scannertools image')
+    parser.add_argument('--push-remote', action='store_true',
+                        help='Push base image to Google Cloud Container Registry')
+    parser.add_argument('--scannertools-dir', help='Path to Scannertools directory (for development)')
+    parser.add_argument('--hostname', help='Internal use only')
     args = parser.parse_args()
 
     # TODO(wcrichto): validate config file
@@ -172,6 +177,10 @@ def main():
 
     config.services.app.environment.append('DEVICE={}'.format(device))
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
+
+    if args.scannertools_dir is not None:
+        config.services.app.volumes.append(
+            '{}:/opt/scannertools'.format(os.path.abspath(args.scannertools_dir)))
 
     # Additional Docker services
     for svc in args.extra_services:
@@ -277,10 +286,12 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             until that's debugged.""")
             exit(1)
 
+        build_device = device if args.build_device is None else args.build_device
+
         build_args = {
             'cores': cores,
-            'tag': 'cpu' if args.build_device == 'cpu' else 'gpu-9.1-cudnn7',
-            'device': args.build_device,
+            'tag': 'cpu' if build_device == 'cpu' else 'gpu-9.1-cudnn7',
+            'device': build_device,
             'tf_version': TF_VERSION,
             'build_tf': 'on' if args.build_tf else 'off'
         }
@@ -290,19 +301,19 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
         sp.check_call(
             'docker build {pull} -t {base_name}:{device} {build_args} -f app/Dockerfile.base app'.
             format(
-                device=args.build_device,
+                device=build_device,
                 base_name=base_name,
                 pull='--pull' if not args.no_pull else '',
                 build_args=' '.join(
                     ['--build-arg {}={}'.format(k, v) for k, v in build_args.items()])),
             shell=True)
 
-        if 'google' in base_config and args.build_remote:
+        if 'google' in base_config and args.push_remote:
             base_url = 'gcr.io/{project}'.format(project=base_config.google.project)
             sp.check_call(
                 'docker tag {base_name}:{device} {base_url}/{base_name}:{device} && \
                 gcloud docker -- push {base_url}/{base_name}:{device}'.format(
-                    device=args.build_device,
+                    device=build_device,
                     base_name=base_name,
                     base_url=base_url),
                 shell=True)
