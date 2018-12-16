@@ -718,8 +718,3 @@ def model_defaults(Model):
         for f in Model._meta.get_fields()
         if hasattr(f, 'default') and f.default is not NOT_PROVIDED
     }
-
-def mutual_info(p):
-    # TODO: reimplement this
-    r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p]})
-    return r.json()

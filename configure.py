@@ -38,7 +38,6 @@ command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 }
 
 extra_processes = {
-    'subserver': 'bash -c "cd subserver && source /root/.cargo/env && cargo run --release"',
     'npm': 'npm run watch --color'
 }
 
