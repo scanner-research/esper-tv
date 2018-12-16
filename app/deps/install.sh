@@ -45,7 +45,7 @@ echo "Installing Rs-Embed"
 cd rs-embed
 rustup update
 rustup override set nightly
-pip3 install --user -e .
+pip3 install --user .
 if [ $RUN_TESTS == 1 ]; then
         #echo 'Skipping Rs-Embed tests... This is a TODO due to env issues'
         python3 setup.py test
