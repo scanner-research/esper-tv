@@ -1,7 +1,7 @@
 #!/bin/bash
 # Temporary solution to reinstall deps on container restart.
 
-NO_TEST=${NO_TEST:=0}
+RUN_TESTS=${RUN_TESTS:=0}
 
 # Fail fast
 set -e
@@ -15,7 +15,7 @@ cd $DEPS_DIR
 echo "Installing Rekall"
 cd rekall
 pip3 install --user -e .
-if [ $NO_TEST != 1 ]; then
+if [ $RUN_TESTS == 1 ]; then
         python3 setup.py test
 fi
 
@@ -25,7 +25,7 @@ echo "Installing Model-Server"
 cd esper-model-server
 ./extract_data.sh
 pip3 install --user -r requirements.txt
-if [ $NO_TEST != 1 ]; then
+if [ $RUN_TESTS == 1 ]; then
         pytest -v tests
 fi
 
@@ -35,7 +35,7 @@ echo "Installing Caption-Index"
 cd caption-index
 pip3 install --user -e .
 ./get_models.sh
-if [ $NO_TEST != 1 ]; then
+if [ $RUN_TESTS == 1 ]; then
         python3 setup.py test
 fi
 
@@ -46,7 +46,7 @@ cd rs-embed
 rustup update
 rustup override set nightly
 pip3 install --user -e .
-if [ $NO_TEST != 1 ]; then
+if [ $RUN_TESTS == 1 ]; then
         #echo 'Skipping Rs-Embed tests... This is a TODO due to env issues'
         python3 setup.py test
 fi
