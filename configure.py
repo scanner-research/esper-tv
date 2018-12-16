@@ -76,6 +76,7 @@ services:
       - ${{HOME}}/.esper/.bash_history:/root/.bash_history
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
+      - ${{HOME}}/.esper/.local:/root/.local
       - ${{HOME}}/scannertools:/opt/scannertools
       - ${{HOME}}/vgrid:/opt/vgrid
       - ${{HOME}}/vgrid_jupyter:/opt/vgrid_jupyter
