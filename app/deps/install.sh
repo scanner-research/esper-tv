@@ -66,6 +66,15 @@ npm install
 npm run build
 cd ..
 pip3 install --user -e .
+
+jupyter nbextension enable --py --user widgetsnbextension
+jupyter contrib nbextension install --user --skip-running-check
+jupyter nbextensions_configurator enable --user
+jupyter nbextension enable hide_input/main
+jupyter nbextension enable toc2/main
+jupyter nbextension enable code_prettify/autopep8
+jupyter nbextension enable execute_time/ExecuteTime
+
 jupyter nbextension install vgrid_jupyter --py --symlink --user --overwrite
 jupyter nbextension enable vgrid_jupyter --py --user
 

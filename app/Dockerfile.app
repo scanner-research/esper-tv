@@ -23,19 +23,8 @@ RUN pip3 install -r requirements.app.txt
 # supervisor only works with python2, so have to specially download old pip to install it
 RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python get-pip.py && pip install supervisor==3.3.3
 
-# Install baseline Jupyter extensions
-COPY .deps/nbconfig /root/.jupyter/nbconfig
-COPY .deps/beakerx.json /root/.jupyter/beakerx.json
+# IPython config
 COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
-RUN jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
-    jupyter contrib nbextension install && \
-    jupyter nbextensions_configurator enable && \
-    jupyter nbextension enable hide_input/main && \
-    jupyter nbextension enable toc2/main && \
-    jupyter nbextension enable code_prettify/autopep8 && \
-    jupyter nbextension enable execute_time/ExecuteTime && \
-    beakerx install && \
-    python3 -c "import matplotlib"
 
 # Fix npm hanging on OS X
 # https://github.com/npm/npm/issues/7862#issuecomment-220798263

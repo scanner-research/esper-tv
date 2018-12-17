@@ -76,6 +76,7 @@ services:
       - ${{HOME}}/.esper/.cargo:/root/.cargo
       - ${{HOME}}/.esper/.rustup:/root/.rustup
       - ${{HOME}}/.esper/.local:/root/.local
+      - ${{HOME}}/.esper/.jupyter:/root/.jupyter
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:
