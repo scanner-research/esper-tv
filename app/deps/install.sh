@@ -1,5 +1,4 @@
 #!/bin/bash
-# Temporary solution to reinstall deps on container restart.
 
 RUN_TESTS=${RUN_TESTS:=0}
 
@@ -14,7 +13,7 @@ pushd .
 cd $DEPS_DIR
 echo "Installing Rekall"
 cd rekall
-pip3 install --user -e .
+pip3 install --upgrade --force-reinstall --user -e .
 if [ $RUN_TESTS == 1 ]; then
         python3 setup.py test
 fi
@@ -33,7 +32,9 @@ fi
 cd $DEPS_DIR
 echo "Installing Caption-Index"
 cd caption-index
-pip3 install --user -e .
+rustup update
+rustup override set nightly
+pip3 install --upgrade --force-reinstall --user .
 ./get_models.sh
 if [ $RUN_TESTS == 1 ]; then
         python3 setup.py test
@@ -45,9 +46,8 @@ echo "Installing Rs-Embed"
 cd rs-embed
 rustup update
 rustup override set nightly
-pip3 install --user .
+pip3 install --upgrade --force-reinstall --user .
 if [ $RUN_TESTS == 1 ]; then
-        #echo 'Skipping Rs-Embed tests... This is a TODO due to env issues'
         python3 setup.py test
 fi
 
@@ -65,7 +65,7 @@ npm link vgrid
 npm install
 npm run build
 cd ..
-pip3 install --user -e .
+pip3 install --upgrade --force-reinstall --user -e .
 
 jupyter nbextension enable --py --user widgetsnbextension
 jupyter contrib nbextension install --user --skip-running-check
