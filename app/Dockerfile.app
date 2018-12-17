@@ -28,8 +28,8 @@ COPY .deps/nbconfig /root/.jupyter/nbconfig
 COPY .deps/beakerx.json /root/.jupyter/beakerx.json
 COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
 RUN jupyter nbextension enable --py --sys-prefix widgetsnbextension && \
-    jupyter contrib nbextension install --user && \
-    jupyter nbextensions_configurator enable --user && \
+    jupyter contrib nbextension install && \
+    jupyter nbextensions_configurator enable && \
     jupyter nbextension enable hide_input/main && \
     jupyter nbextension enable toc2/main && \
     jupyter nbextension enable code_prettify/autopep8 && \
