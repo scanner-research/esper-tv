@@ -466,6 +466,7 @@ def visualize_commercial(commercial_gt, commercial_dict, video_length=3700):
     plt.show()
     
     if num_res > 0:
+        print('Number of videos = %d' %(num_res))
         print("Average precision = %3f , Average recall = %3f" %(avg_precision/num_res*100, avg_recall/num_res*100))
 
 def check_groundtruth(groundtruth, commercial_list):
