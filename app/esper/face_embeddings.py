@@ -28,28 +28,44 @@ _EMB_DATA = _load()
 
 
 def get(ids):
+    """List of face ids -> List of pairs (id, embedding)"""
     return _EMB_DATA.get(ids)
 
 
 def mean(ids):
+    """List of face ids -> mean embedding"""
     return _EMB_DATA.mean(ids)
 
 
 def features(ids):
+    """List of face ids -> List of embeddings"""
     result = _EMB_DATA.get(ids)
     assert len(result) == len(ids)
     return [np.array(v) for _, v in result]
 
 
 def sample(k):
+    """Returns list of face_ids, uniformly random with replacement"""
     return _EMB_DATA.sample(k)
 
 
 def exists(ids):
+    """List of face ids -> List of bools"""
     return _EMB_DATA.exists(ids)
 
 
 def dist(ids, targets=None, target_ids=None):
+    """
+    Computes the distance from each face in ids to the closest target
+    
+    Args:
+        ids: List of faces to compute distances for
+        targets: List of embeddings
+        target_ids: List of face_ids
+    
+    Returns:
+        List of distances in same order as as ids
+    """
     if targets is not None:
         targets = [
             [float(z) for z in x.tolist()] 
@@ -63,6 +79,18 @@ def dist(ids, targets=None, target_ids=None):
 
 
 def knn(targets=None, ids=None, k=2 ** 31, max_threshold=100.):
+    """
+    Computes distance of all faces to the targets 
+    (specified by targets or ids)
+    
+    Args:
+        targets: List of embeddings (i.e., list of floats)
+        ids: List of face ids (another way to specify targets
+        max_threshold: largest distance
+        
+    Returns:
+        List of (face_id, distance) pairs by asending distance
+    """
     if targets is not None:
         targets = [
             [float(z) for z in x.tolist()] 
@@ -76,11 +104,32 @@ def knn(targets=None, ids=None, k=2 ** 31, max_threshold=100.):
 
 
 def kmeans(ids, k=25):
+    """
+    Run kmeans on all face_ids in ids.
+    
+    Args:
+        ids: List of face_ids
+    
+    Returns:
+        List of (face_id, cluster number) pairs
+    """
     return _EMB_DATA.kmeans(ids, k)
 
 
 def logreg(ids, labels, min_thresh=0., max_thresh=1., num_epochs=10, 
            learning_rate=1., l2_penalty=0., l1_penalty=0.):
+    """
+    Args:
+        ids: List of face_ids
+        labels: List of 0, 1 labels
+    Returns:
+        (weights, List of (face_id, score) pairs by ascending score)
+    """
     return _EMB_DATA.logreg(
         ids, labels, min_thresh, max_thresh, num_epochs,
         learning_rate, l2_penalty, l1_penalty)
+
+
+def logreg_predict(weights, min_thresh=-1, max_thresh=2):
+    """Returns: same as logreg"""
+    return _EMB_DATA.logreg_predict(weights, min_thresh, max_thresh)

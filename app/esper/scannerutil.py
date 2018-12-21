@@ -1,5 +1,5 @@
 import scannertools as st
-from scannerpy import Database, register_python_op
+from scannerpy import Database
 import os
 import socket
 import subprocess as sp
@@ -110,10 +110,11 @@ class ScannerWrapper:
                 table='{} {}'.format(table, ' '.join(joins(Video)))
             ))
 
-    def sql_source_args(self, video, num_elements=None):
+    def sql_source_args(self, video, num_elements=None, filter=None):
         from query.models import Video
         return {
-            'filter': '{}.id = {}'.format(Video._meta.db_table, video.id),
+            'filter': '{}.id = {} {}'.format(
+                Video._meta.db_table, video.id, ('AND ' + filter) if filter is not None else ''),
             'num_elements': num_elements if num_elements is not None else 0
         }
 
@@ -144,16 +145,18 @@ class ScannerWrapper:
 
 
 class ScannerSQLTable(st.DataSource):
-    def __init__(self, cls, video, num_elements=None):
+    def __init__(self, cls, video, num_elements=None, filter=None):
         self._cls = cls
         self._video = video
         self._num_elements = num_elements
+        self._filter = filter
 
     def scanner_source(self, db):
         return ScannerWrapper(db).sql_source(self._cls)
 
     def scanner_args(self, db):
-        return ScannerWrapper(db).sql_source_args(self._video, num_elements=self._num_elements)
+        return ScannerWrapper(db).sql_source_args(
+            self._video, num_elements=self._num_elements, filter=self._filter)
 
 
 class ScannerSQLPipeline:
@@ -176,16 +179,3 @@ class ScannerSQLPipeline:
 
     def parse_output(self):
         pass
-
-
-@register_python_op(name='BboxesFromJson')
-def bboxes_from_json(config, bboxes: bytes) -> bytes:
-    bboxes = json.loads(bboxes.decode('utf-8'))
-    return writers.bboxes([
-        config.protobufs.BoundingBox(
-            x1=bb['bbox_x1'],
-            x2=bb['bbox_x2'],
-            y1=bb['bbox_y1'],
-            y2=bb['bbox_y2'])
-        for bb in bboxes
-    ], config.protobufs)

@@ -41,9 +41,6 @@ from pathlib import Path
 from contextlib import contextmanager
 from collections import defaultdict
 
-# Add rekall to path
-sys.path.append('/app/deps/rekall')
-
 # Access to Scanner protobufs
 cfg = Config()
 proto = ProtobufGenerator(cfg)
@@ -682,6 +679,8 @@ def esper_widget(result, **kwargs):
     import vgrid_jupyter
     if not 'select_mode' in kwargs:
         kwargs['select_mode'] = 1
+    if not 'disable_playback' in kwargs:
+        kwargs['disable_playback'] = False
     return vgrid_jupyter.VGridWidget(
         result=result_with_metadata(result),
         jsglobals=esper_js_globals(),
@@ -716,8 +715,3 @@ def model_defaults(Model):
         for f in Model._meta.get_fields()
         if hasattr(f, 'default') and f.default is not NOT_PROVIDED
     }
-
-def mutual_info(p):
-    # TODO: reimplement this
-    r = requests.post('http://localhost:8111/mutualinfo', json={'phrases': [p]})
-    return r.json()

@@ -1,6 +1,0 @@
-/target
-**/*.rs.bk
-rust_scripts.egg-info
-rust_scripts/*.so
-dist
-src/datatypes.rs

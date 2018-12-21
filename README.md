@@ -28,16 +28,24 @@ Docker version 17.12.0-ce, build c97c6d6
 Next, you will need to configure your Esper installation. If you are using Google Cloud, follow the instructions in [Getting started with Google Cloud](https://github.com/scanner-research/esper/blob/master/guides/google.md) and replace `local.toml` with `google.toml` below. Otherwise, edit any relevant configuration values in `config/local.toml`. Then run:
 
 ```
-$ git clone https://github.com/scanner-research/esper
+$ git clone --recursive https://github.com/scanner-research/esper
 $ cd esper
 $ pip3 install -r requirements.txt
-$ python3 configure.py --config config/local.toml --dataset default
-$ docker-compose pull
+$ python3 configure.py --config config/local.toml
 $ docker-compose up -d
-$ docker-compose exec app ./scripts/setup.sh
+$ docker-compose exec app ./deps/install-rust.sh
+$ docker-compose exec app bash -c "source /root/.cargo/env && ./deps/install.sh"
+$ docker-compose exec app bash -c "npm install && npm run build"
 ```
 
-You have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend. You will see a query interface, but we can't do anything with it until we get some data. Go through the [Demo](https://github.com/scanner-research/esper#demo) below to visualize some sample videos and metadata we have provided.
+If you run into an error `Directory '.' is not installable. File 'setup.py' not found.`, then you did not clone with the `--recursive` flag. You need to run:
+
+```
+$ git submodule init
+$ git submodule update
+```
+
+Now you have successfully setup Esper! Visit [http://localhost](http://localhost) (or whatever server you're running this on) to see the frontend. You will see a query interface, but we can't do anything with it until we get some data. Go through the [Demo](https://github.com/scanner-research/esper#demo) below to visualize some sample videos and metadata we have provided.
 
 **:warning: WARNING :warning:**: Esper is a tool for programmers. It uses a programmatic query interface, which means we use **_REMOTE CODE EXECUTION_** to run queries. DO NOT expose this interface publicly, or else risk having a hacker trash your computer, data, and livelihood.
 

@@ -10,9 +10,6 @@ from storehouse import StorehouseException
 import traceback
 import subprocess as sp
 import pandas as pd
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
 from time import strftime
 
 notifier = Notifier()
@@ -124,6 +121,12 @@ def bench(name, args, run_pipeline, configs, force=False, no_delete=False):
                     return pcache.get(run_name(cluster_config, job_config), force=force, fn=lambda: try_config(job_config))
 
                 results.append(list(map(try_config_cached, job_configs)))
+
+
+    # Don't do this at top-level in case this file is incidentally imported into Jupyter
+    import matplotlib
+    matplotlib.use('agg')
+    import matplotlib.pyplot as plt
 
     def plot(metrics, name):
         ax = metrics.plot('TIME', name)
