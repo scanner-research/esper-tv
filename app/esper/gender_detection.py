@@ -104,5 +104,5 @@ with make_cluster(cfg, sql_pool=4, no_delete=True) as db_wrapper:
         run_opts={
             'io_packet_size': 500,
             'work_packet_size': 20,
-            'pipeline_instances_per_node': 4
+            'pipeline_instances_per_node': 8
         })

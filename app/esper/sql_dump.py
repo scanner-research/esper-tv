@@ -1,6 +1,7 @@
 from esper.prelude import *
 from esper.spark import *
 import django.apps
+import os
 
 models = [m._meta.db_table for m in django.apps.apps.get_models(include_auto_created=True)]
 
@@ -16,8 +17,9 @@ with Timer('Exporting models'):
 
 with Timer('Ingest into Spark'):
     def transfer_model_spark(model):
-        df = spark.load_csv('/app/data/pg/{}.csv'.format(model))
-        spark.save(model, df)
+        if os.path.exists('/app/data/pg/{}.csv'.format(model)):
+            df = spark.load_csv('/app/data/pg/{}.csv'.format(model))
+            spark.save(model, df)
     par_for(transfer_model_spark, models, workers=8)
 
 with Timer('Ingest into BigQuery'):

@@ -25,7 +25,7 @@ def worker_config(machine_type):
 
 def cluster_config(**kwargs):
     return kube.ClusterConfig(
-        id='wc-test2',
+        id='wc-test',
         autoscale=True,
         master=master_config,
         **kwargs)
