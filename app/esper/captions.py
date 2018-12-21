@@ -49,7 +49,7 @@ def _init_doc_id_to_vid_id():
     print('{} videos have no documents'.format(len(video_name_to_id) - len(doc_id_to_vid_id)),
           file=sys.stderr)
     return doc_id_to_vid_id
-            
+
 
 DOCUMENT_ID_TO_VIDEO_ID = _init_doc_id_to_vid_id()
 VIDEO_ID_TO_DOCUMENT_ID = {v: k for k, v in DOCUMENT_ID_TO_VIDEO_ID.items()}
@@ -62,36 +62,56 @@ def _doc_ids_to_video_ids(results):
             if video_id is not None:
                 yield d._replace(id=video_id)
     return wrapper(results)
-        
 
-def topic_search(phrases, window_size=60):
+
+def _video_ids_to_doc_ids(vid_ids):
+    if vid_ids is None:
+        return None
+    else:
+        doc_ids = []
+        for v in vid_ids:
+            d = VIDEO_ID_TO_DOCUMENT_ID.get(v, None)
+            if d is not None:
+                doc_ids.append(d)
+            else:
+                print('Document not found for video id={}'.format(v))
+        assert len(doc_ids) > 0
+        return doc_ids
+
+
+def topic_search(phrases, window_size=60, video_ids=None):
     if not isinstance(phrases, list):
         raise TypeError('phrases should be a list of phrases/n-grams')
-    return _doc_ids_to_video_ids(caption_util.topic_search(phrases, INDEX, window_size))
-                            
+    documents = _video_ids_to_doc_ids(video_ids)
+    return _doc_ids_to_video_ids(
+        caption_util.topic_search(
+            phrases, INDEX, window_size, documents))
 
-def phrase_search(query):
-    return _doc_ids_to_video_ids(INDEX.search(query))
-    
+
+def phrase_search(query, video_ids=None):
+    documents = _video_ids_to_doc_ids(video_ids)
+    return _doc_ids_to_video_ids(
+        INDEX.search(query, documents=documents))
+
 
 # Set before forking, this is a hack
 LOWER_CASE_ALPHA_IDS = None
 
-    
+
 def _get_lowercase_segments(video_id, dilate=1, verbose=False):
     doc_id = VIDEO_ID_TO_DOCUMENT_ID.get(video_id, None)
     if doc_id is None:
         if verbose:
             print('No document for video id: {}'.format(video_id), file=sys.stderr)
         return []
-    
+
     def has_lowercase(posting):
         tokens = INDEX.tokens(doc_id, posting.idx, posting.len)
         for t in tokens:
             if t in LOWER_CASE_ALPHA_IDS:
                 return True
         return False
-    
+
     lowercase_segments = []
     curr_interval = None
     for interval in INDEX.intervals(doc_id, 0, 2 ** 31):
@@ -111,14 +131,14 @@ def _get_lowercase_segments(video_id, dilate=1, verbose=False):
     if curr_interval is not None:
         lowercase_segments.append(curr_interval)
     return lowercase_segments
-    
+
 
 def get_lowercase_segments(video_ids=None):
     if video_ids is None:
         video_ids = [v.id for v in Video.objects.filter(threeyears_dataset=True)]
     elif not isinstance(video_ids, list):
         video_ids = list(video_ids)
-    
+
     def has_lower_alpha(word):
         for c in word:
             if c.isalpha() and c.islower():
