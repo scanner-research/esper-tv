@@ -5,40 +5,42 @@ from query.models import *
 from datetime import timedelta
 
 
-NUM_MAJOR_CANONICAL_SHOWS = 40
+NUM_MAJOR_CANONICAL_SHOWS = 150
 
 MAJOR_CANONICAL_SHOWS = [
     x['show__canonical_show__name'] for x in
-    Video.objects.filter(
-        show__canonical_show__is_recurring=True,
-        threeyears_dataset=True # TODO: remove this check
-    ).values(
+    Video.objects.values(
         'show__canonical_show__name'
     ).annotate(
-        video_count=Count('id')
+        total_duration=Sum(
+            ExpressionWrapper(
+                F('num_frames') / F('fps'),
+                output_field=FloatField()))
     ).order_by(
-        '-video_count'
+        '-total_duration'
     ).values(
         'show__canonical_show__name'
     )[:NUM_MAJOR_CANONICAL_SHOWS]
 ]
 
 # Cache this
-total_shot_time_by_show = None
+_TOTAL_SHOT_TIME_BY_CSHOW = None
 
 
-def get_total_shot_time_by_show():
-    global total_shot_time_by_show
-    if total_shot_time_by_show is None:
+def get_total_shot_time_by_canonical_show():
+    global _TOTAL_SHOT_TIME_BY_CSHOW
+    if _TOTAL_SHOT_TIME_BY_CSHOW is None:
         query_results = Shot.objects.filter(
-            video__show__canonical_show__name__in=MAJOR_CANONICAL_SHOWS, in_commercial=False,
+            video__show__canonical_show__name__in=MAJOR_CANONICAL_SHOWS, 
+            in_commercial=False,
         ).values(
             'video__show__canonical_show__name'
         ).annotate(
             screen_time=Sum((F('max_frame') - F('min_frame')) / F('video__fps'),
                             output_field=FloatField())
         )
-        total_shot_time_by_show = { 
-            x['video__show__canonical_show__name'] : timedelta(seconds=x['screen_time']) for x in query_results 
+        _TOTAL_SHOT_TIME_BY_CSHOW = { 
+            x['video__show__canonical_show__name']: 
+            timedelta(seconds=x['screen_time']) for x in query_results 
         }
-    return total_shot_time_by_show
+    return _TOTAL_SHOT_TIME_BY_CSHOW
