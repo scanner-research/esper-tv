@@ -1,4 +1,5 @@
-FROM esper-base:cpu
+ARG base_name
+FROM ${base_name}:cpu
 ARG spark_version=2.4.0
 
 WORKDIR /opt

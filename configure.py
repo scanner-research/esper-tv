@@ -21,6 +21,7 @@ extra_services = {
         yaml.load("""
 build:
   context: ./spark
+  args: {}
 ports: ['8080:8080', '8081:8081', '7077']
 environment: []
 depends_on: [db]
@@ -188,6 +189,9 @@ def main():
     for svc in args.extra_services:
         config.services[svc] = extra_services[svc]
         config.services.app.depends_on.append(svc)
+
+        if svc == 'spark': 
+            config.services.spark.build.args.base_name = base_config.storage.base_image_name
 
     # Additional supervisord proceseses
     with open('app/.deps/supervisord.conf', 'r') as f:
