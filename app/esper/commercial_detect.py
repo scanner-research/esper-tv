@@ -465,9 +465,11 @@ def visualize_commercial(commercial_gt, commercial_dict, video_length=3700):
     cur_axes.axes.get_yaxis().set_visible(False)
     plt.show()
     
+    over_precision, over_recall = check_groundtruth_all(commercial_gt, commercial_dict)
     if num_res > 0:
         print('Number of videos = %d' %(num_res))
         print("Average precision = %3f , Average recall = %3f" %(avg_precision/num_res*100, avg_recall/num_res*100))
+        print("Overall precision = %3f , Overall recall = %3f" %(over_precision*100, over_recall*100))
 
 def check_groundtruth(groundtruth, commercial_list):
     # calculate precision and recall
@@ -481,6 +483,22 @@ def check_groundtruth(groundtruth, commercial_list):
     sum_com = 0
     for com in commercial_list:
         sum_com += com[1] - com[0]
-    precision = 1.0 * sum_overlap / sum_com
-    recall = 1.0 * sum_overlap / sum_gt
+    if sum_gt != 0:
+        precision = 1.0 * sum_overlap / sum_com 
+        recall = 1.0 * sum_overlap / sum_gt 
+    else:
+        precision = recall = 1
     return precision, recall
+
+def check_groundtruth_all(commercial_gt, commercial_dict):
+    sum_overlap, sum_com, sum_gt = 0, 0, 0
+    for video_name, gts in commercial_gt.items():
+        for gt in gts:
+            sum_gt += gt[1] - gt[0]
+            for com in commercial_dict[video_name]:
+                sum_overlap += calculate_overlap(gt, com)
+        for com in commercial_dict[video_name]:
+            sum_com += com[1] - com[0]
+    precision = 1.0 * sum_overlap / sum_com 
+    recall = 1.0 * sum_overlap / sum_gt 
+    return precision, recall    
