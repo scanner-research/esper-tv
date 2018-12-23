@@ -105,7 +105,7 @@ class ScannerWrapper:
                     for field in cls._meta.get_fields()
                     if not field.is_relation
                 ]),
-                id='{}.id'.format(Frame._meta.db_table),
+                id='{}.id'.format(table),
                 group='{}.number'.format(Frame._meta.db_table),
                 table='{} {}'.format(table, ' '.join(joins(Video)))
             ))

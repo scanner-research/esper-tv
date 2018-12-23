@@ -79,6 +79,8 @@ if False:
 
     exit()
 
+videos = list(Video.objects.filter(threeyears_dataset=False).order_by('id'))
+
 # Export packed embeddings and IDs into single files
 if False:
     def get_ids(video):
@@ -88,23 +90,29 @@ if False:
 
     import struct
     with open('/app/data/embs/sevenyears_ids.bin', 'wb') as f:
-        for ids in tqdm(all_ids):
-            f.write(b''.join([struct.pack('=Q', i) for i in ids]))
+        for i, ids in tqdm(enumerate(all_ids)):
+            path = '/app/data/embs/{:07d}.bin'.format(i)
+            if os.path.isfile(path):
+                f.write(b''.join([struct.pack('=Q', i) for i in ids]))
 
     with open('/app/data/embs/sevenyears_embs.bin', 'wb') as f:
         for i in tqdm(list(range(len(videos)))):
-            f.write(open('/app/data/embs/{:07d}.bin'.format(i), 'rb').read())
-            f.flush()
+            path = '/app/data/embs/{:07d}.bin'.format(i)
+            if os.path.isfile(path):
+                f.write(open(path, 'rb').read())
+                f.flush()
+
+    print('done')
+    exit()
 
 if __name__ == "__main__":
-    videos = list(Video.objects.filter(threeyears_dataset=False).order_by('id'))
 
     videos = videos
     cfg = cluster_config(
-        num_workers=50, worker=worker_config('n1-standard-32'),
+        num_workers=100, worker=worker_config('n1-standard-32'),
         pipelines=[face_embedding.FaceEmbeddingPipeline])
 
-    # with make_cluster(cfg, sql_pool=4, no_delete=True) as db_wrapper:
+    # with make_cluster(cfg, sql_pool=2, no_delete=True) as db_wrapper:
     if True:
         db_wrapper = ScannerWrapper.create()
 
@@ -112,9 +120,11 @@ if __name__ == "__main__":
         def load_frames():
             return par_for(frames_for_video, videos, workers=8)
         frames = pcache.get('frames', load_frames)
-        videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames) if len(f) > 0])
+        videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames)
+                                if len(f) > 0])
         videos = list(videos)
         frames = list(frames)
+
         embs = embed_faces(
             db,
             videos=[v.for_scannertools() for v in videos],
@@ -127,7 +137,6 @@ if __name__ == "__main__":
                 'pipeline_instances_per_node': 4
             })
 
-
         def load_embs(i):
             path = '/app/data/embs/{:07d}.bin'.format(i)
             if os.path.isfile(path):
@@ -139,8 +148,8 @@ if __name__ == "__main__":
                 f.write(b''.join(flat_emb))
 
         print('embs', len(embs))
-        for i in tqdm(range(len(embs))):
-            load_embs(i)
+        # for i in tqdm(range(len(embs))):
+        #     load_embs(i)
 
-        # for l in tqdm(list(batch(list(range(len(embs))), 100))):
-        #     par_for(load_embs, l, workers=8, progress=False)
+        for l in tqdm(list(batch(list(range(len(embs))), 100))):
+            par_for(load_embs, l, workers=8, progress=False)

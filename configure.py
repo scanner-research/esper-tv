@@ -72,11 +72,11 @@ services:
     depends_on: [db, frameserver, redis]
     volumes:
       - ./app:/app
-      - ${{HOME}}/.esper/.bash_history:/root/.bash_history
-      - ${{HOME}}/.esper/.cargo:/root/.cargo
-      - ${{HOME}}/.esper/.rustup:/root/.rustup
-      - ${{HOME}}/.esper/.local:/root/.local
-      - ${{HOME}}/.esper/.jupyter:/root/.jupyter
+      - {home}/.esper/.bash_history:/root/.bash_history
+      - {home}/.esper/.cargo:/root/.cargo
+      - {home}/.esper/.rustup:/root/.rustup
+      - {home}/.esper/.local:/root/.local
+      - {home}/.esper/.jupyter:/root/.jupyter
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:
@@ -96,13 +96,14 @@ services:
     ports: ['6379:6379']
     environment: []
 """.format(
-        nginx_port=NGINX_PORT,
-        ipython_port=IPYTHON_PORT,
-        cores=cores,
-        workers=cores * 2,
-        columns=tsize.columns,
-        lines=tsize.lines,
-        term=os.environ.get('TERM'))))
+    home=os.path.expanduser('~'),
+    nginx_port=NGINX_PORT,
+    ipython_port=IPYTHON_PORT,
+    cores=cores,
+    workers=cores * 2,
+    columns=tsize.columns,
+    lines=tsize.lines,
+    term=os.environ.get('TERM'))))
 
 db_local = DotMap(
     yaml.load("""
@@ -263,10 +264,17 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
         ]
 
         if base_config.storage.type == 'google':
+
+            if not 'AWS_ACCESS_KEY_ID' in os.environ:
+                raise Exception('Missing environment variable AWS_ACCESS_KEY_ID')
+
+            if not 'AWS_SECRET_ACCESS_KEY' in os.environ:
+                raise Exception('Missing environment variable AWS_SECRET_ACCESS_KEY')
+
             env_vars.extend([
                 'BUCKET={}'.format(base_config.storage.bucket),
-                'AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}',
-                'AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}',
+                'AWS_ACCESS_KEY_ID={}'.format(os.environ['AWS_ACCESS_KEY_ID']),
+                'AWS_SECRET_ACCESS_KEY={}'.format(os.environ['AWS_SECRET_ACCESS_KEY'])
             ])
 
         service.environment.extend(env_vars)
