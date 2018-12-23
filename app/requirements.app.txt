@@ -26,6 +26,7 @@ psutil
 redis
 msgpack
 pyro-ppl==0.2.1
+pickle_cache
 
 #vega==0.5.0
 #textacy

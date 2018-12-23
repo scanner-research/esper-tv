@@ -22,12 +22,9 @@ import pandas as pd
 import sys
 import sqlparse
 import logging
-import pickle as pickle
-import marshal
 import json
 import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-import gc
 import requests
 import cv2
 import itertools
@@ -40,6 +37,7 @@ import csv
 from pathlib import Path
 from contextlib import contextmanager
 from collections import defaultdict
+from pickle_cache import PickleCache
 
 # Access to Scanner protobufs
 cfg = Config()
@@ -237,103 +235,7 @@ class Timer:
                                                                   int(t) % 60))
 
 
-CACHE_DIR = '/app/.cache'
-DEFAULT_CACHE_METHOD = 'pickle'
-NUM_CHUNKS = 8
-
-
-class PyCache:
-    def __init__(self):
-        if not os.path.isdir(CACHE_DIR):
-            os.mkdir(CACHE_DIR)
-
-    def _fname(self, k, i, method):
-        exts = {'pickle': 'pkl', 'marshal': 'msl', 'numpy': 'bin'}
-        return '{}/{}_{}.{}'.format(CACHE_DIR, k, i, exts[method])
-
-    def has(self, k, i=0, method=DEFAULT_CACHE_METHOD):
-        return os.path.isfile(self._fname(k, i, method))
-
-    def set(self, k, v, method=DEFAULT_CACHE_METHOD):
-        def save_chunk(args):
-            (i, v) = args
-            with open(self._fname(k, i, method), 'wb') as f:
-                if method == 'marshal':
-                    marshal.dump(v, f)
-                elif method == 'numpy':
-                    for arr in v:
-                        f.write(arr.tobytes())
-                elif method == 'pickle':
-                    pickler = pickle.Pickler(f, pickle.HIGHEST_PROTOCOL)
-                    pickler.fast = 1  # https://stackoverflow.com/a/15108940/356915
-                    pickler.dump(v)
-                else:
-                    raise Exception("Invalid cache method {}".format(method))
-
-        gc.disable()  # https://stackoverflow.com/a/36699998/356915
-        if (isinstance(v, list) or isinstance(v, tuple)) and len(v) >= NUM_CHUNKS:
-            n = len(v)
-            chunk_size = int(math.ceil(float(n) / NUM_CHUNKS))
-            par_for(
-                save_chunk,
-                [(i, v[(i * chunk_size):((i + 1) * chunk_size)]) for i in range(NUM_CHUNKS)],
-                progress=False,
-                workers=1)
-        else:
-            save_chunk((0, v))
-        gc.enable()
-
-    def get(self, k, fn=None, force=False, method=DEFAULT_CACHE_METHOD, **kwargs):
-        if not (all([self.has(k2, 0, m2) for k2, m2 in zip(k, method)])
-                if isinstance(k, tuple) else self.has(k, 0, method)) or force:
-            if fn is not None:
-                v = fn()
-                if isinstance(k, tuple):
-                    for (k2, v2, m2) in zip(k, v, method):
-                        self.set(k2, v2, m2)
-                else:
-                    self.set(k, v, method)
-                return v
-            else:
-                raise Exception('Missing cache key {}'.format(k))
-
-        if isinstance(k, tuple):
-            return tuple([self.get(k2, method=m2, **kwargs) for k2, m2 in zip(k, method)])
-
-        else:
-
-            def load_chunk(i):
-                with open(self._fname(k, i, method), 'rb') as f:
-                    if method == 'marshal':
-                        return marshal.load(f)
-                    elif method == 'numpy':
-                        dtype = kwargs['dtype']
-                        size = np.dtype(dtype).itemsize * kwargs['length']
-                        byte_str = f.read()
-                        assert len(byte_str) % size == 0
-                        return [
-                            np.frombuffer(byte_str[i:i + size], dtype=dtype)
-                            for i in range(0, len(byte_str), size)
-                        ]
-                    elif method == 'pickle':
-                        return pickle.load(f, encoding='latin1')
-                    else:
-                        raise Exception("Invalid cache method {}".format(method))
-
-            gc.disable()
-            if self.has(k, 1, method):
-                loaded = flatten(
-                    par_for(
-                        load_chunk, list(range(NUM_CHUNKS)), workers=NUM_CHUNKS,
-                        progress=False))
-            else:
-                loaded = load_chunk(0)
-            gc.enable()
-
-            return loaded
-
-
-pcache = PyCache()
+pcache = PickleCache(cache_dir='/app/.cache')
 
 
 class QuerySetMixin(object):
