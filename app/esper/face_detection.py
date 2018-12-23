@@ -54,9 +54,17 @@ if False:
         bench('face', {'videos': videos, 'frames': [[f['number'] for f in Frame.objects.filter(video=v).values('number').order_by('number')] for v in videos]},
               run_pipeline, configs, no_delete=True, force=True)
 
+
 with Timer('run'):
+
+    print('Getting frames')
+    def load_frames():
+        return [[f['number'] for f in Frame.objects.filter(video=v, shot_boundary=False).values('number').order_by('number')]
+                for v in tqdm(videos)]
+    frames = pcache.get('face_frames', load_frames)
+
     cfg = cluster_config(
-        num_workers=50,
+        num_workers=100,
         worker=worker_config('n1-standard-64'),
         num_load_workers=2,
         num_save_workers=2)
@@ -66,12 +74,6 @@ with Timer('run'):
     #     db_wrapper = ScannerWrapper.create(enable_watchdog=False)
 
         db = db_wrapper.db
-
-        print('Getting frames')
-        def load_frames():
-            return [[f['number'] for f in Frame.objects.filter(video=v, shot_boundary=False).values('number').order_by('number')]
-                    for v in tqdm(videos)]
-        frames = pcache.get('face_frames', load_frames)
 
         print('Starting detection')
         detect_faces(
@@ -85,5 +87,6 @@ with Timer('run'):
             run_opts={
                 'io_packet_size': 1000,
                 'work_packet_size': 20,
-                'pipeline_instances_per_node': 16
+                'pipeline_instances_per_node': 16,
+                'checkpoint_frequency': 1000
             })

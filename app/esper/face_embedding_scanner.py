@@ -80,13 +80,20 @@ if False:
     exit()
 
 videos = list(Video.objects.filter(threeyears_dataset=False).order_by('id'))
+def load_frames():
+    return par_for(frames_for_video, videos, workers=8)
+frames = pcache.get('frames', load_frames)
+videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames)
+                        if len(f) > 0])
+videos = list(videos)
+frames = list(frames)
 
 # Export packed embeddings and IDs into single files
 if False:
     def get_ids(video):
         return [f['id'] for f in Face.objects.filter(frame__video=video).order_by('frame__number', 'id').values('id')]
 
-    all_ids = par_for(get_ids, videos, workers=4)
+    all_ids = pcache.get('emb_ids', (lambda: par_for(get_ids, videos, workers=4)))
 
     import struct
     with open('/app/data/embs/sevenyears_ids.bin', 'wb') as f:
@@ -99,7 +106,10 @@ if False:
         for i in tqdm(list(range(len(videos)))):
             path = '/app/data/embs/{:07d}.bin'.format(i)
             if os.path.isfile(path):
-                f.write(open(path, 'rb').read())
+                byts = open(path, 'rb').read()
+                if len(byts) / (4 * 128) != len(all_ids[i]):
+                    print(i)
+                f.write(byts)
                 f.flush()
 
     print('done')
@@ -107,7 +117,6 @@ if False:
 
 if __name__ == "__main__":
 
-    videos = videos
     cfg = cluster_config(
         num_workers=100, worker=worker_config('n1-standard-32'),
         pipelines=[face_embedding.FaceEmbeddingPipeline])
@@ -117,13 +126,6 @@ if __name__ == "__main__":
         db_wrapper = ScannerWrapper.create()
 
         db = db_wrapper.db
-        def load_frames():
-            return par_for(frames_for_video, videos, workers=8)
-        frames = pcache.get('frames', load_frames)
-        videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames)
-                                if len(f) > 0])
-        videos = list(videos)
-        frames = list(frames)
 
         embs = embed_faces(
             db,
