@@ -4,7 +4,7 @@ from .queries import query
 @query("Non-handlabeled random faces/genders")
 def not_handlabeled():
     from query.models import Labeler, Tag, FaceGender
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     import random
     l = Labeler.objects.get(name='rudecarnie')
     t = Tag.objects.get(name='handlabeled-face:labeled')
@@ -21,7 +21,7 @@ def not_handlabeled():
 @query("Handlabeled faces/genders")
 def handlabeled():
     from query.models import FaceGender
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         FaceGender.objects.filter(labeler__name='handlabeled-gender').annotate(
             identity=F('face__faceidentity__identity')))
@@ -29,13 +29,13 @@ def handlabeled():
 @query("Cars")
 def cars():
     from query.models import Object
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(Object.objects.filter(label=3, probability__gte=0.9))
 
 @query("Donald Trump")
 def donald_trump():
     from query.models import FaceIdentity
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(FaceIdentity.objects.filter(identity__name='donald trump', probability__gt=0.99))
 
 @query('Two identities')
@@ -58,14 +58,14 @@ def two_identities():
 @query("Commercials")
 def commercials():
     from query.models import Commercial
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(Commercial.objects.filter(labeler__name='haotian-commercials'))
 
 
 @query("Positive segments")
 def positive_segments():
     from query.models import Segment
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         Segment.objects.filter(labeler__name='haotian-segments',
                                polarity__isnull=False).order_by('-polarity'))
@@ -74,7 +74,7 @@ def positive_segments():
 @query("Negative segments")
 def negative_segments():
     from query.models import Segment
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         Segment.objects.filter(labeler__name='haotian-segments',
                                polarity__isnull=False).order_by('polarity'))
@@ -83,7 +83,7 @@ def negative_segments():
 @query("Segments about Donald Trump")
 def segments_about_donald_trump():
     from query.models import Segment
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',
@@ -93,7 +93,7 @@ def segments_about_donald_trump():
 @query("Segments about North Korea")
 def segments_about_north_korea():
     from query.models import Segment
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',
@@ -104,7 +104,7 @@ def segments_about_north_korea():
 @query("Segments about immigration")
 def segments_about_immigration():
     from query.models import Segment
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         Segment.objects.filter(
             labeler__name='haotian-segments',
@@ -114,7 +114,7 @@ def segments_about_immigration():
 @query("Sunday morning news shows")
 def sunday_morning_news_shows():
     from query.models import Video
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(
         Video.objects.filter(
             time__week_day=1,
@@ -123,7 +123,7 @@ def sunday_morning_news_shows():
 @query("Fox News videos")
 def fox_news_videos():
     from query.models import Video
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(Video.objects.filter(channel__name='FOXNEWS'))
 
 
@@ -140,14 +140,14 @@ def frames_with_two_women():
 @query("Audio labels")
 def audio_labels():
     from query.models import Speaker
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(Speaker.objects.all(), group=True, limit=10000)
 
 
 @query("Topic labels")
 def all_topics():
     from query.models import Segment
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     return qs_to_result(Segment.objects.filter(labeler__name='handlabeled-topic'), group=True, limit=10000)
 
 
@@ -175,7 +175,7 @@ def random_without_topics():
 @query("Non-handlabeled random audio")
 def nonhandlabeled_random_audio():
     from query.models import Video, Speaker, Commercial
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     from django.db.models import Subquery, Count
 
     videos = Video.objects.annotate(
@@ -306,7 +306,7 @@ def face_search_by_id():
         178251]
 
     from esper.face_embeddings import knn
-    
+
     increment = 0.05
     max_thresh = 1.0
     max_results_per_group = 50
@@ -351,7 +351,7 @@ def face_search_by_id():
 def face_search_with_exclusion():
     from esper.embed_google_images import name_to_embedding
     from esper.face_embeddings import knn
-    
+
     def exclude_faces(face_ids, exclude_ids, exclude_thresh):
         excluded_face_ids = set()
         for exclude_id in exclude_ids:
@@ -391,7 +391,7 @@ def face_search_with_exclusion():
 @query('Other people who are on screen with X')
 def face_search_for_other_people():
     from esper.face_embeddings import kmeans
-    
+
     name = 'sean spicer'
     precision_thresh = 0.95
     blurriness_thresh = 10.
@@ -435,7 +435,7 @@ def face_search_for_other_people():
 @query('Identity across major shows')
 def identity_across_shows():
     from query.models import FaceIdentity
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     from esper.major_canonical_shows import MAJOR_CANONICAL_SHOWS
 
     name='hillary clinton'
@@ -457,7 +457,7 @@ def identity_across_shows():
 @query('Host with other still face')
 def shots_with_host_and_still_face():
     from query.models import FaceIdentity
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     from collections import defaultdict
 
     host_name = 'rachel maddow'

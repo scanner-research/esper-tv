@@ -1,4 +1,5 @@
-from esper.prelude import Timer, model_defaults, Notifier, pcache
+from esper.prelude import Timer, Notifier, pcache
+from query.base_models import model_defaults
 from query.models import Video, Frame, Face, Labeler
 from scannertools import kube, face_detection
 from esper.kube import make_cluster, cluster_config, worker_config

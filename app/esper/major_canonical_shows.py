@@ -1,5 +1,5 @@
 from esper.prelude import *
-from esper.stdlib import *
+from esper.widget import *
 from query.models import *
 
 from datetime import timedelta
@@ -31,7 +31,7 @@ def get_total_shot_time_by_canonical_show():
     global _TOTAL_SHOT_TIME_BY_CSHOW
     if _TOTAL_SHOT_TIME_BY_CSHOW is None:
         query_results = Shot.objects.filter(
-            video__show__canonical_show__name__in=MAJOR_CANONICAL_SHOWS, 
+            video__show__canonical_show__name__in=MAJOR_CANONICAL_SHOWS,
             in_commercial=False,
         ).values(
             'video__show__canonical_show__name'
@@ -39,8 +39,8 @@ def get_total_shot_time_by_canonical_show():
             screen_time=Sum((F('max_frame') - F('min_frame')) / F('video__fps'),
                             output_field=FloatField())
         )
-        _TOTAL_SHOT_TIME_BY_CSHOW = { 
-            x['video__show__canonical_show__name']: 
-            timedelta(seconds=x['screen_time']) for x in query_results 
+        _TOTAL_SHOT_TIME_BY_CSHOW = {
+            x['video__show__canonical_show__name']:
+            timedelta(seconds=x['screen_time']) for x in query_results
         }
     return _TOTAL_SHOT_TIME_BY_CSHOW

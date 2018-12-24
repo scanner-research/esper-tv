@@ -17,7 +17,7 @@ import enum
 from storehouse import StorageConfig, StorageBackend
 import traceback
 from pprint import pprint
-from esper.stdlib import *
+from esper.widget import *
 from esper.prelude import *
 import django.apps
 

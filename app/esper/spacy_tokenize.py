@@ -1,5 +1,5 @@
 from esper.prelude import *
-from esper.stdlib import *
+from esper.widget import *
 import spacy
 import pysrt
 import itertools

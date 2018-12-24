@@ -1,8 +1,9 @@
 from sklearn.neighbors import NearestNeighbors
-from django.db import models, connection
+from django.db import models, connection, connections
 from django.db.models import F, ExpressionWrapper
 from django.db.models.base import ModelBase
 from django.db.models.functions import Cast
+from django.db.models.query import QuerySet
 from django_bulk_update.manager import BulkUpdateManager
 import sys
 import numpy as np
@@ -10,16 +11,106 @@ import json
 import warnings
 import os
 import subprocess as sp
+import sqlparse
+import subprocess as sp
+import csv
 
 MAX_STR_LEN = 256
 
-current_dataset = None
-datasets = {}
+
+class QuerySetMixin(object):
+    def explain(self):
+        # TODO(wcrichto): doesn't work for queries with strings
+        cursor = connections[self.db].cursor()
+        cursor.execute('EXPLAIN ANALYZE %s' % str(self.query))
+        print(("\n".join(([t for (t, ) in cursor.fetchall()]))))
+
+    def print_sql(self):
+        q = str(self.query)
+        print((sqlparse.format(q, reindent=True)))
+
+    def exists(self):
+        try:
+            next(self.iterator())
+            return True
+        except StopIteration:
+            return False
+
+    def values_with(self, *fields):
+        return self.values(*([f.name for f in self.model._meta.get_fields()] + list(fields)))
+
+    def save_to_csv(self, name):
+        meta = self.model._meta
+        with connection.cursor() as cursor:
+            cursor.execute("COPY ({}) TO '{}' CSV DELIMITER ',' HEADER".format(
+                str(self.query), '/app/pg/{}.csv'.format(name)))
+
+
+for key in QuerySetMixin.__dict__:
+    if key[:2] == '__':
+        continue
+
+    setattr(QuerySet, key, QuerySetMixin.__dict__[key])
 
 
 def _print(args):
     print(args)
     sys.stdout.flush()
+
+
+def bulk_create_copy(self, objects, keys, table=None):
+    meta = self.model._meta
+    fname = '/app/rows.csv'
+    log.debug('Creating CSV')
+    with open(fname, 'w') as f:
+        writer = csv.writer(f, delimiter=',')
+        writer.writerow(keys)
+        max_id = self.all().aggregate(Max('id'))['id__max']
+        id = max_id + 1 if max_id is not None else 0
+        for obj in tqdm(objects):
+            if table is None:
+                obj['id'] = id
+                id += 1
+            writer.writerow([obj[k] for k in keys])
+
+    log.debug('Writing to database')
+    print(sp.check_output("""
+    echo "\copy {table} FROM '/app/rows.csv' WITH DELIMITER ',' CSV HEADER;" | psql -h db esper will
+    """.format(table=table or meta.db_table),
+        shell=True))
+
+    # with connection.cursor() as cursor:
+    #     cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
+    #         table or meta.db_table, ', '.join(keys), fname))
+    #     if table is None:
+    #         cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
+
+    # os.remove(fname)
+    log.debug('Done!')
+
+
+def model_repr(model):
+    def field_repr(field):
+        return '{}: {}'.format(field.name, getattr(model, field.name))
+
+    return '{}({})'.format(
+        model.__class__.__name__,
+        ', '.join([
+            field_repr(field) for field in model._meta.get_fields(include_hidden=False)
+            if not field.is_relation
+        ]))
+
+
+models.Model.__repr__ = model_repr
+
+
+def model_defaults(Model):
+    from django.db.models.fields import NOT_PROVIDED
+    return {
+        f.name: f.default
+        for f in Model._meta.get_fields()
+        if hasattr(f, 'default') and f.default is not NOT_PROVIDED
+    }
 
 
 def CharField(*args, **kwargs):
@@ -236,4 +327,3 @@ class Pose(models.Model):
 
     class Meta:
         abstract = True
-

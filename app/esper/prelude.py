@@ -1,12 +1,7 @@
 from scannerpy import ProtobufGenerator, Config
 from storehouse import StorageConfig, StorageBackend
-from query.base_models import Track, BoundingBox
-from django.db import connections, connection
-from django.db.models.query import QuerySet
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func, FloatField, ExpressionWrapper
 from django.db.models.functions import Cast, Extract
-from django.utils import timezone
-from django_bulk_update.manager import BulkUpdateManager
 from IPython.core.getipython import get_ipython
 from timeit import default_timer as now
 from functools import reduce
@@ -14,13 +9,11 @@ from typing import Dict
 from pprint import pprint
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
-import django.db.models as models
 import os
 import subprocess as sp
 import numpy as np
 import pandas as pd
 import sys
-import sqlparse
 import logging
 import json
 import multiprocessing as mp
@@ -35,9 +28,9 @@ import socket
 import math
 import csv
 from pathlib import Path
-from contextlib import contextmanager
 from collections import defaultdict
 from pickle_cache import PickleCache
+from esper.widget import esper_widget
 
 # Access to Scanner protobufs
 cfg = Config()
@@ -46,7 +39,7 @@ proto = ProtobufGenerator(cfg)
 # Logging config
 log = logging.getLogger('esper')
 log.setLevel(logging.DEBUG)
-log.propagate = False # https://stackoverflow.com/questions/11820338/replace-default-handler-of-python-logger
+log.propagate = False  # https://stackoverflow.com/questions/11820338/replace-default-handler-of-python-logger
 if not log.handlers:
 
     class CustomFormatter(logging.Formatter):
@@ -66,8 +59,6 @@ if not log.handlers:
 
 # Only run if we're in an IPython notebook
 if get_ipython() is not None:
-    import beakerx
-
     # Matplotlib/seaborn config
     import matplotlib
     import matplotlib.pyplot as plt
@@ -93,115 +84,12 @@ else:
 storage = StorageBackend.make_from_config(storage_config)
 
 
-# http://code.activestate.com/recipes/577058/
-def query_yes_no(question, default="yes"):
-    """Ask a yes/no question via raw_input() and return their answer.
-
-    "question" is a string that is presented to the user.
-    "default" is the presumed answer if the user just hits <Enter>.
-        It must be "yes" (the default), "no" or None (meaning
-        an answer is required of the user).
-
-    The "answer" return value is True for "yes" or False for "no".
-    """
-    valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
-    if default is None:
-        prompt = " [y/n] "
-    elif default == "yes":
-        prompt = " [Y/n] "
-    elif default == "no":
-        prompt = " [y/N] "
-    else:
-        raise ValueError("invalid default answer: '%s'" % default)
-
-    while True:
-        sys.stdout.write(question + prompt)
-        choice = input().lower()
-        if default is not None and choice == '':
-            return valid[default]
-        elif choice in valid:
-            return valid[choice]
-        else:
-            sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
-
-
-def bbox_area(f):
-    return (f.bbox_x2 - f.bbox_x1) * (f.bbox_y2 - f.bbox_y1)
-
-
-def bbox_midpoint(f):
-    return np.array([(f.bbox_x1 + f.bbox_x2) / 2, (f.bbox_y1 + f.bbox_y2) / 2])
-
-
-def bbox_dist(f1, f2):
-    return np.linalg.norm(bbox_midpoint(f1) - bbox_midpoint(f2))
-
-
-def bbox_iou(f1, f2):
-    x1 = max(f1.bbox_x1, f2.bbox_x1)
-    x2 = min(f1.bbox_x2, f2.bbox_x2)
-    y1 = max(f1.bbox_y1, f2.bbox_y1)
-    y2 = min(f1.bbox_y2, f2.bbox_y2)
-
-    if x1 > x2 or y1 > y2: return 0
-
-    intersection = (x2 - x1) * (y2 - y1)
-    return intersection / (bbox_area(f1) + bbox_area(f2) - intersection)
-
-
-def bbox_area2(f):
-    return (f['bbox_x2'] - f['bbox_x1']) * (f['bbox_y2'] - f['bbox_y1'])
-
-
-def bbox_iou2(f1, f2):
-    x1 = max(f1['bbox_x1'], f2['bbox_x1'])
-    x2 = min(f1['bbox_x2'], f2['bbox_x2'])
-    y1 = max(f1['bbox_y1'], f2['bbox_y1'])
-    y2 = min(f1['bbox_y2'], f2['bbox_y2'])
-
-    if x1 > x2 or y1 > y2: return 0
-
-    intersection = (x2 - x1) * (y2 - y1)
-    return intersection / (bbox_area2(f1) + bbox_area2(f2) - intersection)
-
-
 def unzip(l, default=([], [])):
     x = tuple(zip(*l))
     if x == ():
         return default
     else:
         return x
-
-
-def group_by_frame(objs, fn_key, fn_sort, output_dict=False, include_frame=True):
-    d = defaultdict(list)
-    for obj in objs:
-        d[fn_key(obj)].append(obj)
-
-    for l in list(d.values()):
-        l.sort(key=fn_sort)
-
-    if output_dict:
-        return dict(d)
-    else:
-        l = sorted(iter(list(d.items())), key=itemgetter(0))
-        if not include_frame:
-            l = [f for _, f in l]
-        return l
-
-
-def ingest_if_missing(db, videos):
-    needed = [video.path for video in videos if not db.has_table(video.path)]
-    if len(needed) > 0:
-        _, failed = db.ingest_videos([(p, p) for p in needed])
-        assert (len(failed) == 0)
-
-
-def shape(l):
-    if type(l) is list or type(l) is tuple:
-        return 'list({})'.format(shape(l[0]))
-    else:
-        return type(l).__name__
 
 
 def par_for(f, l, process=False, workers=None, progress=True):
@@ -230,120 +118,12 @@ class Timer:
     def __exit__(self, a, b, c):
         t = int(now() - self.start)
         if self._run:
-            log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self._s, int(t / 3600), int(
-                (t / 60) % 60),
+            log.debug('-- END: {} -- {:02d}:{:02d}:{:02d}'.format(self._s, int(t / 3600),
+                                                                  int((t / 60) % 60),
                                                                   int(t) % 60))
 
 
 pcache = PickleCache(cache_dir='/app/.cache')
-
-
-class QuerySetMixin(object):
-    def explain(self):
-        # TODO(wcrichto): doesn't work for queries with strings
-        cursor = connections[self.db].cursor()
-        cursor.execute('EXPLAIN ANALYZE %s' % str(self.query))
-        print(("\n".join(([t for (t, ) in cursor.fetchall()]))))
-
-    def print_sql(self):
-        q = str(self.query)
-        print((sqlparse.format(q, reindent=True)))
-
-    def exists(self):
-        try:
-            next(self.iterator())
-            return True
-        except StopIteration:
-            return False
-
-    def values_with(self, *fields):
-        return self.values(*([f.name for f in self.model._meta.get_fields()] + list(fields)))
-
-    def save_to_csv(self, name):
-        meta = self.model._meta
-        with connection.cursor() as cursor:
-            cursor.execute("COPY ({}) TO '{}' CSV DELIMITER ',' HEADER".format(
-                str(self.query), '/app/pg/{}.csv'.format(name)))
-
-def qs_child_count(qs, fkey_path):
-    return Subquery(
-        qs.filter(**{fkey_path:OuterRef('pk')}) \
-        .values(fkey_path) \
-        .annotate(c=Count('*')) \
-        .values('c'),
-        models.IntegerField())
-
-
-for key in QuerySetMixin.__dict__:
-    if key[:2] == '__':
-        continue
-
-    setattr(QuerySet, key, QuerySetMixin.__dict__[key])
-
-
-def print_sql(self):
-    q = str(self.query)
-    print((sqlparse.format(q, reindent=True)))
-
-
-setattr(QuerySet, 'print_sql', print_sql)
-
-def bulk_create_copy(self, objects, keys, table=None):
-    meta = self.model._meta
-    fname = '/app/rows.csv'
-    log.debug('Creating CSV')
-    with open(fname, 'w') as f:
-        writer = csv.writer(f, delimiter=',')
-        writer.writerow(keys)
-        max_id = self.all().aggregate(Max('id'))['id__max']
-        id = max_id + 1 if max_id is not None else 0
-        for obj in tqdm(objects):
-            if table is None:
-                obj['id'] = id
-                id += 1
-            writer.writerow([obj[k] for k in keys])
-
-    log.debug('Writing to database')
-    print(sp.check_output("""
-    echo "\copy {table} FROM '/app/rows.csv' WITH DELIMITER ',' CSV HEADER;" | psql -h db esper will
-    """.format(table=table or meta.db_table),
-        shell=True))
-
-    # with connection.cursor() as cursor:
-    #     cursor.execute("COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER".format(
-    #         table or meta.db_table, ', '.join(keys), fname))
-    #     if table is None:
-    #         cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
-
-    # os.remove(fname)
-    log.debug('Done!')
-
-
-class BulkUpdateManagerMixin:
-    def batch_create(self, objs, batch_size=1000):
-        for i in tqdm(list(range(0, len(objs), batch_size))):
-            self.bulk_create(objs[i:(i + batch_size)])
-
-    def bulk_create_copy(self, objects):
-        return bulk_create_copy(self, objects)
-
-
-BulkUpdateManager.__bases__ += (BulkUpdateManagerMixin, )
-
-
-def model_repr(model):
-    def field_repr(field):
-        return '{}: {}'.format(field.name, getattr(model, field.name))
-
-    return '{}({})'.format(
-        model.__class__.__name__,
-        ', '.join([
-            field_repr(field) for field in model._meta.get_fields(include_hidden=False)
-            if not field.is_relation
-        ]))
-
-
-models.Model.__repr__ = model_repr
 
 
 def crop(img, bbox):
@@ -379,15 +159,6 @@ def load_frame(video, frame, bboxes):
             8)
 
     return img
-
-
-def face_to_dict(face):
-    return {
-        'bbox_x1': face.bbox_x1,
-        'bbox_x2': face.bbox_x2,
-        'bbox_y1': face.bbox_y1,
-        'bbox_y2': face.bbox_y2,
-    }
 
 
 def make_montage(video,
@@ -432,11 +203,11 @@ def make_montage(video,
 
 def shot_montage(video, **kwargs):
     from query.models import Frame
-    return make_montage(
-        video,
-        [f['number'] for f in
-         Frame.objects.filter(video=video, shot_boundary=True).order_by('number').values('number')],
-        **kwargs)
+    return make_montage(video, [
+        f['number'] for f in Frame.objects.filter(video=video, shot_boundary=True).order_by(
+            'number').values('number')
+    ], **kwargs)
+
 
 def _get_frame(args):
     (videos, fps, start, i, kwargs) = args
@@ -463,14 +234,6 @@ def make_montage_video(videos, start, end, output_path, **kwargs):
     vid.release()
 
 
-def gather(l, idx):
-    return [l[i] for i in idx]
-
-
-def gather2(l, idx):
-    return [l[i][j] for i, j in idx]
-
-
 # https://mathieularose.com/how-not-to-flatten-a-list-of-lists-in-python/
 def flatten(l):
     return list(itertools.chain.from_iterable(l))
@@ -488,114 +251,13 @@ class Break(Exception):
     pass
 
 
-# http://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html
-def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix', cmap=None):
-    """
-    This function prints and plots the confusion matrix.
-    Normalization can be applied by setting `normalize=True`.
-    """
-    if normalize:
-        # cm = cm.T
-        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        # cm = cm.T
-        print("Normalized confusion matrix")
-    else:
-        print('Confusion matrix, without normalization')
-
-    print(cm)
-
-    plt.figure(figsize=(4, 4))
-    plt.imshow(cm, interpolation='nearest', cmap=cmap or plt.cm.Blues)
-    plt.title(('Normalized ' if normalize else '') + title)
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-
-    fmt = '.2f' if normalize else 'd'
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(list(range(cm.shape[0])), list(range(cm.shape[1]))):
-        plt.text(
-            j,
-            i,
-            format(cm[i, j], fmt),
-            horizontalalignment="center",
-            color="white" if cm[i, j] > thresh else "black")
-
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-
-
-def readlines(path):
-    with open(path, 'r') as f:
-        return [s.strip() for s in f.readlines()]
-
-
-class WithMany:
-    def __init__(self, *args):
-        self._args = args
-
-    def __enter__(self):
-        return tuple([obj.__enter__() for obj in self._args])
-
-    def __exit__(self, *args, **kwargs):
-        for obj in self._args:
-            obj.__exit__(*args, **kwargs)
-
-
-@contextmanager
-def named_temp_dir(delete=True, **kwargs):
-    dir = tempfile.mkdtemp(**kwargs)
-    try:
-        yield dir
-    finally:
-        if delete:
-            shutil.rmtree(dir)
-
-
-# https://gist.github.com/howardhamilton/537e13179489d6896dd3
-@contextmanager
-def pushd(new_dir):
-    previous_dir = os.getcwd()
-    os.chdir(new_dir)
-    try:
-        yield
-    finally:
-        os.chdir(previous_dir)
-
-
-def imshow(img):
-    plt.imshow(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    plt.axis('off')
-
-
-def frange(x, y, jump):
-    while x < y:
-        yield x
-        x += jump
-
-
-def esper_widget(result, **kwargs):
-    from esper.stdlib import result_with_metadata, esper_js_globals
-    import vgrid_jupyter
-    if not 'select_mode' in kwargs:
-        kwargs['select_mode'] = 1
-    if not 'disable_playback' in kwargs:
-        kwargs['disable_playback'] = False
-    return vgrid_jupyter.VGridWidget(
-        result=result_with_metadata(result),
-        jsglobals=esper_js_globals(),
-        settings=kwargs)
-
-
 def ring():
     print('\a')
 
 
 def batch(l, n):
     for i in range(0, len(l), n):
-        yield l[i:i+n]
+        yield l[i:i + n]
 
 
 class Notifier:
@@ -605,15 +267,4 @@ class Notifier:
         self._p = self._r.pubsub()
 
     def notify(self, message, action=None):
-        self._r.publish('main', json.dumps({
-            'message': message,
-            'action': action
-        }))
-
-def model_defaults(Model):
-    from django.db.models.fields import NOT_PROVIDED
-    return {
-        f.name: f.default
-        for f in Model._meta.get_fields()
-        if hasattr(f, 'default') and f.default is not NOT_PROVIDED
-    }
+        self._r.publish('main', json.dumps({'message': message, 'action': action}))

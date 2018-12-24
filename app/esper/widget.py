@@ -17,12 +17,23 @@ from django.db.models.query import QuerySet
 from django.db.models import F
 from django.db.models.functions import Cast
 import django.db.models as models
-from esper.prelude import collect, BUCKET
 from query.base_models import Track
 from query.models import \
     Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Segment, Tag, Object, \
     Topic, Identity
 import django.apps
+import os
+
+
+BUCKET = os.environ.get('BUCKET')
+
+
+def collect(l, kfn):
+    d = defaultdict(list)
+    for x in l:
+        d[kfn(x)].append(x)
+    return dict(d)
+
 
 def access(obj: Any, path: str) -> Any:
     fields = path.split('__')
@@ -34,11 +45,6 @@ def access(obj: Any, path: str) -> Any:
 def fprint(*args) -> None:
     print(*args)
     sys.stdout.flush()
-
-
-def at_fps(qs: QuerySet, n: int = 1) -> QuerySet:
-    return qs.annotate(_tmp=F('number') % (
-        Cast('video__fps', models.IntegerField()) / n)).filter(_tmp=0)
 
 
 def bbox_to_dict(f: Any) -> Dict:
@@ -387,3 +393,13 @@ def result_with_metadata(result):
             'identities': identities
         }
     }
+
+
+def esper_widget(result, **kwargs):
+    import vgrid_jupyter
+    if not 'select_mode' in kwargs:
+        kwargs['select_mode'] = 1
+    if not 'disable_playback' in kwargs:
+        kwargs['disable_playback'] = False
+    return vgrid_jupyter.VGridWidget(
+        result=result_with_metadata(result), jsglobals=esper_js_globals(), settings=kwargs)

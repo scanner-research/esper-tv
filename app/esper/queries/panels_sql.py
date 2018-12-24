@@ -4,7 +4,7 @@ from .queries import query
 def panels():
     from query.base_models import BoundingBox
     from query.models import Labeler, Face, Frame
-    from esper.stdlib import qs_to_result
+    from esper.widget import qs_to_result
     from django.db.models import OuterRef, Count, IntegerField
 
     mtcnn = Labeler.objects.get(name='mtcnn')
@@ -40,4 +40,3 @@ def panels_():
         'min_frame': frame.number,
         'objects': [bbox_to_dict(f) for f in faces]
     } for (frame, faces) in panels()], 'Frame')
-
