@@ -3,6 +3,8 @@ from scannerpy import Database
 import os
 import socket
 import subprocess as sp
+import json
+from scannerpy.stdlib import writers
 
 def join_path(src_cls, dest_cls):
     from collections import defaultdict
@@ -179,3 +181,16 @@ class ScannerSQLPipeline:
 
     def parse_output(self):
         pass
+
+
+def bboxes_from_json(config, bboxes: bytes) -> bytes:
+    dilate = config.args['dilate'] if 'dilate' in config.args else 1.0
+    bboxes = json.loads(bboxes.decode('utf-8'))
+    return writers.bboxes([
+        config.protobufs.BoundingBox(
+            x1=bb['bbox_x1']*(2.-dilate),
+            x2=bb['bbox_x2']*dilate,
+            y1=bb['bbox_y1']*(2.-dilate),
+            y2=bb['bbox_y2']*dilate)
+        for bb in bboxes
+    ], config.protobufs)
