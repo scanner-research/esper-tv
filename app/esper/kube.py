@@ -4,24 +4,26 @@ import os
 import shlex
 from contextlib import contextmanager
 
-image_path = 'gcr.io/{project}/{base_name}:{device}'.format(
-    project=os.environ['GOOGLE_PROJECT'],
-    base_name=os.environ['BASE_IMAGE_NAME'],
-    device='cpu')
+def image_path(device):
+    return 'gcr.io/{project}/{base_name}:{device}'.format(
+        project=os.environ['GOOGLE_PROJECT'],
+        base_name=os.environ['BASE_IMAGE_NAME'],
+        device=device)
 
 cloud_config = kube.CloudConfig(project=os.environ['GOOGLE_PROJECT'])
 
 master_config = kube.MachineConfig(
-    image=image_path,
+    image=image_path('cpu'),
     type=kube.MachineTypeName(name='n1-highmem-32'),
     disk=250)
 
-def worker_config(machine_type):
+def worker_config(machine_type, **kwargs):
     return kube.MachineConfig(
-        image=image_path,
+        image=image_path('gpu' if 'gpu' in kwargs else 'cpu'),
         type=kube.MachineTypeName(name=machine_type),
         disk=250,
-        preemptible=True)
+        preemptible=True,
+        **kwargs)
 
 def cluster_config(**kwargs):
     return kube.ClusterConfig(
