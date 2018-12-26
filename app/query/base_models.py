@@ -14,6 +14,7 @@ import subprocess as sp
 import sqlparse
 import subprocess as sp
 import csv
+import tempfile
 
 MAX_STR_LEN = 256
 
@@ -139,18 +140,18 @@ class Video(models.Model):
             format(expiry, os.environ['BUCKET'], self.path),
             shell=True).strip()
 
-    def extract_audio(self, output_path=None, ext='wav', segment=None):
+    def _ffmpeg_fmt_time(self, t):
+        return '{:02d}:{:02d}:{:02d}.{:03d}'.format(
+            int(t / 3600), int(t / 60 % 60), int(t % 60), int(t * 1000 % 1000))
+
+    def download(self, output_path=None, ext='mp4', segment=None):
         if output_path is None:
             output_path = tempfile.NamedTemporaryFile(suffix='.{}'.format(ext), delete=False).name
 
-        def fmt_time(t):
-            return '{:02d}:{:02d}:{:02d}.{:03d}'.format(
-                int(t / 3600), int(t / 60 % 60), int(t % 60), int(t * 1000 % 1000))
-
         if segment is not None:
             (start, end) = segment
-            start_str = '-ss {}'.format(fmt_time(start))
-            end_str = '-t {}'.format(fmt_time(end - start))
+            start_str = '-ss {}'.format(self._ffmpeg_fmt_time(start))
+            end_str = '-t {}'.format(self._ffmpeg_fmt_time(end - start))
         else:
             start_str = ''
             end_str = ''

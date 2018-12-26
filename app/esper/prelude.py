@@ -246,6 +246,25 @@ def collect(l, kfn):
     return dict(d)
 
 
+def concat_videos(paths, output_path=None):
+    if output_path is None:
+        output_path = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False).name
+
+    transform = ';'.join(['[{i}:v]scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2[v{i}]'.format(i=i) for i in range(len(paths))])
+    filter = ''.join(['[v{i}][{i}:a:0]'.format(i=i) for i in range(len(paths))])
+    inputs = ' '.join(['-i {}'.format(p) for p in paths])
+
+    cmd = '''
+    ffmpeg -y {inputs} \
+    -filter_complex "{transform}; {filter}concat=n={n}:v=1:a=1[outv][outa]" \
+    -map "[outv]" -map "[outa]" {output}
+    '''.format(transform=transform, inputs=inputs, filter=filter, n=len(paths), output=output_path)
+    print(cmd)
+    sp.check_call(cmd, shell=True)
+
+    return output_path
+
+
 # For breaking out of nested loops
 class Break(Exception):
     pass

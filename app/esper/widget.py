@@ -95,14 +95,13 @@ def pose_to_dict(f: Any) -> Dict:
     }
 
 
-def simple_result(result: Dict, ty: str) -> Dict:
+def simple_result(result: Dict) -> Dict:
     return {
         'result': [{
             'type': 'flat',
             'elements': [r]
         } for r in result],
         'count': len(result),
-        'type': ty
     }
 
 
