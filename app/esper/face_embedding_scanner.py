@@ -16,6 +16,20 @@ from scannerpy import register_python_op
 import os
 
 
+@scannerpy.register_python_op(name='BboxesFromJson')
+def bboxes_from_json(config, bboxes: bytes) -> bytes:
+    dilate = config.args['dilate'] if 'dilate' in config.args else 1.0
+    bboxes = json.loads(bboxes.decode('utf-8'))
+    return writers.bboxes([
+        config.protobufs.BoundingBox(
+            x1=bb['bbox_x1']*(2.-dilate),
+            x2=bb['bbox_x2']*dilate,
+            y1=bb['bbox_y1']*(2.-dilate),
+            y2=bb['bbox_y2']*dilate)
+        for bb in bboxes
+    ], config.protobufs)
+
+
 class FaceEmbeddingPipeline(face_embedding.FaceEmbeddingPipeline):
     additional_sources = ['faces']
 
@@ -35,7 +49,7 @@ embed_faces = FaceEmbeddingPipeline.make_runner()
 
 def frames_for_video(video):
     return [f['number'] for f in
-            Frame.objects.filter(video=video).annotate(
+            Frame.objects.filter(video=video, shot_boundary=False).annotate(
                 c=Subquery(Face.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values('c')))
             .filter(c__gte=1)
             .values('number').order_by('number')]
@@ -66,10 +80,10 @@ if False:
 
     exit()
 
-videos = list(Video.objects.filter(threeyears_dataset=False).order_by('id'))
+videos = list(Video.objects.filter(threeyears_dataset=True).order_by('id'))
 def load_frames():
     return par_for(frames_for_video, videos, workers=8)
-frames = pcache.get('frames', load_frames)
+frames = pcache.get('emb_frames', load_frames, force=True)
 videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames)
                         if len(f) > 0])
 videos = list(videos)
@@ -105,12 +119,12 @@ if False:
 if __name__ == "__main__":
 
     cfg = cluster_config(
-        num_workers=100, worker=worker_config('n1-standard-32'),
+        num_workers=0, worker=worker_config('n1-standard-64'),
         pipelines=[face_embedding.FaceEmbeddingPipeline])
 
-    # with make_cluster(cfg, sql_pool=2, no_delete=True) as db_wrapper:
-    if True:
-        db_wrapper = ScannerWrapper.create()
+    with make_cluster(cfg, sql_pool=2, no_delete=True) as db_wrapper:
+    # if True:
+    #     db_wrapper = ScannerWrapper.create()
 
         db = db_wrapper.db
 
@@ -118,12 +132,13 @@ if __name__ == "__main__":
             db,
             videos=[v.for_scannertools() for v in videos],
             frames=frames,
-            faces=[ScannerSQLTable(Face, v, num_elements=len(f))
+            faces=[ScannerSQLTable(Face, v, num_elements=len(f),
+                                   filter='query_frame.shot_boundary = false')
                    for v, f in zip(videos, frames)],
             run_opts={
                 'io_packet_size': 500,
                 'work_packet_size': 20,
-                'pipeline_instances_per_node': 4
+                'pipeline_instances_per_node': 8
             })
 
         def load_embs(i):

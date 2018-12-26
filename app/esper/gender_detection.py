@@ -1,4 +1,4 @@
-from esper.prelude import Timer, unzip, par_for
+from esper.prelude import Timer, unzip, par_for, pcache
 from query.models import Video, Frame, Face, FaceGender, Labeler, Gender
 from scannertools import kube, gender_detection
 from esper.kube import make_cluster, cluster_config, worker_config
@@ -13,6 +13,19 @@ from django.db.models import Count, OuterRef, Subquery
 
 labeler_id = Labeler.objects.get(name='rudecarnie').id
 gender_ids = {g.name: g.id for g in Gender.objects.all()}
+
+@scannerpy.register_python_op(name='BboxesFromJson')
+def bboxes_from_json(config, bboxes: bytes) -> bytes:
+    dilate = config.args['dilate'] if 'dilate' in config.args else 1.0
+    bboxes = json.loads(bboxes.decode('utf-8'))
+    return writers.bboxes([
+        config.protobufs.BoundingBox(
+            x1=bb['bbox_x1']*(2.-dilate),
+            x2=bb['bbox_x2']*dilate,
+            y1=bb['bbox_y1']*(2.-dilate),
+            y2=bb['bbox_y2']*dilate)
+        for bb in bboxes
+    ], config.protobufs)
 
 @scannerpy.register_python_op(name='GendersToJson')
 def genders_to_json(config, genders: bytes, faces: bytes) -> bytes:
@@ -43,11 +56,11 @@ class GenderDetectionPipeline(ScannerSQLPipeline, gender_detection.GenderDetecti
 
 detect_genders = GenderDetectionPipeline.make_runner()
 
-videos = Video.objects.filter(threeyears_dataset=False).order_by('id')
+videos = list(Video.objects.filter(threeyears_dataset=True).order_by('id'))
 
 def frames_for_video(video):
     return [f['number'] for f in
-            Frame.objects.filter(video=video).annotate(
+            Frame.objects.filter(video=video, shot_boundary=False).annotate(
                 c=Subquery(Face.objects.filter(frame=OuterRef('pk')).values('frame').annotate(c=Count('*')).values('c')))
             .filter(c__gte=1)
             .values('number').order_by('number')]
@@ -81,16 +94,16 @@ if False:
 
 videos = videos
 cfg = cluster_config(
-    num_workers=50, worker=worker_config('n1-standard-32'),
+    num_workers=100, worker=worker_config('n1-standard-64'),
     pipelines=[gender_detection.GenderDetectionPipeline])
 
-with make_cluster(cfg, sql_pool=4, no_delete=True) as db_wrapper:
+with make_cluster(cfg, sql_pool=2, no_delete=True) as db_wrapper:
     db = db_wrapper.db
 
 # if True:
 #     db_wrapper = ScannerWrapper.create()
 
-    frames = par_for(frames_for_video, videos, workers=8)
+    frames = pcache.get('gender_frames', lambda: par_for(frames_for_video, videos, workers=8))
     videos, frames = unzip([(v, f) for (v, f) in zip(videos, frames) if len(f) > 0])
     videos = list(videos)
     frames = list(frames)
@@ -99,10 +112,11 @@ with make_cluster(cfg, sql_pool=4, no_delete=True) as db_wrapper:
         videos=[v.for_scannertools() for v in videos],
         db_videos=videos,
         frames=frames,
-        faces=[ScannerSQLTable(Face, v, num_elements=len(f))
+        faces=[ScannerSQLTable(Face, v, num_elements=len(f),
+                               filter='query_frame.shot_boundary = false')
                for v, f in zip(videos, frames)],
         run_opts={
             'io_packet_size': 500,
             'work_packet_size': 20,
-            'pipeline_instances_per_node': 8
+            'pipeline_instances_per_node': 16
         })
