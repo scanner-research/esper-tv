@@ -80,7 +80,8 @@ jupyter nbextension enable vgrid_jupyter --py --user
 
 cd /app
 npm link vgrid
-
-echo "SUCCESS! All dependencies installed"
+npm run build
 
 popd
+
+echo "SUCCESS! All dependencies installed"
