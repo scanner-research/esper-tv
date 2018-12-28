@@ -26,6 +26,7 @@ export default class App extends React.Component {
     valid: true,
     clickedBox: null,
     dataContext: null,
+    i: 0
   }
 
   constructor() {
@@ -42,7 +43,7 @@ export default class App extends React.Component {
   }
 
   _onSearch = (results) => {
-    this.setState({dataContext: results});
+    this.setState({dataContext: results, i: this.state.i + 1});
   }
 
   _onBoxClick = (box) => {
@@ -68,7 +69,7 @@ export default class App extends React.Component {
                  ? (this.state.dataContext.groups.length > 0
                   ? <div className='search-result'>
                     <VGrid data={this.state.dataContext} settings={this._settings}
-                           onSave={this._onSave} />
+                           onSave={this._onSave} resultNumber={this.state.i} />
                     <Sidebar />
                   </div>
                   : <div>No results matching query.</div>)
