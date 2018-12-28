@@ -432,7 +432,7 @@ def visualize_commercial(commercial_gt, commercial_dict, video_length=3700):
     ax = fig.add_subplot(111)
     vid = 1
     avg_precision = avg_recall = num_res = 0
-    for video_name in sorted(commercial_dict):
+    for video_name in sorted(commercial_dict)[::-1]:
         commercial_list = commercial_dict[video_name]
         commercial_length = 0
         for (start, end) in commercial_list:
