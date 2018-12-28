@@ -11,7 +11,7 @@ import captions.util as caption_util
 from captions import Documents, Lexicon, CaptionIndex, MetadataIndex
 
 
-INDEX_DIR = '/app/data/index10'
+INDEX_DIR = '/app/data/index10a_align_only'
 DOCUMENTS_PATH = os.path.join(INDEX_DIR, 'docs.list')
 LEXICON_PATH = os.path.join(INDEX_DIR, 'words.lex')
 INDEX_PATH = os.path.join(INDEX_DIR, 'index.bin')
@@ -73,8 +73,8 @@ def _video_ids_to_doc_ids(vid_ids):
             d = VIDEO_ID_TO_DOCUMENT_ID.get(v, None)
             if d is not None:
                 doc_ids.append(d)
-            else:
-                print('Document not found for video id={}'.format(v))
+#             else:
+#                 print('Document not found for video id={}'.format(v))
         assert len(doc_ids) > 0
         return doc_ids
 

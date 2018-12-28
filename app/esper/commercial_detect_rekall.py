@@ -22,7 +22,7 @@ MIN_LOWERWINDOW = 15
 MAX_LOWERWINDOW_GAP = 60
 
 MIN_COMMERCIAL_TIME = 10
-MAX_COMMERCIAL_TIME = 270
+MAX_COMMERCIAL_TIME = 240
 
 MAX_MERGE_DURATION = 300
 MAX_MERGE_GAP = 30
@@ -134,14 +134,14 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
             print(idx, win)
     
     # get all instances of >>, Announcer:, and  >> Announcer: in transcript
-    arrow_text = get_text_intervals(">>", transcript)
-    announcer_text = get_text_intervals("Announcer:", transcript)
-    arrow_announcer_text = get_text_intervals(">> Announcer:", transcript)
+    arrow_intervals = get_text_intervals(">>", transcript)
+    arrow_announcer_intervals = get_text_intervals(">> Announcer:", transcript)
+    lowercase_intervals = get_lowercase_intervals(transcript)
 
     if verbose:
-        print("arrow_text: ({})\n".format(arrow_text.size()), arrow_text)
-        print("announcer_text: ({})\n".format(announcer_text.size()))
-        print("arrow_announcer_text: ({})\n".format(arrow_announcer_text.size()))
+#         print("arrow_text: ({})\n".format(arrow_intervals.size()), arrow_intervals)
+#         print("arrow_announcer_text: ({})\n".format(arrow_announcer_intervals.size()), arrow_announcer_intervals)
+        print(arrow_intervals.minus(arrow_announcer_intervals))
     
     # get an interval for the whole video
     whole_video = IntervalList([(0., video.num_frames/video.fps, 0)])
@@ -172,11 +172,21 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
                 stack.append(interval)
         return stack
     
+    #
     all_blocks = whole_video.minus(black_windows)
     non_commercial_blocks = all_blocks.filter_against(
-        arrow_text.minus(arrow_announcer_text),
+        arrow_intervals.minus(arrow_announcer_intervals),
         predicate=overlaps()
     )
+    #
+#     lowercase_center_intervals = IntervalList([
+#         ((i.start + i.end) / 2, (i.start + i.end) / 2 + 0.1, 0)
+#         for i in lowercase_intervals.get_intervals()])
+#     non_commercial_blocks = non_commercial_blocks.minus(
+#         non_commercial_blocks.filter_against(
+#             lowercase_center_intervals,
+#             predicate=overlaps()))
+    
     commercial_blocks = whole_video.minus(non_commercial_blocks.set_union(black_windows))
     if verbose:
         print("commercial blocks candidates: ({})\n".format(commercial_blocks.size()))
@@ -192,14 +202,13 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
         commercials_raw = copy.deepcopy(commercials)
     
     # add in lowercase intervals
-    lowercase_intervals = get_lowercase_intervals(transcript)
     if verbose:
         print("lowercase intervals:\n", lowercase_intervals)
     commercials = commercials \
-            .set_union(lowercase_intervals) \
-            .dilate(MIN_COMMERCIAL_GAP / 2) \
-            .coalesce() \
-            .dilate(-MIN_COMMERCIAL_GAP / 2)
+            .set_union(lowercase_intervals) 
+#             .dilate(MIN_COMMERCIAL_GAP / 2) \
+#             .coalesce() \
+#             .dilate(-MIN_COMMERCIAL_GAP / 2)
     if verbose:
         print("commercials merge with lowercase:\n", commercials)
     
@@ -218,10 +227,10 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
         print("blank intervals:\n", blank_intervals)
 
     # add in blank intervals, but only if adding in the new intervals doesn't get too long & remove small gaps
-    commercials = commercials.set_union(blank_intervals) \
-            .dilate(MIN_COMMERCIAL_GAP / 2) \
-            .coalesce() \
-            .dilate(-MIN_COMMERCIAL_GAP / 2)
+    commercials = commercials.set_union(blank_intervals) 
+#             .dilate(MIN_COMMERCIAL_GAP / 2) \
+#             .coalesce() \
+#             .dilate(-MIN_COMMERCIAL_GAP / 2)
         
 #     commercials = commercials.merge(blank_intervals,
 #             predicate=or_pred(before(max_dist=MAX_MERGE_GAP),
@@ -237,11 +246,13 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
         print("commercials merge with blank intervals:\n", commercials)
         
     # merge with small gaps, but only if that doesn't make things too long
-#     commercials = commercials \
-#             .coalesce() \
-#             .filter_length(max_length=MAX_COMMERCIAL_TIME) \
-#             .set_union(commercials) \
-#             .coalesce()
+    commercials = commercials \
+            .dilate(MAX_MERGE_GAP / 2) \
+            .coalesce() \
+            .dilate(-MAX_MERGE_GAP / 2) \
+            .filter_length(max_length=MAX_COMMERCIAL_TIME) \
+            .set_union(commercials) \
+            .coalesce()
     
 
 #     # post-process commercials to get rid of gaps, small commercials, and
@@ -282,7 +293,7 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
     
     if debug:
         result = {'black': black_windows.dilate(2),
-                  'arrow': arrow_text.dilate(2),
+                  'arrow': arrow_intervals.minus(arrow_announcer_intervals).dilate(2),
                   'commercials_raw': commercials_raw,
                   'lowercase': lowercase_intervals,
                   'blank': blank_intervals,

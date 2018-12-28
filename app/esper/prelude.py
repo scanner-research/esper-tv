@@ -259,7 +259,7 @@ def concat_videos(paths, output_path=None):
     -filter_complex "{transform}; {filter}concat=n={n}:v=1:a=1[outv][outa]" \
     -map "[outv]" -map "[outa]" {output}
     '''.format(transform=transform, inputs=inputs, filter=filter, n=len(paths), output=output_path)
-    print(cmd)
+#     print(cmd)
     sp.check_call(cmd, shell=True)
 
     return output_path
