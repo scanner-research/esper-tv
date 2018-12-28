@@ -8,10 +8,11 @@ import multiprocessing
 import shutil
 import socket
 import os
+import pathlib
 
 NGINX_PORT = '80'
 IPYTHON_PORT = '8888'
-TF_VERSION = '1.12.0'
+TF_VERSION = '1.11.0'
 
 cores = multiprocessing.cpu_count()
 
@@ -73,11 +74,6 @@ services:
     depends_on: [db, frameserver, redis]
     volumes:
       - ./app:/app
-      - {home}/.esper/.bash_history:/root/.bash_history
-      - {home}/.esper/.cargo:/root/.cargo
-      - {home}/.esper/.rustup:/root/.rustup
-      - {home}/.esper/.local:/root/.local
-      - {home}/.esper/.jupyter:/root/.jupyter
       - ./service-key.json:/app/service-key.json
     ports: ["8000", "{ipython_port}"]
     environment:
@@ -146,6 +142,8 @@ def main():
     parser.add_argument('--push-remote', action='store_true',
                         help='Push base image to Google Cloud Container Registry')
     parser.add_argument('--scannertools-dir', help='Path to Scannertools directory (for development)')
+    parser.add_argument('--dotfiles-dir', default=os.path.expanduser('~/.esper'),
+                        help='Path to directory for persistent dotfiles in Docker container')
     parser.add_argument('--hostname', help='Internal use only')
     args = parser.parse_args()
 
@@ -184,6 +182,23 @@ def main():
     if args.scannertools_dir is not None:
         config.services.app.volumes.append(
             '{}:/opt/scannertools'.format(os.path.abspath(args.scannertools_dir)))
+
+    # Dotfiles directory
+    dotfiles = ['.bash_history']
+    dotdirs = ['.cargo', '.rustup', '.local', '.jupyter']
+
+    # Instantiate dotfiles directory
+    os.makedirs(args.dotfiles_dir, exist_ok=True)
+
+    # Create any dotfiles like .bash_history as files since otherwise missing mounts 
+    # will be turned into directories and then not be properly created by the shell
+    for f in dotfiles:
+        pathlib.Path('{}/{}'.format(args.dotfiles_dir, f)).touch()
+
+    # Add all dotfiles paths as Docker volumes
+    for path in dotfiles + dotdirs:
+        config.services.app.volumes.append('{dotfiles_dir}/{path}:/root/{path}'.format(
+            dotfiles_dir=args.dotfiles_dir, path=path))
 
     # Additional Docker services
     for svc in args.extra_services:
