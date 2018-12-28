@@ -161,3 +161,13 @@ class LabeledInterview(models.Model):
     guest2 = base.CharField(default=None, blank=True, null=True)
     original = models.BooleanField(default=True)
     scattered_clips = models.BooleanField(default=False)
+
+class HairColorName(models.Model):
+    name = base.CharField(unique=True)
+
+class HairColor(Labeled, models.Model):
+    face = models.ForeignKey(Face)
+    color = models.ForeignKey(HairColorName)
+    
+    class Meta:
+        unique_together = ('labeler', 'face')
