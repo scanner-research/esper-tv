@@ -100,6 +100,10 @@ def get_commercials():
     return commercials
 
 
+def get_frames():
+    frames = spark.load('query_frame').alias('frames')
+    return frames
+
 def get_shots():
     shots = spark.load('query_shot').alias('shots')
 
@@ -257,28 +261,35 @@ def _annotate_host_probability(faces, identity_threshold=0.3):
 def get_faces(annotate_host_probability=True):
     faces = spark.load('query_face').alias('faces')
 
-    shots = get_shots().alias('shots')
+    videos = get_videos()
+    frames = get_frames()
     faces = faces.join(
-        shots, faces.shot_id == shots.id
+        frames, faces.frame_id == frames.id
+    ).join(
+        videos, frames.video_id == videos.id
     ).select(
         'faces.*',
-        'shots.show_id',
-        'shots.video_id',
-        'shots.canonical_show_id',
-        'shots.channel_id',
-        'shots.min_frame',
-        'shots.max_frame',
-        'shots.duration',
-        'shots.in_commercial',
-        'shots.hour',
-        'shots.week_day',
-        'shots.time',
-        'shots.fps'
+        videos.show_id,
+        videos.canonical_show_id,
+        videos.channel_id,
+        videos.time,
+        videos.fps,
+        videos.week_day,
+        frames.video_id,
+        frames.number
+    ).where(
+        frames.number % func.floor(videos.fps * 3) == 0
     )
 
     faces = faces.withColumn('height', faces.bbox_y2 - faces.bbox_y1)
     faces = faces.withColumn('width', faces.bbox_x2 - faces.bbox_x1)
     faces = faces.withColumn('area', faces.height * faces.width)
+    faces = faces.withColumn('duration', func.lit(3))
+    faces = faces.withColumn('min_frame', faces.number)
+    faces = faces.withColumn('max_frame', faces.number + func.floor(faces.fps * 3) - 1)
+
+    faces = _annotate_hour(faces)
+    faces = _annotate_in_commercial(faces)
 
     if annotate_host_probability:
         faces = _annotate_host_probability(faces)
