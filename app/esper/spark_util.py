@@ -275,10 +275,12 @@ def get_faces(annotate_host_probability=True):
         videos.time,
         videos.fps,
         videos.week_day,
+        videos.threeyears_dataset,
         frames.video_id,
         frames.number
     ).where(
-        frames.number % func.floor(videos.fps * 3) == 0
+        ((videos.threeyears_dataset == True) & (frames.number % func.floor(videos.fps * 3) == 0)) | \
+        ((videos.threeyears_dataset == False) & (frames.number % func.ceil(videos.fps * 3) == 0))
     )
 
     faces = faces.withColumn('height', faces.bbox_y2 - faces.bbox_y1)
