@@ -531,3 +531,10 @@ def shots_with_host_and_still_face():
         Face.objects.filter(shot__id__in=list(selected_shots)),
         limit=100000
     )
+
+@query("Random blonde hair people")
+def random_blond_hair_people():
+    from query.models import Face
+    from esper.widget import qs_to_result
+    # try: 'black', 'white', 'brown', 'gray'
+    return qs_to_result(Face.objects.filter(haircolor__color__name='blond'), group=False, frame_major=False, shuffle=True, limit=1000)
