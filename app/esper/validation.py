@@ -85,9 +85,9 @@ def face_validation(name, face_filter, noprint=False):
     handlabeled_frames = list(Frame.objects.filter(tags__name='handlabeled-face:labeled'))
     all_faces = collect(
         face_filter(
-            Face.objects.filter(person__frame__in=handlabeled_frames).values_with(
-                'labeler__name', 'person__frame__id')),
-        itemgetter('person__frame__id'))
+            Face.objects.filter(frame__in=handlabeled_frames).values_with(
+                'labeler__name', 'frame__id')),
+        itemgetter('frame__id'))
     auto_labeler = 'mtcnn'
     gt_labeler = 'handlabeled-face'
     true_pos = 0
@@ -139,9 +139,9 @@ def gender_validation(name, xxx_todo_changeme, noprint=False):
     all_genders = defaultdict(
         list,
         collect(
-            FaceGender.objects.filter(face__person__frame__in=handlabeled_frames).values_with(
-                'labeler__name', 'face__person__frame__id'),
-            itemgetter('face__person__frame__id')))
+            FaceGender.objects.filter(face__frame__in=handlabeled_frames).values_with(
+                'labeler__name', 'face__frame__id'),
+            itemgetter('face__frame__id')))
     auto_labeler = 'rudecarnie'
     gt_labeler = 'handlabeled-gender'
     true_pos = 0
@@ -204,9 +204,9 @@ def screentime_validation(name, face_filter, gender_cmat):
         list,
         collect(
             face_filter(
-                FaceGender.objects.filter(face__person__frame__in=handlabeled_frames)).values_with(
-                    'labeler__name', 'face__person__frame__id', 'face__shot__id'),
-            itemgetter('face__person__frame__id')))
+                FaceGender.objects.filter(face__frame__in=handlabeled_frames)).values_with(
+                    'labeler__name', 'face__frame__id', 'face__shot__id'),
+            itemgetter('face__frame__id')))
 
     labelers = ['rudecarnie', 'rudecarnie-adj', 'handlabeled-gender']
     counts = ['multicount', 'singlecount']
