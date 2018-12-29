@@ -1,10 +1,13 @@
-from esper.prelude import *
 from rekall.interval_list import IntervalList, Interval
 from rekall.logical_predicates import not_pred, or_pred
 from rekall.temporal_predicates import overlaps, equal, before, after
 import pysrt
 import copy
 import time
+import os
+import pickle
+import math
+import multiprocessing as mp
 
 """
 All thresholds 
@@ -19,7 +22,6 @@ MAX_BLANKWINDOW = 270
 
 MIN_LOWERTEXT = 0.5
 MIN_LOWERWINDOW = 15
-MAX_LOWERWINDOW_GAP = 60
 
 MIN_COMMERCIAL_TIME = 10
 MAX_COMMERCIAL_TIME = 300
@@ -81,16 +83,6 @@ def get_text_intervals(word, transcript):
         if word in text and '{' not in text
     ]).coalesce()
 
-# def get_text_intervals_reliable(word, transcript):
-#     text_intervals = []
-#     for i, (text, start_sec, end_sec) in enumerate(transcript):
-#         if word in text and '{' not in text:
-#             t1 = (i != 0 and start_sec - transcript[i-1][2] < RELIABLE_TEXT_DURATION)
-#             t2 = (i != len(transcript)-1 and transcript[i+1][1] - end_sec < RELIABLE_TEXT_DURATION)
-#             if t1 or t2:
-#                 text_intervals.append((start_sec, end_sec, 0))
-#     return IntervalList(text_intervals).coalesce()
-
 def get_lowercase_intervals(transcript):
     def is_lower_text(text):
         lower = [c for c in text if c.islower()]
@@ -122,26 +114,33 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
     
     Return: commercial_list (list of tuple((start_fid, start_sec), (end_fid, end_sec)), None if failed)
     """
+    if type(video) == dict:
+        fps = video['fps']
+        video_length = video['num_frames'] / fps
+    else:
+        fps = video.fps
+        video_length = video.num_frames / video.fps
     
     transcript = load_transcript(transcript_path)
     if blackframe_list is None:
         blackframe_intervallist = get_blackframe_list(histogram)
     else:
-        blackframe_intervallist = IntervalList([(fid2second(fid, video.fps),
-                                                fid2second(fid + 1, video.fps),
+        blackframe_intervallist = IntervalList([(fid2second(fid, fps),
+                                                fid2second(fid + 1, fps),
                                                 0) for fid in blackframe_list])
-
+    
+    # get black windows
     black_windows = blackframe_intervallist \
-            .dilate(1. / video.fps) \
+            .dilate(1. / fps) \
             .coalesce() \
-            .dilate(-1. / video.fps)
+            .dilate(-1. / fps)
 #             .filter_length(min_length=MIN_BLACKWINDOW * 1. / video.fps)
     if verbose:
         print("black window: ({})\n".format(black_windows.size()))
         for idx, win in enumerate(black_windows.get_intervals()):
             print(idx, win)
     
-    # get all instances of >>, Announcer:, and  >> Announcer: in transcript
+    # get all instances of >>
     arrow_intervals = get_text_intervals(">>", transcript)
     arrow_announcer_intervals = get_text_intervals(">> Announcer:", transcript)
     arrow_having_intervals = get_text_intervals(">> HAVING", transcript)
@@ -159,7 +158,7 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
       .dilate(-1) \
     
     # get an interval for the whole video
-    whole_video = IntervalList([(0., video.num_frames/video.fps, 0)])
+    whole_video = IntervalList([(0., video_length, 0)])
 
     # whole video minus black windows to get segments in between black windows
     # then filter out anything that overlaps with ">>" as long as it's not ">> Announcer:"
@@ -186,7 +185,6 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
     
     # get reliable double arrow intervals
     reliable_transcripts = transcript_intervals.filter_length(min_length=RELIABLE_TEXT_DURATION)
-    
     arrow_intervals = arrow_intervals \
         .minus(arrow_announcer_intervals) \
         .minus(arrow_having_intervals) \
@@ -195,24 +193,14 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
             predicate=overlaps()   
         )
     
+    # get non-commercial blocks by filtering out intervals overlaps with >>
     all_blocks = whole_video.minus(black_windows)
     non_commercial_blocks = all_blocks.filter_against(
         arrow_intervals,
         predicate=overlaps()
     )
     
-    # use lowercase intervals center as signal for commercial
-#     lowercase_center_intervals = IntervalList([
-#         ((i.start + i.end) / 2, (i.start + i.end) / 2 + 0.1, 0)
-#         for i in lowercase_intervals.get_intervals()])
-#     non_commercial_blocks = non_commercial_blocks.minus(
-#         non_commercial_blocks.filter_against(
-#             lowercase_center_intervals,
-#             predicate=overlaps()))
-    
-    commercial_blocks = whole_video \
-        .minus(non_commercial_blocks \
-                   .set_union(black_windows))
+    commercial_blocks = whole_video.minus(non_commercial_blocks.set_union(black_windows))
     if verbose:
         print("commercial blocks candidates: ({})\n".format(commercial_blocks.size()))
         for idx, win in enumerate(commercial_blocks.get_intervals()):
@@ -230,11 +218,7 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
     lowercase_intervals = get_lowercase_intervals(transcript)
     if verbose:
         print("lowercase intervals:\n", lowercase_intervals)
-    commercials = commercials \
-            .set_union(lowercase_intervals) 
-#             .dilate(MIN_COMMERCIAL_GAP / 2) \
-#             .coalesce() \
-#             .dilate(-MIN_COMMERCIAL_GAP / 2)
+    commercials = commercials.set_union(lowercase_intervals) 
     if verbose:
         print("commercials merge with lowercase:\n", commercials)
     
@@ -245,16 +229,13 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
         .filter_length(min_length=MIN_BLANKWINDOW, max_length=MAX_BLANKWINDOW)
     # remove last one minute segment due to no aligned transcripts
     blank_intervals = blank_intervals \
-        .minus(IntervalList([(video.num_frames/video.fps-60, video.num_frames/video.fps, 0)])) \
+        .minus(IntervalList([(video_length-60, video_length, 0)])) \
         .filter_length(min_length=MIN_BLANKWINDOW)
     if verbose:
         print("blank intervals:\n", blank_intervals)
 
-    # add in blank intervals, but only if adding in the new intervals doesn't get too long & remove small gaps
+    # add in blank intervals
     commercials = commercials.set_union(blank_intervals) 
-#             .dilate(MIN_COMMERCIAL_GAP / 2) \
-#             .coalesce() \
-#             .dilate(-MIN_COMMERCIAL_GAP / 2)
         
 #     commercials = commercials.merge(blank_intervals,
 #             predicate=or_pred(before(max_dist=MAX_MERGE_GAP),
@@ -316,8 +297,6 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
 #                 .filter_length(max_length=MAX_ISOLATED_BLANK_TIME))
 #     commercials = commercials.minus(commercials_to_delete)
 
-    commercial_list = [(i.start, i.end) for i in commercials.get_intervals()]
-    
     if debug:
         result = {'black': black_windows.dilate(2),
                   'arrow': arrow_intervals.dilate(2),
@@ -328,6 +307,74 @@ def detect_commercial_rekall(video, transcript_path, blackframe_list=None, histo
                   }
         return result
     else:
-        return commercial_list
+        result = [(i.start, i.end) for i in commercials.get_intervals()]
+        return result
+    
+    
+def solve_thread(video_list, tmp_dict_path, thread_id):
+    print("Thread %d start computing..." % (thread_id))
+    res_dict = {}
+    for i, param in enumerate(video_list):
+        (video, blackframe_list) = param
+        print("Thread %d start %dth video: %s" % (thread_id, i, video['video_name']))
 
+        transcript_path = "/app/data/subs/aligned/" + video['video_name'] + '.word.srt'
+        if not os.path.exists(transcript_path):
+            continue
+        result = detect_commercial_rekall(video, 
+                                          transcript_path, 
+                                          blackframe_list=blackframe_list, 
+                                          debug=False, verbose=False)
+        res_dict[video['id']] = result
+        if i % 1000 == 0:
+            pickle.dump(res_dict, open(tmp_dict_path, "wb" ))
+            
+    pickle.dump(res_dict, open(tmp_dict_path, "wb" ))
+    print("Thread %d finished computing..." % (thread_id))
 
+    
+def solve_parallel(video_list, res_dict_path=None, nthread=64):
+    
+#     if os.path.exists(res_dict_path):
+#         res_dict = pickle.load(open(res_dict_path, "rb" ))
+# #         video_list = [video for video in video_list if video not in res_dict]
+#     else:
+    res_dict = {}
+
+    num_video = len(video_list)
+    print(num_video)
+    if num_video == 0:
+        return 
+    if num_video <= nthread:
+        nthread = num_video
+        num_video_t = 1
+    else:
+        num_video_t = math.ceil(1. * num_video / nthread)
+    print(num_video_t)
+    
+    tmp_dict_list = []
+    for i in range(nthread):
+        tmp_dict_list.append('/app/result/commercial/dict_{}.pkl'.format(i))
+
+    ctx = mp.get_context('spawn')
+    thread_list = []
+    for i in range(nthread):
+        if i != nthread - 1:
+            video_list_t = video_list[i*num_video_t : (i+1)*num_video_t]
+        else:
+            video_list_t = video_list[i*num_video_t : ]
+        t = ctx.Process(target=solve_thread, args=(video_list_t, tmp_dict_list[i], i,))
+        thread_list.append(t)
+    
+    for t in thread_list:
+        t.start()
+    for t in thread_list:
+        t.join()
+    
+    for path in tmp_dict_list:
+        if not os.path.exists(path):
+            continue
+        res_dict_tmp = pickle.load(open(path, "rb" ))
+        res_dict = {**res_dict, **res_dict_tmp}
+    
+    pickle.dump(res_dict, open(res_dict_path, "wb" ))  
