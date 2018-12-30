@@ -2,7 +2,7 @@ from scannertools import audio
 from scannertools.transcript_alignment import align_transcript_pipeline, TranscriptAligner
 from query.models import Video
 from esper.kube import make_cluster, cluster_config, worker_config
-from esper.load_alignment import callback
+from esper.load_aligned_transcript import callback
 
 import scannerpy
 import os
