@@ -290,3 +290,14 @@ class Notifier:
 
     def notify(self, message, action=None):
         self._r.publish('main', json.dumps({'message': message, 'action': action}))
+
+        
+def imshow(img):
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    plt.axis('off')
+    
+
+def frange(x, y, jump):
+    while x < y:
+        yield x
+        x += jump

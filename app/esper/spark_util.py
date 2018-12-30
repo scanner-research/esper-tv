@@ -187,6 +187,7 @@ def get_speakers():
 
 def get_segments():
     segments = spark.load('query_segment').alias('segments')
+    segments = segments.where(segments.labeler_id == Labeler.objects.get(name='haotian-segments').id)
 
     videos = get_videos().alias('videos')
     segments = segments.join(
@@ -206,6 +207,51 @@ def get_segments():
     )
     segments = _annotate_in_commercial(segments)
     return segments
+
+
+def get_topics():
+    topics = spark.load('query_topic').alias('topics')
+    return topics
+
+
+def get_segment_topics():
+    segments = get_segments()
+    segment_topics = spark.load('query_segment_topics').alias('segment_topics')
+    segment_topics = segment_topics.join(
+        segments, segment_topics.segment_id == segments.id
+    ).select(
+        'segment_topics.*',
+        segments.min_frame,
+        segments.max_frame,
+        segments.video_id
+    )
+
+    return segment_topics
+
+
+def interval_overlap_join(df1, df2):
+    video_id_to_intervals = defaultdict(list)
+    for c in df2.collect():
+        video_id_to_intervals[c.video_id].append(
+            (c.min_frame, c.max_frame, c)
+        )
+
+    output_intervals = []
+    for row in df1.collect():
+        for (start, end, row2) in video_id_to_intervals[row.video_id]:
+            if row.min_frame < end and row.max_frame > start:
+                row_dict = row.asDict()
+                for k, v in row2.asDict().items():
+                    if k == 'id':
+                        continue
+                    row_dict[k] = v
+                row_dict['min_frame'] = max(row.min_frame, start)
+                row_dict['max_frame'] = min(row.max_frame, end)
+                row_dict['duration'] = (row_dict['max_frame'] - row_dict['min_frame']) / row.fps
+                output_intervals.append(row_dict)
+                break
+
+    print(output_intervals[0])
 
 
 NULL_IDENTITY_ID = -1
