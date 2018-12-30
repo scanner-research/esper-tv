@@ -1,6 +1,8 @@
 from rekall.interval_list import IntervalList, Interval
 from rekall.logical_predicates import not_pred, or_pred
 from rekall.temporal_predicates import overlaps, equal, before, after
+from query.models import Video
+
 import pysrt
 import copy
 import time
@@ -375,3 +377,21 @@ def solve_parallel(video_list, res_dict_path=None, nthread=64):
         res_dict = {**res_dict, **res_dict_tmp}
     
     pickle.dump(res_dict, open(res_dict_path, "wb" ))  
+
+if __name__ == "__main__":
+
+    # load data
+    black_frame_dict = pickle.load(open('/app/data/black_frame_all.pkl', 'rb'))
+    result_dict = pickle.load(open('/app/result/commercial/commercial_dict.pkl', 'rb'))
+    additional_field = pickle.load(open('/app/data/addtional_field_all.pkl', 'rb'))
+    videos = Video.objects.all()
+    
+    # prepare data format
+    param_list = []
+    for i, video in enumerate(videos):
+        if video.id in black_frame_dict and additional_field[video.id]['aligned_transcript'] and not video.id in result_dict:
+            param_list.append(({'id': video.id, 'video_name': video.item_name(), 'fps': video.fps, 'num_frames': video.num_frames}, 
+                               black_frame_dict[video.id]))
+
+    # solve with multiprocessing
+    solve_parallel(param_list, res_dict_path='/app/result/commercial/commercial_dict.pkl', nthread=32, use_process=True)
