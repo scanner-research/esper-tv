@@ -25,6 +25,7 @@ import tempfile
 from tqdm import tqdm
 import multiprocessing
 
+# ============== Help functions ==============    
 def second2time(second, sep=','):
     h, m, s, ms = int(second) // 3600, int(second % 3600) // 60, int(second) % 60, int((second - int(second)) * 1000)
     return '{:02d}:{:02d}:{:02d}{:s}{:03d}'.format(h, m, s, sep, ms)
@@ -37,6 +38,27 @@ def count_intervals(intrvlcol):
     return num_intrvl
 
 
+def intrvlcol2list(intrvlcol):
+    interval_list = []
+    for video_id, intrvllist in intrvlcol.intervals.items():
+        for interval in intrvllist.get_intervals():
+            interval_list.append((video_id, interval.get_start(), interval.get_end()))
+    return interval_list
+
+
+def make_supercut(supercut_intervals, out_path = '/app/result/supercut/supercut.mp4'):
+    def download_video_clip(i):
+        video_id, sfid, efid = supercut_intervals[i]
+        video = Video.objects.filter(id=video_id)[0]
+        clip_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
+        return clip_path
+    
+    # make supercut video 
+    clip_paths = par_for(download_video_clip, [i for i in range(len(supercut_intervals))])
+    concat_videos(clip_paths, out_path)
+
+    
+# ============== Queries with rekall ==============    
 def get_person_intrvlcol(person_name, video_ids=None):
     all_faces = FaceIdentity.objects
     if not video_ids is None:
@@ -55,11 +77,9 @@ def get_person_intrvlcol(person_name, video_ids=None):
             'end': 'max_frame',
             'payload': 'shot_id'
         })
-    num_intrvl = 0
-    for _, intrvllist in person_intrvllists.items():
-        num_intrvl += intrvllist.size()
-    print("Get %d intervals" % num_intrvl)
-    return VideoIntervalCollection(person_intrvllists)
+    person_intrvlcol = VideoIntervalCollection(person_intrvllists)
+    print("Get {} intervals for person {}".format(count_intervals(person_intrvlcol), person_name))
+    return person_intrvlcol
 
 
 def get_caption_intrvlcol(phrase, video_ids=None):
@@ -86,12 +106,9 @@ def get_caption_intrvlcol(phrase, video_ids=None):
     
     for video_id, intrvllist in phrase_intrvllists.items():
         phrase_intrvllists[video_id] = IntervalList(intrvllist)
-        
-    num_intrvl = 0
-    for _, intrvllist in phrase_intrvllists.items():
-        num_intrvl += intrvllist.size()
-    print("Get %d intervals" % num_intrvl)
-    return VideoIntervalCollection(phrase_intrvllists)
+    phrase_intrvlcol = VideoIntervalCollection(phrase_intrvllists)
+    print('Get {} intervals for phrase \"{}\"'.format(count_intervals(phrase_intrvlcol), phrase))
+    return phrase_intrvlcol
 
 
 def get_relevant_shots(intrvlcol):
@@ -121,44 +138,59 @@ def get_oneface_intrvlcol(relevant_shots):
     num_intrvl = 0
     for _, intrvllist in oneface_intrvlcol.get_allintervals().items():
         num_intrvl += intrvllist.size()
-    print("Get %d intervals" % num_intrvl)
+    print("Get %d relevant one face intervals" % num_intrvl)
     return oneface_intrvlcol
 
-
-def make_supercut(supercut_intervals, out_path = '/app/result/supercut/supercut.mp4'):
-    def download_video_clip(i):
-        video_id, sfid, efid = supercut_intervals[i]
-        video = Video.objects.filter(id=video_id)[0]
-        clip_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
-        return clip_path
+def get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase):
+    phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
+    person_phrase_intrvlcol = person_intrvlcol.overlaps(phrase_intrvlcol)
+    relevant_shots = get_relevant_shots(person_phrase_intrvlcol)
+    oneface_intrvlcol = get_oneface_intrvlcol(relevant_shots)
+    person_alone_phrase_intrvlcol = person_phrase_intrvlcol.overlaps(oneface_intrvlcol)
     
-    # make supercut video 
-    clip_paths = par_for(download_video_clip, [i for i in range(len(supercut_intervals))])
-    concat_videos(clip_paths, out_path)
+    print('Get {} person alone intervals for phrase \"{}\"'.format(count_intervals(person_alone_phrase_intrvlcol), phrase))
+    return person_alone_phrase_intrvlcol
     
     
+# ============== Applications ==============    
 def same_person_one_sentence(person_name, sentence):
     videos = Video.objects.filter(threeyears_dataset=True)
     video_ids = [video.id for video in videos]
     
     person_intrvlcol = get_person_intrvlcol(person_name, video_ids)
-    words = [word.upper() for word in sentence.split(' ')] 
-    supercut_intervals_all = []
-    for word in tqdm(words):
-        phrase_intrvlcol = get_caption_intrvlcol(word, person_intrvlcol.get_allintervals().keys())
-        person_with_phrase_intrvlcol = person_intrvlcol.overlaps(phrase_intrvlcol)
-        relevant_shots = get_relevant_shots(person_with_phrase_intrvlcol)
-        oneface_intrvlcol = get_oneface_intrvlcol(relevant_shots)
-        person_alone_intrvlcol = person_with_phrase_intrvlcol.overlaps(oneface_intrvlcol)
+    words = [word.upper() for word in sentence.split(' ')]
 
-        print("Get {} intervals for word {}".format(count_intervals(person_alone_intrvlcol), word))
-
-        supercut_intervals = []
-        for video_id, intrvllist in person_alone_intrvlcol.intervals.items():
-            for interval in intrvllist.get_intervals():
-                supercut_intervals.append((video_id, interval.get_start(), interval.get_end()))
-        supercut_intervals_all.append(supercut_intervals)
-    return supercut_intervals_all
+    supercut_candidates = []
+    phrase2interval = {}
+    concat_next = False
+    for idx, word in tqdm(enumerate(words)):
+        if concat_next:
+            concat_next = False
+            continue
+        if len(word) < 4 and idx != len(words) - 1:
+            phrase = word + ' ' + words[idx + 1]
+            if phrase in phrase2interval:
+                supercut_candidates.append(phrase2interval[phrase])
+            else:
+                person_alone_phrase_intrvlcol = get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase)
+                num_intervals = count_intervals(person_alone_phrase_intrvlcol)
+                if num_intervals > 0:
+                    concat_next = True
+                    candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
+                    phrase2interval[phrase] = candidates
+                    supercut_candidates.append(candidates)
+                    continue
+        
+        if word in phrase2interval:
+            supercut_candidates.append(phrase2interval[word])
+        else:
+            person_alone_phrase_intrvlcol = get_person_alone_phrase_intrvlcol(person_intrvlcol, word)
+            num_intervals = count_intervals(person_alone_phrase_intrvlcol)
+            if num_intervals > 0:
+                candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
+                phrase2interval[word] = candidates
+                supercut_candidates.append(candidates)
+    return supercut_candidates
 
 
 def multi_person_one_phrase(phrase):
@@ -166,8 +198,4 @@ def multi_person_one_phrase(phrase):
     video_ids = [video.id for video in videos]
     
     phrase_intrvlcol = get_caption_intrvlcol(phrase.upper(), video_ids)
-    supercut_intervals = []
-    for video, intrvllist in phrase_intrvlcol.intervals.items():
-        for interval in intrvllist.get_intervals():
-            supercut_intervals.append((video, interval.get_start(), interval.get_end()))
-    return supercut_intervals
+    return intrvlcol2list(phrase_intrvlcol)
