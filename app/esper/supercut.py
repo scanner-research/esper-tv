@@ -60,14 +60,19 @@ def make_supercut(supercut_intervals, out_path = '/app/result/supercut/supercut.
     
 # ============== Queries with rekall ==============    
 def get_person_intrvlcol(person_name, video_ids=None):
-    all_faces = FaceIdentity.objects
+    if video_ids is None:
+        videos = Video.objects.filter(threeyears_dataset=True)
+        video_ids = [video.id for video in videos]
+    
+    all_faces = FaceIdentity.objects.annotate(height=F("face__bbox_y2") - F("face__bbox_y1"))
     if not video_ids is None:
         all_faces = all_faces.filter(face__shot__video_id__in=video_ids)
         
     person_intrvllists = qs_to_intrvllists(
         all_faces
-            .filter(identity__name=person_name.lower())
-            .filter(probability__gt=0.99)
+            .filter(identity__name=person_name.lower(), 
+                    probability__gt=0.99,
+                    height__gte=0.3)
             .annotate(video_id=F("face__shot__video_id"))
             .annotate(shot_id=F("face__shot_id"))
             .annotate(min_frame=F("face__shot__min_frame"))
@@ -153,43 +158,60 @@ def get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase):
     
     
 # ============== Applications ==============    
-def same_person_one_sentence(person_name, sentence):
-    videos = Video.objects.filter(threeyears_dataset=True)
-    video_ids = [video.id for video in videos]
-    
-    person_intrvlcol = get_person_intrvlcol(person_name, video_ids)
+def same_person_one_sentence(person, sentence):
+    if type(person) == str:
+        person_intrvlcol = get_person_intrvlcol(person_name)
+    else:
+        person_intrvlcol = person
     words = [word.upper() for word in sentence.split(' ')]
 
     supercut_candidates = []
+    segments = []
     phrase2interval = {}
-    concat_next = False
+    num_concat = 0
     for idx, word in tqdm(enumerate(words)):
-        if concat_next:
-            concat_next = False
+        if num_concat > 0:
+            num_concat -= 1
             continue
-        if len(word) < 4 and idx != len(words) - 1:
-            phrase = word + ' ' + words[idx + 1]
+            
+        phrase = word
+        candidates = None
+        while idx + num_concat < len(words):
+            if num_concat > 0:
+                phrase += ' ' + words[idx + num_concat]
+            # skip short word for long phrase
+            if len(phrase) < 4:
+                num_concat += 1
+                continue
+            
             if phrase in phrase2interval:
-                supercut_candidates.append(phrase2interval[phrase])
+                candidates = phrase2interval[phrase]
+                segment = phrase
+                num_concat += 1
             else:
                 person_alone_phrase_intrvlcol = get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase)
                 num_intervals = count_intervals(person_alone_phrase_intrvlcol)
-                if num_intervals > 0:
-                    concat_next = True
+                if num_intervals > 3:
                     candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
                     phrase2interval[phrase] = candidates
-                    supercut_candidates.append(candidates)
-                    continue
-        
-        if word in phrase2interval:
-            supercut_candidates.append(phrase2interval[word])
-        else:
+                    segment = phrase
+                    num_concat += 1
+                else:
+                    num_concat = num_concat - 1 if num_concat != 0 else 0
+                    break
+        # make up for short word            
+        if candidates is None and len(word) < 4:
             person_alone_phrase_intrvlcol = get_person_alone_phrase_intrvlcol(person_intrvlcol, word)
             num_intervals = count_intervals(person_alone_phrase_intrvlcol)
             if num_intervals > 0:
                 candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
                 phrase2interval[word] = candidates
-                supercut_candidates.append(candidates)
+                segment = word
+        if not candidates is None:
+            supercut_candidates.append(candidates)
+            segments.append(segment)
+            
+    print("Sentence segments: ", segments)
     return supercut_candidates
 
 
