@@ -16,7 +16,7 @@ from esper.captions import *
 from query.models import Video, Face, FaceIdentity
 
 # import esper widget for debugging
-from esper.prelude import esper_widget, concat_videos
+from esper.prelude import *
 
 import random
 import os
@@ -24,6 +24,7 @@ import pickle
 import tempfile
 from tqdm import tqdm
 import multiprocessing
+from pydub import AudioSegment
 
 # ============== Help functions ==============    
 def second2time(second, sep=','):
@@ -46,17 +47,78 @@ def intrvlcol2list(intrvlcol):
     return interval_list
 
 
-def make_supercut(supercut_intervals, out_path = '/app/result/supercut/supercut.mp4'):
+def stitch_video_temporal(intervals, out_path = '/app/result/supercut/supercut.mp4'):
     def download_video_clip(i):
-        video_id, sfid, efid = supercut_intervals[i]
+        video_id, sfid, efid = intervals[i]
         video = Video.objects.filter(id=video_id)[0]
         clip_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
         return clip_path
     
     # make supercut video 
-    clip_paths = par_for(download_video_clip, [i for i in range(len(supercut_intervals))])
+    clip_paths = par_for(download_video_clip, [i for i in range(len(intervals))])
     concat_videos(clip_paths, out_path)
 
+    
+def make_montage_t(args):
+    (videos, frames, kwargs) = args
+    return make_montage(videos, frames, **kwargs)    
+
+def stitch_video_spatial(intervals, out_path, **kwargs):
+    def gcd(a, b):
+        return gcd(b, a % b) if b else a
+
+    id2video = {video_id: Video.objects.filter(id=video_id)[0] for (video_id, sfid, efid) in intervals}
+    videos = [id2video[video_id] for (video_id, sfid, efid) in intervals]
+    fps = reduce(gcd, [int(math.ceil(v.fps)) for v in videos])
+
+    max_frames = 0
+    for (video_id, sfid, efid) in intervals:
+        max_frames = max(max_frames, (efid - sfid) / math.ceil(id2video[video_id].fps) * fps )
+        max_frames = int(max_frames)
+    kwargs_list = []
+    for i in range(max_frames):
+        frames = [int(math.ceil(id2video[video_id].fps) / fps) * i + sfid for (video_id, sfid, efid) in intervals]
+        kwargs_list.append((videos, frames, kwargs))
+    
+    first = make_montage_t(kwargs_list[0])
+    vid = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'XVID'), fps,
+                          (first.shape[1], first.shape[0]))
+    frames = par_for(
+        make_montage_t, kwargs_list,
+        workers=16,
+        process=True)
+    for frame in tqdm(frames):
+        vid.write(frame)
+
+    vid.release()
+    
+
+def mix_audio(intervals, out_path, decrease_volume=3):
+    def download_audio_clip(i):
+        video_id, sfid, efid = intervals[i]
+        video = Video.objects.filter(id=video_id)[0]
+        video_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
+        return AudioSegment.from_file(video_path, format="mp4")
+    
+    max_duration = 0
+    for (video_id, sfid, efid) in intervals:
+        video = Video.objects.filter(id=video_id)[0]
+        max_duration = max(max_duration, (efid-sfid)/video.fps)
+    print("Max duration %.3f s" % max_duration)
+
+    audios = par_for(download_audio_clip, [i for i in range(len(intervals))])
+    audio_mix = AudioSegment.silent(duration=int(max_duration*1000))
+    for audio in audios:
+        audio_mix = audio_mix.overlay(audio)
+    audio_mix = audio_mix - decrease_volume
+    audio_mix.export(out_path, format="wav")
+    
+    
+def merge_video_audio(video_path, audio_path, out_path):
+    cmd = 'ffmpeg -y -i {} -i {} -c:v copy -c:a aac -strict experimental {}' \
+            .format(video_path, audio_path, out_path)
+    os.system(cmd)
+    
     
 # ============== Queries with rekall ==============    
 def get_person_intrvlcol(person_name, video_ids=None):
