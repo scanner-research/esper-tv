@@ -26,6 +26,7 @@ from tqdm import tqdm
 import multiprocessing
 from pydub import AudioSegment
 
+
 # ============== Help functions ==============    
 def second2time(second, sep=','):
     h, m, s, ms = int(second) // 3600, int(second % 3600) // 60, int(second) % 60, int((second - int(second)) * 1000)
@@ -47,7 +48,7 @@ def intrvlcol2list(intrvlcol):
     return interval_list
 
 
-def stitch_video_temporal(intervals, out_path = '/app/result/supercut/supercut.mp4'):
+def stitch_video_temporal(intervals, out_path):
     def download_video_clip(i):
         video_id, sfid, efid = intervals[i]
         video = Video.objects.filter(id=video_id)[0]
@@ -63,21 +64,28 @@ def make_montage_t(args):
     (videos, frames, kwargs) = args
     return make_montage(videos, frames, **kwargs)    
 
-def stitch_video_spatial(intervals, out_path, **kwargs):
+def stitch_video_spatial(intervals, out_path, align=False, **kwargs):
     def gcd(a, b):
         return gcd(b, a % b) if b else a
 
     id2video = {video_id: Video.objects.filter(id=video_id)[0] for (video_id, sfid, efid) in intervals}
     videos = [id2video[video_id] for (video_id, sfid, efid) in intervals]
     fps = reduce(gcd, [int(math.ceil(v.fps)) for v in videos])
+#     print('gcd fps', fps)
 
-    max_frames = 0
+    nframes_list = []
     for (video_id, sfid, efid) in intervals:
-        max_frames = max(max_frames, (efid - sfid) / math.ceil(id2video[video_id].fps) * fps )
-        max_frames = int(max_frames)
+        n = (efid - sfid) / math.ceil(id2video[video_id].fps) * fps
+        nframes_list.append(int(n))
+    if align:
+        nframes = min(nframes_list)
+    else:
+        nframes = max(nframes_list)
+    
     kwargs_list = []
-    for i in range(max_frames):
+    for i in range(nframes):
         frames = [int(math.ceil(id2video[video_id].fps) / fps) * i + sfid for (video_id, sfid, efid) in intervals]
+#         print(frames)
         kwargs_list.append((videos, frames, kwargs))
     
     first = make_montage_t(kwargs_list[0])
@@ -93,21 +101,28 @@ def stitch_video_spatial(intervals, out_path, **kwargs):
     vid.release()
     
 
-def mix_audio(intervals, out_path, decrease_volume=3):
+def mix_audio(intervals, out_path, decrease_volume=3, align=False):
     def download_audio_clip(i):
         video_id, sfid, efid = intervals[i]
         video = Video.objects.filter(id=video_id)[0]
         video_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
         return AudioSegment.from_file(video_path, format="mp4")
     
-    max_duration = 0
+    durations = []
     for (video_id, sfid, efid) in intervals:
         video = Video.objects.filter(id=video_id)[0]
-        max_duration = max(max_duration, (efid-sfid)/video.fps)
+        d = (efid - sfid) / video.fps
+        durations.append(d)
+    max_duration, min_duration = max(durations), min(durations)
     print("Max duration %.3f s" % max_duration)
-
+    
     audios = par_for(download_audio_clip, [i for i in range(len(intervals))])
-    audio_mix = AudioSegment.silent(duration=int(max_duration*1000))
+    if not align: 
+        audio_mix = AudioSegment.silent(duration=int(max_duration*1000))
+    else:
+        audio_mix = AudioSegment.silent(duration=int(min_duration*1000))
+        audios = [audio.speedup(playback_speed=durations[i] / min_duration) for i, audio in enumerate(audios)]
+        
     for audio in audios:
         audio_mix = audio_mix.overlay(audio)
     audio_mix = audio_mix - decrease_volume
@@ -115,9 +130,12 @@ def mix_audio(intervals, out_path, decrease_volume=3):
     
     
 def merge_video_audio(video_path, audio_path, out_path):
-    cmd = 'ffmpeg -y -i {} -i {} -c:v copy -c:a aac -strict experimental {}' \
-            .format(video_path, audio_path, out_path)
-    os.system(cmd)
+    avi_path = '/app/result/montage/merge.avi'
+    cmd_merge = 'ffmpeg -y -i {} -i {} -c:v copy -c:a aac -strict experimental {}' \
+            .format(video_path, audio_path, avi_path)
+    cmd_avi2mp4 = 'ffmpeg -y -i {} -c:a aac -b:a 128k -c:v libx264 -crf 23 {}'.format(avi_path, out_path)
+    os.system(cmd_merge)
+    os.system(cmd_avi2mp4)
     
     
 # ============== Queries with rekall ==============    
@@ -277,9 +295,23 @@ def same_person_one_sentence(person, sentence):
     return supercut_candidates
 
 
-def multi_person_one_phrase(phrase):
+def multi_person_one_phrase(phrase, with_faces=False, limit=None):
     videos = Video.objects.filter(threeyears_dataset=True)
     video_ids = [video.id for video in videos]
-    
     phrase_intrvlcol = get_caption_intrvlcol(phrase.upper(), video_ids)
+
+    
+    def fn(i):
+        faces = Face.objects.filter(shot__video__id=video_id, shot__min_frame__lte=i.start, shot__max_frame__gte=i.end)
+        return len(faces) > 0
+            
+    if with_faces:
+        intrvlcol_withface = {}
+        for video_id, intrvllist in phrase_intrvlcol.intervals.items():
+            intrvllist_withface = intrvllist.filter(fn)
+            if intrvllist_withface.size() > 0:
+                intrvlcol_withface[video_id] = intrvllist_withface
+            if not limit is None and len(intrvlcol_withface) == limit:
+                phrase_intrvlcol = VideoIntervalCollection(intrvlcol_withface)
+                break
     return intrvlcol2list(phrase_intrvlcol)
