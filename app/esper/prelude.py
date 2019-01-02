@@ -32,6 +32,7 @@ from collections import defaultdict
 from pickle_cache import PickleCache
 from esper.widget import esper_widget
 import scannertools
+from iterextras import unzip, par_for, par_filter, flatten, collect, batch
 
 # Access to Scanner protobufs
 cfg = Config()
@@ -85,27 +86,6 @@ else:
     storage_config = StorageConfig.make_posix_config()
     scannertools.init_storage()
 storage = StorageBackend.make_from_config(storage_config)
-
-
-def unzip(l, default=([], [])):
-    x = tuple(zip(*l))
-    if x == ():
-        return default
-    else:
-        return x
-
-
-def par_for(f, l, process=False, workers=None, progress=True):
-    Pool = ProcessPoolExecutor if process else ThreadPoolExecutor
-    with Pool(max_workers=mp.cpu_count() if workers is None else workers) as executor:
-        if progress:
-            return list(tqdm(executor.map(f, l), total=len(l), smoothing=0.05))
-        else:
-            return list(executor.map(f, l))
-
-
-def par_filter(f, l, **kwargs):
-    return [x for x, b in zip(l, par_for(f, l, **kwargs)) if b]
 
 
 class Timer:
@@ -192,8 +172,8 @@ def make_montage(video,
             if i >= len(imgs):
                 break
             img = imgs[i]
-            montage[row * target_height:(row + 1) * target_height, col * target_width:(
-                col + 1) * target_width, :] = img
+            montage[row * target_height:(row + 1) * target_height, col * target_width:(col + 1) *
+                    target_width, :] = img
         else:
             continue
         break
@@ -237,23 +217,14 @@ def make_montage_video(videos, start, end, output_path, **kwargs):
     vid.release()
 
 
-# https://mathieularose.com/how-not-to-flatten-a-list-of-lists-in-python/
-def flatten(l):
-    return list(itertools.chain.from_iterable(l))
-
-
-def collect(l, kfn):
-    d = defaultdict(list)
-    for x in l:
-        d[kfn(x)].append(x)
-    return dict(d)
-
-
 def concat_videos(paths, output_path=None):
     if output_path is None:
         output_path = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False).name
 
-    transform = ';'.join(['[{i}:v]scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2[v{i}]'.format(i=i) for i in range(len(paths))])
+    transform = ';'.join([
+        '[{i}:v]scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2[v{i}]'
+        .format(i=i) for i in range(len(paths))
+    ])
     filter = ''.join(['[v{i}][{i}:a:0]'.format(i=i) for i in range(len(paths))])
     inputs = ' '.join(['-i {}'.format(p) for p in paths])
 
@@ -261,8 +232,9 @@ def concat_videos(paths, output_path=None):
     ffmpeg -y {inputs} \
     -filter_complex "{transform}; {filter}concat=n={n}:v=1:a=1[outv][outa]" \
     -map "[outv]" -map "[outa]" {output}
-    '''.format(transform=transform, inputs=inputs, filter=filter, n=len(paths), output=output_path)
-#     print(cmd)
+    '''.format(
+        transform=transform, inputs=inputs, filter=filter, n=len(paths), output=output_path)
+    #     print(cmd)
     sp.check_call(cmd, shell=True)
 
     return output_path
@@ -277,11 +249,6 @@ def ring():
     print('\a')
 
 
-def batch(l, n):
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
-
-
 class Notifier:
     def __init__(self):
         import redis
@@ -291,11 +258,11 @@ class Notifier:
     def notify(self, message, action=None):
         self._r.publish('main', json.dumps({'message': message, 'action': action}))
 
-        
+
 def imshow(img):
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     plt.axis('off')
-    
+
 
 def frange(x, y, jump):
     while x < y:

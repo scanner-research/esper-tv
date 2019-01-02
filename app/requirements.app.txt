@@ -25,9 +25,10 @@ google_images_download
 psutil
 redis
 msgpack
-#pyro-ppl==0.2.1
 pickle_cache
+iterextras
 
+#pyro-ppl==0.2.1
 #vega==0.5.0
 #textacy
 #gensim
