@@ -13,7 +13,7 @@ from rekall.list_predicates import length_exactly
 from esper.captions import *
 
 # import face identities for person search
-from query.models import Video, Face, FaceIdentity
+from query.models import Video, Face, FaceIdentity, FaceGender
 
 # import esper widget for debugging
 from esper.prelude import *
@@ -52,6 +52,7 @@ def intrvlcol2list(intrvlcol, with_duration=False):
                 interval_list.append((video_id, i.start, i.end, (i.end - i.start) / video.fps))
             else:
                 interval_list.append((video_id, i.start, i.end))
+    print("Get {} intervals from interval collection".format(len(interval_list)))
     return interval_list
 
 def random_sample_candidates(intervals, num_sample):
@@ -323,7 +324,7 @@ def same_person_one_sentence(person, sentence):
     return supercut_candidates
 
 
-def multi_person_one_phrase(phrase, with_faces=False, limit=None):
+def multi_person_one_phrase(phrase, filters={}):
     videos = Video.objects.filter(threeyears_dataset=True)
     video_ids = [video.id for video in videos]
     phrase_intrvlcol = get_caption_intrvlcol(phrase.upper(), video_ids)
@@ -331,15 +332,22 @@ def multi_person_one_phrase(phrase, with_faces=False, limit=None):
     def fn(i):
         faces = Face.objects.filter(shot__video__id=video_id, shot__min_frame__lte=i.start, shot__max_frame__gte=i.end)
 #         faces = Face.objects.filter(frame__number__gte=i.start, frame__number__lte=i.end) 
-        return len(faces) > 0
-            
-    if with_faces:
+        if len(faces) != 1:
+            return False
+        if 'gender' in filters:
+            faceGender = FaceGender.objects.filter(face__id=faces[0].id)[0]
+            if faceGender.gender.name != filters['gender']:
+                return False
+        return True
+    
+    if 'with_face' in filters:
+        print('Filtering with face...')
         intrvlcol_withface = {}
         for video_id, intrvllist in phrase_intrvlcol.intervals.items():
             intrvllist_withface = intrvllist.filter(fn)
             if intrvllist_withface.size() > 0:
                 intrvlcol_withface[video_id] = intrvllist_withface
-            if not limit is None and len(intrvlcol_withface) == limit:
+            if 'limit' in filters and len(intrvlcol_withface) == filters['limit']:
                 break
         phrase_intrvlcol = VideoIntervalCollection(intrvlcol_withface)
 #         print(len(phrase_intrvlcol))
