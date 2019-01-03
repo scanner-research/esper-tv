@@ -64,7 +64,7 @@ def random_sample_candidates(intervals, num_sample):
 
 def stitch_video_temporal(intervals, out_path):
     def download_video_clip(i):
-        video_id, sfid, efid = intervals[i]
+        video_id, sfid, efid = intervals[i][:3]
         video = Video.objects.filter(id=video_id)[0]
         video_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
         return video_path
@@ -82,23 +82,30 @@ def stitch_video_spatial(intervals, out_path, align=False, **kwargs):
     def gcd(a, b):
         return gcd(b, a % b) if b else a
 
-    id2video = {video_id: Video.objects.filter(id=video_id)[0] for (video_id, sfid, efid) in intervals}
-    videos = [id2video[video_id] for (video_id, sfid, efid) in intervals]
+    id2video = {i[0]: Video.objects.filter(id=i[0])[0] for i in intervals}
+    videos = [id2video[i[0]] for i in intervals]
     fps = reduce(gcd, [int(math.ceil(v.fps)) for v in videos])
 #     print('gcd fps', fps)
 
-    nframes_list = []
-    for (video_id, sfid, efid) in intervals:
+    nframes = []
+    for i in intervals:
+        video_id, sfid, efid = i[:3]
         n = (efid - sfid) / math.ceil(id2video[video_id].fps) * fps
-        nframes_list.append(int(n))
+        nframes.append(int(n))
     if align:
-        nframes = min(nframes_list)
+        nframe_mix = np.median(nframes).astype(int)
     else:
-        nframes = max(nframes_list)
+        nframe_mix = max(nframes)
     
     kwargs_list = []
-    for i in range(nframes):
-        frames = [int(math.ceil(id2video[video_id].fps) / fps) * i + sfid for (video_id, sfid, efid) in intervals]
+    for i in range(nframe_mix):
+        frames = []
+        for idx, intrv in enumerate(intervals):
+            video_id, sfid, efid = intrv[:3]
+            fid_shift = int(math.ceil(id2video[video_id].fps) / fps) * i
+            if align:
+                fid_shift = int(round(1. * fid_shift / nframe_mix * nframes[idx])) 
+            frames.append(fid_shift + sfid)
 #         print(frames)
         kwargs_list.append((videos, frames, kwargs))
     
@@ -115,45 +122,35 @@ def stitch_video_spatial(intervals, out_path, align=False, **kwargs):
     vid.release()
     
 
-def mix_audio(intervals, out_path, decrease_volume=3, align_type=None):
+def mix_audio(intervals, out_path, decrease_volume=3, align=False):
     def download_audio_clip(i):
-        video_id, sfid, efid = intervals[i]
+        video_id, sfid, efid = intervals[i][:3]
         video = Video.objects.filter(id=video_id)[0]
         video_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
         
-        if not align_type is None:
-            if align_type == 'slow':
-                speed = max(0.5, durations[i] / max_duration)
-            else:
-                speed = min(2.0, durations[i] / min_duration)
-            print(speed)
+        if align:
+            speed = durations[i] / duration_mix
+            speed = max(0.5, speed)
+            speed = min(2.0, speed)
+#             print(speed)
             tmp_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
             cmd = 'ffmpeg -i {} -filter:a "atempo={}" -vn {}'.format(video_path, speed, tmp_path)
-            print(cmd)
+#             print(cmd)
             os.system(cmd)
             video_path = tmp_path
         return AudioSegment.from_file(video_path, format="mp4")
     
     durations = []
-    for (video_id, sfid, efid) in intervals:
+    for i in intervals:
+        video_id, sfid, efid = i[:3]
         video = Video.objects.filter(id=video_id)[0]
         d = (efid - sfid) / video.fps
         durations.append(d)
-    max_duration, min_duration = max(durations), min(durations)
-    print("Audio clip duration: min=%.3fs max=%.3fs" % (min_duration, max_duration))
+    duration_mix = np.median(durations)
+    print("Audio clip duration: min=%.3fs max=%.3fs" % (min(durations), max(durations)))
     
     audios = par_for(download_audio_clip, [i for i in range(len(intervals))])
-    if align_type == 'fast':
-        audio_mix = AudioSegment.silent(duration=int(min_duration*1000))
-    else:
-        audio_mix = AudioSegment.silent(duration=int(max_duration*1000))
-
-#     if not align: 
-#         audio_mix = AudioSegment.silent(duration=int(max_duration*1000))
-#     else:
-#         audio_mix = AudioSegment.silent(duration=int(min_duration*1000))
-#         audios = [audio.speedup(playback_speed=durations[i] / min_duration) for i, audio in enumerate(audios)]
-        
+    audio_mix = AudioSegment.silent(duration=int(duration_mix*1000))
     for audio in audios:
         audio_mix = audio_mix.overlay(audio)
     audio_mix = audio_mix - decrease_volume
@@ -332,8 +329,8 @@ def multi_person_one_phrase(phrase, with_faces=False, limit=None):
     phrase_intrvlcol = get_caption_intrvlcol(phrase.upper(), video_ids)
 
     def fn(i):
-#         faces = Face.objects.filter(shot__video__id=video_id, shot__min_frame__lte=i.start, shot__max_frame__gte=i.end)
-        faces = Face.objects.filter(frame__number__gte=i.start, frame__number__lte=i.end) 
+        faces = Face.objects.filter(shot__video__id=video_id, shot__min_frame__lte=i.start, shot__max_frame__gte=i.end)
+#         faces = Face.objects.filter(frame__number__gte=i.start, frame__number__lte=i.end) 
         return len(faces) > 0
             
     if with_faces:
