@@ -1,6 +1,6 @@
 from sklearn.neighbors import NearestNeighbors
 from django.db import models, connection, connections
-from django.db.models import F, ExpressionWrapper
+from django.db.models import F, ExpressionWrapper, Max
 from django.db.models.base import ModelBase
 from django.db.models.functions import Cast
 from django.db.models.query import QuerySet
@@ -15,6 +15,7 @@ import sqlparse
 import subprocess as sp
 import csv
 import tempfile
+from tqdm import tqdm
 
 MAX_STR_LEN = 256
 
@@ -62,7 +63,7 @@ def _print(args):
 def bulk_create_copy(self, objects, keys, table=None):
     meta = self.model._meta
     fname = '/app/rows.csv'
-    log.debug('Creating CSV')
+    print('Creating CSV')
     with open(fname, 'w') as f:
         writer = csv.writer(f, delimiter=',')
         writer.writerow(keys)
@@ -74,7 +75,7 @@ def bulk_create_copy(self, objects, keys, table=None):
                 id += 1
             writer.writerow([obj[k] for k in keys])
 
-    log.debug('Writing to database')
+    print('Writing to database')
     print(sp.check_output("""
     echo "\copy {table} FROM '/app/rows.csv' WITH DELIMITER ',' CSV HEADER;" | psql -h db esper will
     """.format(table=table or meta.db_table),
@@ -87,7 +88,7 @@ def bulk_create_copy(self, objects, keys, table=None):
     #         cursor.execute("SELECT setval('{}_id_seq', {}, false)".format(table, id))
 
     # os.remove(fname)
-    log.debug('Done!')
+    print('Done!')
 
 
 def model_repr(model):
