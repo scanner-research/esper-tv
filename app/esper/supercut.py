@@ -225,7 +225,7 @@ def filter_still_image_t(interval):
     frame_second = load_frame(video, fid + 1, [])
     diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
 #     print(video.id, fid, diff)
-    return diff > 30
+    return diff > 25
 
 def filter_still_image_parallel(intervals, limit=100):
     if limit < len(intervals):
@@ -370,7 +370,7 @@ def get_oneface_intrvlcol(relevant_shots):
     print("Get %d relevant one face intervals" % num_intrvl)
     return oneface_intrvlcol
 
-def get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase):
+def get_person_alone_phrase_intervals(person_intrvlcol, phrase):
     phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
     person_phrase_intrvlcol_raw = person_intrvlcol.overlaps(phrase_intrvlcol)
     # only keep intervals which is the same before overlap
@@ -383,9 +383,13 @@ def get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase):
     person_alone_phrase_intrvlcol = person_phrase_intrvlcol.overlaps(oneface_intrvlcol)
     
     # run optical flow to filter out still images
+    intervals = intrvlcol2list(person_alone_phrase_intrvlcol)
+    intervals_nostill = filter_still_image_parallel(intervals)
+    intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
     
-    print('Get {} person alone intervals for phrase \"{}\"'.format(count_intervals(person_alone_phrase_intrvlcol), phrase))
-    return person_alone_phrase_intrvlcol
+    # Todo: always give at least one output 
+    print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), phrase))
+    return intervals_final
     
     
 # ============== Applications ============== 
@@ -468,12 +472,11 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
                 segment = phrase
                 num_concat += 1
             else:
-                person_alone_phrase_intrvlcol = get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase)
-                num_intervals = count_intervals(person_alone_phrase_intrvlcol)
+                person_alone_phrase_intervals = get_person_alone_phrase_intervals(person_intrvlcol, phrase)
+                num_intervals = len(person_alone_phrase_intervals)
                 if num_intervals > LEAST_HIT:
-                    candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
-                    candidates = filter_still_image_parallel(candidates)
-#                     phrase2interval[phrase] = candidates
+                    candidates = person_alone_phrase_intervals
+                    phrase2interval[phrase] = candidates
                     segment = phrase
                     num_concat += 1
                 else:
@@ -487,18 +490,13 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
                 candidates = phrase2interval[word]
                 segment = word
             else:
-                person_alone_phrase_intrvlcol = get_person_alone_phrase_intrvlcol(person_intrvlcol, word)
-                num_intervals = count_intervals(person_alone_phrase_intrvlcol)
+                person_alone_phrase_intervals = get_person_alone_phrase_intervals(person_intrvlcol, phrase)
+                num_intervals = len(person_alone_phrase_intervals)
                 if num_intervals > 0:
-                    candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
-                    candidates = filter_still_image_parallel(candidates)
-#                     phrase2interval[word] = candidates
+                    candidates = person_alone_phrase_intervals
+                    phrase2interval[word] = candidates
                     segment = word
         if not candidates is None:
-            ###
-#             candidates = filter_still_image_parallel(candidates)
-            ###
-            phrase2interval[segment] = candidates
             supercut_candidates.append(candidates)
             segments.append(segment)
             
