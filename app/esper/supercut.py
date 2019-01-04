@@ -58,10 +58,12 @@ def intrvlcol2list(intrvlcol, with_duration=True):
     return interval_list
 
 
-def select_candidates(intervals, num_sample=1, filter='random'):
+def select_candidates(intervals, num_sample=1, range=(0.5, 1.5), filter='random'):
     durations = [i[-1] for i in intervals]
     median = np.median(durations)
-    intervals_regular = [i for i in intervals if i[-1] > 0.5 * median and i[-1] < 1.5 * median]
+    intervals_regular = [i for i in intervals if i[-1] > range[0] * median and i[-1] < range[1] * median]
+    if len(intervals_regular) == 0:
+        intervals_regular = [i for i in intervals if i[-1] > 0.5 * median and i[-1] < 1.5 * median]
     # Todo: if regular intervals are not enough
     if filter == 'random':
         return random.sample(intervals_regular, num_sample)
@@ -70,12 +72,22 @@ def select_candidates(intervals, num_sample=1, filter='random'):
         return intervals_regular[np.argmax(durations_regular)]
 
     
-def stitch_video_temporal(intervals, out_path, out_duration=None, speed=0.8, dilation=0):
+def stitch_video_temporal(intervals, out_path, out_duration=None, speed=0.8, dilation=1.0):
     def download_video_clip(i):
         video_id, sfid, efid = intervals[i][:3]
         video = Video.objects.filter(id=video_id)[0]
-        video_path = video.download(segment=(1.*sfid/video.fps, 1.*efid/video.fps))
+        start, end = 1. * sfid / video.fps, 1. * efid / video.fps
+        video_path = video.download(segment=(start, end))
+        if i == len(intervals) - 1 and not dilation is None: 
+            video_path = add_fade_out(video_path)
         return video_path
+    
+    if dilation < 0.5:
+        dilation = None
+    if not dilation is None:
+        video_id, sfid, efid = intervals[-1][:3]
+        video = Video.objects.filter(id=video_id)[0]
+        intervals.append((video_id, efid, efid + int(dilation*video.fps), dilation))
     
     # make supercut video 
     clip_paths = par_for(download_video_clip, [i for i in range(len(intervals))])
@@ -225,14 +237,22 @@ def filter_still_image_t(interval):
     frame_second = load_frame(video, fid + 1, [])
     diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
 #     print(video.id, fid, diff)
-    return diff > 25
+    return diff > 15
 
 def filter_still_image_parallel(intervals, limit=100):
+    durations = [i[-1] for i in intervals]
     if limit < len(intervals):
-        intervals = random.sample(intervals, limit)
+#         intervals = random.sample(intervals, limit)
+        intervals = [intervals[idx] for idx in np.argsort(durations)[-limit : ]]
     filter_res = par_for(filter_still_image_t, intervals)
     return [intrv for i, intrv in enumerate(intervals) if filter_res[i]]
 
+
+def replace_audio(video_path, audio_path, out_path):
+    cmd = 'ffmpeg -y -i {} -i {} -c:v copy -map 0:v:0 -map 1:a:0 {}' \
+          .format(video_path, audio_path, out_path)
+    os.system(cmd)
+    
 
 def add_bgm(video_path, bgm_path, out_path, bgm_decrease=2):
     audio_ori = AudioSegment.from_file(video_path, format='mp4')
@@ -240,11 +260,18 @@ def add_bgm(video_path, bgm_path, out_path, bgm_decrease=2):
     audio_mix = audio_ori.overlay(audio_bgm - bgm_decrease)
     tmp_path = tempfile.NamedTemporaryFile(suffix='.wav').name
     audio_mix.export(tmp_path, format='wav')
+    replace_audio(video_path, tmp_path, out_path)
     
-    cmd = 'ffmpeg -y -i {} -i {} -c:v copy -map 0:v:0 -map 1:a:0 {}' \
-          .format(video_path, tmp_path, out_path)
-    os.system(cmd)
     
+def add_fade_out(video_path):
+    audio = AudioSegment.from_file(video_path, format='mp4')
+    silence = AudioSegment.silent(duration=len(audio))
+    silence_path = tempfile.NamedTemporaryFile(suffix='.wav').name
+    silence.export(silence_path, format='wav')
+    out_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
+    replace_audio(video_path, silence_path, out_path)
+    return out_path
+
         
 # ============== Queries with rekall ==============    
 def get_person_intrvlcol(person_name, **kwargs):
@@ -415,12 +442,15 @@ def single_person_one_song(person_name, lyric_path, out_path, person_intrvlcol=N
     for idx, (sentence, start, end) in enumerate(lyrics):
         supercut_candidates = single_person_one_sentence(person_intrvlcol, sentence, phrase2interval)
         pickle.dump(phrase2interval, open(cache_path, 'wb'))
+        
         # sample candidate
-        supercut_intervals = [select_candidates(candidates, filter='longest') for candidates in supercut_candidates]
+        supercut_intervals = [select_candidates(candidates, range=(0.99, 1.4), filter='longest') for candidates in supercut_candidates]
         print(supercut_intervals)
+        
         # concat clips with dilation at the end; global speed change
-        tmp_path = '/app/result/supercut/{}-{}-{}.mp4'.format(person_name, song_name, idx) 
-        stitch_video_temporal(supercut_intervals, tmp_path, out_duration=None)
+        tmp_path = '/app/result/supercut/{}-{}-{}.mp4'.format(person_name, song_name, idx)
+        dilation = lyrics[idx+1][1] - end if idx != len(lyrics) - 1 else 0
+        stitch_video_temporal(supercut_intervals, tmp_path, out_duration=None, dilation=dilation)
         cutting_paths.append(tmp_path)
 #         if idx == 1:
 #             break
