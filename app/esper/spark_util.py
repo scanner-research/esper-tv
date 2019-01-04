@@ -1,12 +1,14 @@
-from esper.widget import *
-from esper.prelude import *
-from esper.spark import *
-from esper.validation import *
 import pyspark.sql.functions as func
 from pyspark.sql.types import BooleanType, IntegerType, StringType, DoubleType
 from collections import defaultdict, Counter
 import datetime
 import calendar
+import sys
+
+from esper.widget import *
+from esper.prelude import *
+from esper.spark import *
+from esper.validation import *
 
 
 spark = SparkWrapper()
@@ -229,6 +231,11 @@ def get_segment_topics():
     return segment_topics
 
 
+
+def get_hair_colors():
+    return spark.load('query_haircolor').alias('hair_colors')
+
+
 def interval_overlap_join(df1, df2):
     video_id_to_intervals = defaultdict(list)
     for c in df2.collect():
@@ -257,12 +264,21 @@ def interval_overlap_join(df1, df2):
 NULL_IDENTITY_ID = -1
 
 
-def _annotate_host_probability(faces, identity_threshold=0.3):
+def _annotate_host_probability(faces, identity_threshold=0.5):
+    labelers = get_labelers()
+    labelers = labelers.where(
+        labelers.name.contains('face-identity:') |
+        labelers.name.contains('face-identity-converted:')
+    )
+
     face_identities = spark.load('query_faceidentity').alias('face_identity')
-    face_identities = face_identities.where(face_identities.probability > identity_threshold)
+    face_identities = face_identities.where(
+        face_identities.probability > identity_threshold)
+    face_identities = face_identities.join(
+        labelers, face_identities.labeler_id == labelers.id,
+        'left_outer')
 
     faces2 = get_faces(annotate_host_probability=False).alias('faces2')
-    faces2 = faces2.where(faces2.in_commercial == False)
 
     face_identities = face_identities.join(
         faces2, face_identities.face_id == faces2.id
@@ -276,17 +292,36 @@ def _annotate_host_probability(faces, identity_threshold=0.3):
         'faces2.channel_id'
     )
 
+    print('Constructing host probability udf...', file=sys.stderr)
+
     # Annotate host probabilities
     canonical_show_id_to_host_ids = defaultdict(set)
     canonical_show_hosts = spark.load('query_canonicalshow_hosts')
     for e in canonical_show_hosts.collect():
         canonical_show_id_to_host_ids[e.canonicalshow_id].add(e.identity_id)
+    print('  {} canonical shows have hosts'.format(
+          len(canonical_show_id_to_host_ids)), file=sys.stderr)
 
-    def is_host_helper(identity_id, canonical_show_id):
-        return identity_id in canonical_show_id_to_host_ids[canonical_show_id]
+    # Fall back to all channel staff if no host info is annotated
+    channel_id_to_host_ids = defaultdict(set)
+    for e in get_videos().select(
+        'channel_id', 'canonical_show_id'
+    ).distinct().collect():
+        channel_id_to_host_ids[e.channel_id].update(
+            canonical_show_id_to_host_ids[e.canonical_show_id])
+    for channel_id, hosts in channel_id_to_host_ids.items():
+        print('  channel_id={} has {} unique hosts'.format(
+              channel_id, len(hosts)), file=sys.stderr)
+
+    def is_host_helper(identity_id, canonical_show_id, channel_id):
+        if canonical_show_id not in canonical_show_id_to_host_ids:
+            return identity_id in channel_id_to_host_ids[channel_id]
+        else:
+            return identity_id in canonical_show_id_to_host_ids[canonical_show_id]
 
     host_filter_udf = func.udf(is_host_helper, BooleanType())
-    host_identities = face_identities.filter(host_filter_udf('identity_id', 'canonical_show_id'))
+    host_identities = face_identities.filter(
+        host_filter_udf('identity_id', 'canonical_show_id', 'channel_id'))
 
     face_id_to_host_prob = defaultdict(float)
     for host in host_identities.collect():
@@ -304,7 +339,20 @@ def _annotate_host_probability(faces, identity_threshold=0.3):
     return faces
 
 
+# Lazily Cached
+_faces_wo_hosts = None
+_faces_w_hosts = None
+
+
 def get_faces(annotate_host_probability=True):
+    global _faces_w_hosts, _faces_wo_hosts
+    if annotate_host_probability:
+        if _faces_w_hosts is not None:
+            return _faces_w_hosts
+    else:
+        if _faces_wo_hosts is not None:
+            return _faces_wo_hosts
+
     faces = spark.load('query_face').alias('faces')
 
     videos = get_videos()
@@ -313,6 +361,8 @@ def get_faces(annotate_host_probability=True):
         frames, faces.frame_id == frames.id
     ).join(
         videos, frames.video_id == videos.id
+    ).where(
+        (videos.corrupted == False) & (videos.duplicate == False)
     ).select(
         'faces.*',
         videos.show_id,
@@ -341,7 +391,9 @@ def get_faces(annotate_host_probability=True):
 
     if annotate_host_probability:
         faces = _annotate_host_probability(faces)
-
+        _faces_w_hosts = faces
+    else:
+        _faces_wo_hosts = faces
     return faces
 
 
@@ -407,7 +459,7 @@ def _annotate_male_female_probability(face_genders):
     return face_genders
 
 
-def get_face_genders(include_bbox=False):
+def get_face_genders(include_bbox=False, annotate_host_probability=True):
     face_genders = spark.load('query_facegender').alias('face_genders')
 
     cols = ['face_genders.*',
@@ -428,15 +480,16 @@ def get_face_genders(include_bbox=False):
         'faces.hour',
         'faces.week_day',
         'faces.time',
-        'faces.is_host',
-        'faces.host_probability']
+        'faces.is_host']
+    if annotate_host_probability:
+        cols.append('faces.host_probability')
     if include_bbox:
         cols = cols + ['faces.bbox_x1',
                 'faces.bbox_x2',
                 'faces.bbox_y1',
                 'faces.bbox_y2']
 
-    faces = get_faces().alias('faces')
+    faces = get_faces(annotate_host_probability=annotate_host_probability).alias('faces')
     face_genders = face_genders.join(
         faces, face_genders.face_id == faces.id
     ).select(*cols)
@@ -446,8 +499,21 @@ def get_face_genders(include_bbox=False):
     return face_genders
 
 
-def get_face_identities(include_bbox=False, include_name=False):
+def get_labelers():
+    labelers = spark.load('query_labeler').alias('labeler')
+    return labelers
+
+
+def get_face_identities(include_bbox=False, include_name=False, annotate_host_probability=True):
+    labelers = get_labelers()
+    labelers = labelers.where(
+        labelers.name.contains('face-identity:') |
+        labelers.name.contains('face-identity-converted:')
+    )
+
     face_identities = spark.load('query_faceidentity').alias('face_identities')
+    face_identities = face_identities.join(
+        labelers, face_identities.labeler_id == labelers.id, 'left_outer')
 
     cols = ['face_identities.*',
         'faces.height',
@@ -467,15 +533,16 @@ def get_face_identities(include_bbox=False, include_name=False):
         'faces.hour',
         'faces.week_day',
         'faces.time',
-        'faces.is_host',
-        'faces.host_probability']
+        'faces.is_host']
+    if annotate_host_probability:
+        cols.append('faces.host_probability')
     if include_bbox:
         cols = cols + ['faces.bbox_x1',
                 'faces.bbox_x2',
                 'faces.bbox_y1',
                 'faces.bbox_y2']
 
-    faces = get_faces().alias('faces')
+    faces = get_faces(annotate_host_probability=annotate_host_probability).alias('faces')
     face_identities = face_identities.join(
         faces, face_identities.face_id == faces.id
     ).select(*cols)

@@ -6,23 +6,23 @@ import tempfile
 import subprocess as sp
 
 class Identity(models.Model):
-    name = base.CharField()
+    name = base.CharField(unique=True)
 
 
 class CanonicalShow(models.Model):
-    name = base.CharField()
+    name = base.CharField(unique=True)
     is_recurring = models.BooleanField(default=False)
     hosts = models.ManyToManyField(Identity, blank=True)
 
 
 class Show(models.Model):
-    name = base.CharField()
+    name = base.CharField(unique=True)
     hosts = models.ManyToManyField(Identity, blank=True)
     canonical_show = models.ForeignKey(CanonicalShow)
 
 
 class Channel(models.Model):
-    name = base.CharField()
+    name = base.CharField(unique=True)
 
 
 class Video(base.Video):
@@ -32,6 +32,8 @@ class Video(base.Video):
     commercials_labeled = models.BooleanField(default=False)
     srt_extension = base.CharField()
     threeyears_dataset = models.BooleanField(default=False)
+    duplicate = models.BooleanField(default=False)
+    corrupted = models.BooleanField(default=False)
 
     def get_stride(self):
         return int(math.ceil(self.fps) / 2)
@@ -77,7 +79,7 @@ class Commercial(Track):
 
 
 class Topic(models.Model):
-    name = base.CharField()
+    name = base.CharField(unique=True)
 
 
 class Segment(Track):
@@ -135,6 +137,7 @@ class ScannerJob(models.Model):
     name = base.CharField()
 
 
+
 class Object(base.BoundingBox, models.Model):
     frame = models.ForeignKey(Frame)
     label = models.IntegerField()
@@ -168,6 +171,6 @@ class HairColorName(models.Model):
 class HairColor(Labeled, models.Model):
     face = models.ForeignKey(Face)
     color = models.ForeignKey(HairColorName)
-    
+
     class Meta:
         unique_together = ('labeler', 'face')
