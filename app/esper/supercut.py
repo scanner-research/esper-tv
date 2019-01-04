@@ -28,6 +28,7 @@ import multiprocessing
 from pydub import AudioSegment
 import pysrt
 import re
+import cv2
 
 
 # ============== Help functions ==============    
@@ -45,7 +46,7 @@ def count_intervals(intrvlcol):
 
 def intrvlcol2list(intrvlcol, with_duration=True):
     interval_list = []
-    for video_id, intrvllist in intrvlcol.intervals.items():
+    for video_id, intrvllist in intrvlcol.get_allintervals().items():
         if with_duration:
             video = Video.objects.filter(id=video_id)[0]
         for i in intrvllist.get_intervals():
@@ -177,7 +178,7 @@ def mix_audio(intervals, out_path, decrease_volume=3, align=False):
     audio_mix.export(out_path, format="wav")
     
     
-def merge_video_audio(video_path, audio_path, out_path):
+def concat_video_audio(video_path, audio_path, out_path):
     tmp_path = tempfile.NamedTemporaryFile(suffix='.avi').name
     cmd_merge = 'ffmpeg -y -i {} -i {} -c:v copy -c:a aac -strict experimental {}' \
             .format(video_path, audio_path, tmp_path)
@@ -186,16 +187,65 @@ def merge_video_audio(video_path, audio_path, out_path):
     os.system(cmd_avi2mp4)
 
     
-def concat_videos_simple(paths, out_path):
-    tmp_path = tempfile.NamedTemporaryFile(suffix='.txt').name
-    file = open(tmp_path, 'w')
-    for p in paths:
-        file.write('file ' + "\'" + p + "\'" + '\n')
-    file.close()
-    cmd = 'ffmpeg -y -safe 0 -f concat -i {} -c copy {}'.format(tmp_path, out_path)
+# def concat_videos_simple(paths, out_path):
+#     tmp_path = tempfile.NamedTemporaryFile(suffix='.txt').name
+#     file = open(tmp_path, 'w')
+#     for p in paths:
+#         file.write('file ' + "\'" + p + "\'" + '\n')
+#     file.close()
+#     cmd = 'ffmpeg -y -safe 0 -f concat -i {} -c copy {}'.format(tmp_path, out_path)
+#     os.system(cmd)
+    
+    
+# def filter_still_images(intrvlcol, limit=25):
+#     def fn(i):
+#         fid = (i.start + i.end) // 2
+#         frame_first = load_frame(video, fid, [])
+#         frame_second = load_frame(video, fid + 1, [])
+#         diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
+# #         print(video.id, fid, diff)
+#         return diff > 15
+    
+#     intrvlcol_nostill = {}
+#     for video_id, intrvllist in intrvlcol.get_allintervals().items():
+#         video = Video.objects.filter(id=video_id)[0]
+#         intrvllist_nostill = intrvllist.filter(fn) 
+#         if intrvllist_nostill != []:
+#             intrvlcol_nostill[video_id] = intrvllist_nostill
+#         if len(intrvlcol_nostill) > limit:
+#             break
+#     return VideoIntervalCollection(intrvlcol_nostill)
+
+
+def filter_still_image_t(interval):
+    video_id, sfid, efid = interval[:3]
+    video = Video.objects.filter(id=video_id)[0]
+    fid = (sfid + efid) // 2
+    frame_first = load_frame(video, fid, [])
+    frame_second = load_frame(video, fid + 1, [])
+    diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
+#     print(video.id, fid, diff)
+    return diff > 30
+
+def filter_still_image_parallel(intervals, limit=100):
+    if limit < len(intervals):
+        intervals = random.sample(intervals, limit)
+    filter_res = par_for(filter_still_image_t, intervals)
+    return [intrv for i, intrv in enumerate(intervals) if filter_res[i]]
+
+
+def add_bgm(video_path, bgm_path, out_path, bgm_decrease=2):
+    audio_ori = AudioSegment.from_file(video_path, format='mp4')
+    audio_bgm = AudioSegment.from_file(bgm_path, format='wav')
+    audio_mix = audio_ori.overlay(audio_bgm - bgm_decrease)
+    tmp_path = tempfile.NamedTemporaryFile(suffix='.wav').name
+    audio_mix.export(tmp_path, format='wav')
+    
+    cmd = 'ffmpeg -y -i {} -i {} -c:v copy -map 0:v:0 -map 1:a:0 {}' \
+          .format(video_path, tmp_path, out_path)
     os.system(cmd)
     
-    
+        
 # ============== Queries with rekall ==============    
 def get_person_intrvlcol(person_name, **kwargs):
 #     if video_ids is None:
@@ -332,8 +382,7 @@ def get_person_alone_phrase_intrvlcol(person_intrvlcol, phrase):
     oneface_intrvlcol = get_oneface_intrvlcol(relevant_shots)
     person_alone_phrase_intrvlcol = person_phrase_intrvlcol.overlaps(oneface_intrvlcol)
     
-    # Todo: run optical flow to filter out still images
-    
+    # run optical flow to filter out still images
     
     print('Get {} person alone intervals for phrase \"{}\"'.format(count_intervals(person_alone_phrase_intrvlcol), phrase))
     return person_alone_phrase_intrvlcol
@@ -364,6 +413,7 @@ def single_person_one_song(person_name, lyric_path, out_path, person_intrvlcol=N
         pickle.dump(phrase2interval, open(cache_path, 'wb'))
         # sample candidate
         supercut_intervals = [select_candidates(candidates, filter='longest') for candidates in supercut_candidates]
+        print(supercut_intervals)
         # concat clips with dilation at the end; global speed change
         tmp_path = '/app/result/supercut/{}-{}-{}.mp4'.format(person_name, song_name, idx) 
         stitch_video_temporal(supercut_intervals, tmp_path, out_duration=None)
@@ -408,8 +458,9 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
                 LEAST_HIT = 0
             else:
                 LEAST_HIT = 3
-            
-            if phrase in phrase2interval and not phrase2interval[phrase] is None:
+                
+            if phrase in phrase2interval:
+#             if phrase in phrase2interval and not phrase2interval[phrase] is None:
                 if phrase2interval[phrase] is None:
                     num_concat = num_concat - 1 if num_concat != 0 else 0
                     break
@@ -421,7 +472,8 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
                 num_intervals = count_intervals(person_alone_phrase_intrvlcol)
                 if num_intervals > LEAST_HIT:
                     candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
-                    phrase2interval[phrase] = candidates
+                    candidates = filter_still_image_parallel(candidates)
+#                     phrase2interval[phrase] = candidates
                     segment = phrase
                     num_concat += 1
                 else:
@@ -439,9 +491,14 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
                 num_intervals = count_intervals(person_alone_phrase_intrvlcol)
                 if num_intervals > 0:
                     candidates = intrvlcol2list(person_alone_phrase_intrvlcol)
-                    phrase2interval[word] = candidates
+                    candidates = filter_still_image_parallel(candidates)
+#                     phrase2interval[word] = candidates
                     segment = word
         if not candidates is None:
+            ###
+#             candidates = filter_still_image_parallel(candidates)
+            ###
+            phrase2interval[segment] = candidates
             supercut_candidates.append(candidates)
             segments.append(segment)
             
