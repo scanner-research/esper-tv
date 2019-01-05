@@ -5,6 +5,7 @@ import numpy as np
 import tempfile
 import subprocess as sp
 
+
 class Identity(models.Model):
     name = base.CharField(unique=True)
 
@@ -69,10 +70,13 @@ class Labeler(base.Labeler):
 
 Labeled = base.Labeled(Labeler)
 
+
 class Gender(models.Model):
     name = base.CharField()
 
+
 Track = base.Track(Labeler)
+
 
 class Commercial(Track):
     pass
@@ -143,16 +147,19 @@ class Object(base.BoundingBox, models.Model):
     label = models.IntegerField()
     probability = models.FloatField()
 
+
 class LabeledCommercial(models.Model):
     video = models.ForeignKey(Video)
     start = models.FloatField()
     end = models.FloatField()
+
 
 class LabeledPanel(models.Model):
     video = models.ForeignKey(Video)
     start = models.FloatField()
     end = models.FloatField()
     num_panelists = models.IntegerField()
+
 
 class LabeledInterview(models.Model):
     video = models.ForeignKey(Video)
@@ -165,12 +172,26 @@ class LabeledInterview(models.Model):
     original = models.BooleanField(default=True)
     scattered_clips = models.BooleanField(default=False)
 
+
 class HairColorName(models.Model):
     name = base.CharField(unique=True)
+
 
 class HairColor(Labeled, models.Model):
     face = models.ForeignKey(Face)
     color = models.ForeignKey(HairColorName)
+
+   class Meta:
+        unique_together = ('labeler', 'face')
+
+
+class ClothingName(models.Model):
+    name = base.CharField(unique=True)
+
+
+class Clothing(Labeled, models.Model):
+    face = models.ForeignKey(Face)
+    clothing = models.ForeignKey(ClothingName)
 
     class Meta:
         unique_together = ('labeler', 'face')
