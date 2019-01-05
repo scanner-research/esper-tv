@@ -141,7 +141,6 @@ class ScannerJob(models.Model):
     name = base.CharField()
 
 
-
 class Object(base.BoundingBox, models.Model):
     frame = models.ForeignKey(Frame)
     label = models.IntegerField()
@@ -181,7 +180,7 @@ class HairColor(Labeled, models.Model):
     face = models.ForeignKey(Face)
     color = models.ForeignKey(HairColorName)
 
-   class Meta:
+    class Meta:
         unique_together = ('labeler', 'face')
 
 
