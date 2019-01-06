@@ -231,6 +231,9 @@ def get_segment_topics():
     return segment_topics
 
 
+def get_clothing():
+    return spark.load('query_clothing').alias('clothing')
+
 
 def get_hair_colors():
     return spark.load('query_haircolor').alias('hair_colors')
@@ -357,12 +360,18 @@ def get_faces(annotate_host_probability=True):
 
     videos = get_videos()
     frames = get_frames()
+    haircolors = get_haircolors()
+    clothing = get_clothing()
     faces = faces.join(
         frames, faces.frame_id == frames.id
     ).join(
         videos, frames.video_id == videos.id
     ).where(
         (videos.corrupted == False) & (videos.duplicate == False)
+    ).join(
+        haircolors, faces.id == haircolors.face_id, 'left_outer'
+    ).join(
+        clothing, faces.id == clothing.face_id, 'left_outer'
     ).select(
         'faces.*',
         videos.show_id,
@@ -373,7 +382,9 @@ def get_faces(annotate_host_probability=True):
         videos.week_day,
         videos.threeyears_dataset,
         frames.video_id,
-        frames.number
+        frames.number,
+        haircolors.color_id.alias('haircolor_id'),
+        clothing.clothing_id.alias('clothing_id')
     ).where(
         ((videos.threeyears_dataset == True) & (frames.number % func.floor(videos.fps * 3) == 0)) | \
         ((videos.threeyears_dataset == False) & (frames.number % func.ceil(videos.fps * 3) == 0))
@@ -462,7 +473,8 @@ def _annotate_male_female_probability(face_genders):
 def get_face_genders(include_bbox=False, annotate_host_probability=True):
     face_genders = spark.load('query_facegender').alias('face_genders')
 
-    cols = ['face_genders.*',
+    cols = [
+        'face_genders.*',
         'faces.height',
         'faces.width',
         'faces.area',
@@ -480,7 +492,10 @@ def get_face_genders(include_bbox=False, annotate_host_probability=True):
         'faces.hour',
         'faces.week_day',
         'faces.time',
-        'faces.is_host']
+        'faces.is_host',
+        'faces.haircolor_id',
+        'faces.clothing_id'
+    ]
     if annotate_host_probability:
         cols.append('faces.host_probability')
     if include_bbox:
@@ -515,7 +530,8 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
     face_identities = face_identities.join(
         labelers, face_identities.labeler_id == labelers.id, 'left_outer')
 
-    cols = ['face_identities.*',
+    cols = [
+        'face_identities.*',
         'faces.height',
         'faces.width',
         'faces.area',
@@ -533,7 +549,10 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
         'faces.hour',
         'faces.week_day',
         'faces.time',
-        'faces.is_host']
+        'faces.is_host',
+        'faces.haircolor_id',
+        'faces.clothing_id'
+    ]
     if annotate_host_probability:
         cols.append('faces.host_probability')
     if include_bbox:
@@ -555,6 +574,10 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
         ).select(*cols)
 
     return face_identities
+
+
+def get_haircolors(include_bbox=False, annotate_host_probability=True):
+    return spark.load('query_haircolor').alias('haircolors')
 
 
 def annotate_interval_overlap(df, video_id_to_intervals, new_column_name='overlap_seconds'):
