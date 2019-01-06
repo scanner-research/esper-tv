@@ -1,7 +1,7 @@
 from rekall.interval_list import IntervalList, Interval
 from rekall.logical_predicates import not_pred, or_pred
 from rekall.temporal_predicates import overlaps, equal, before, after
-from query.models import Video
+# from query.models import Video
 
 import pysrt
 import copy
@@ -367,16 +367,16 @@ def solve_parallel(video_list, res_dict_path=None, nthread=64):
     
     for t in thread_list:
         t.start()
-    for t in thread_list:
-        t.join()
+#     for t in thread_list:
+#         t.join()
     
-    for path in tmp_dict_list:
-        if not os.path.exists(path):
-            continue
-        res_dict_tmp = pickle.load(open(path, "rb" ))
-        res_dict = {**res_dict, **res_dict_tmp}
+#     for path in tmp_dict_list:
+#         if not os.path.exists(path):
+#             continue
+#         res_dict_tmp = pickle.load(open(path, "rb" ))
+#         res_dict = {**res_dict, **res_dict_tmp}
     
-    pickle.dump(res_dict, open(res_dict_path, "wb" ))  
+#     pickle.dump(res_dict, open(res_dict_path, "wb" ))  
 
 if __name__ == "__main__":
 
@@ -390,8 +390,9 @@ if __name__ == "__main__":
     param_list = []
     for i, video in enumerate(videos):
         if video.id in black_frame_dict and additional_field[video.id]['aligned_transcript'] and not video.id in result_dict:
-            param_list.append(({'id': video.id, 'video_name': video.item_name(), 'fps': video.fps, 'num_frames': video.num_frames}, 
-                               black_frame_dict[video.id]))
+            video_desp = {'id': video.id, 'video_name': video.item_name(), 'fps': video.fps, 'num_frames': video.num_frames}
+            param_list.append((video_desp, black_frame_dict[video.id]))
+    print(len(param_list))
 
     # solve with multiprocessing
-    solve_parallel(param_list, res_dict_path='/app/result/commercial/commercial_dict.pkl', nthread=32, use_process=True)
+    solve_parallel(param_list, res_dict_path='/app/result/commercial/commercial_dict.pkl', nthread=32)

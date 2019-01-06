@@ -22,17 +22,17 @@ if __name__ == "__main__":
 #     video_list = ['MSNBCW_20160614_180000_MSNBC_Live']
 #     videos = [Video.objects.filter(path__contains=video_name)[0] for video_name in video_list]
 
-    videos = Video.objects.all()
+    videos = Video.objects.filter(path__contains='2018')
     addtional_field = pickle.load(open('/app/data/addtional_field_all.pkl', 'rb'))
     videos = [video for video in videos if addtional_field[video.id]['valid_transcript']]
     
     # second run for bad align videos
-    res_stats = pickle.load(open('/app/result/align_stats_first.pkl', 'rb'))
-    videos = [video for video in videos if video.id in res_stats and res_stats[video.id]['word_missing'] > 0.2]
-    print("Videos total: ", len(videos))
+#     res_stats = pickle.load(open('/app/result/align_stats_first.pkl', 'rb'))
+#     videos = [video for video in videos if video.id in res_stats and res_stats[video.id]['word_missing'] > 0.2]
+#     print("Videos total: ", len(videos))
     
     # remove already dumped videos
-    res_stats = pickle.load(open('/app/result/align_stats_second.pkl', 'rb'))
+    res_stats = pickle.load(open('/app/result/align_stats_final.pkl', 'rb'))
     videos = [video for video in videos if video.id not in res_stats]
     print('Unfinished videos:', len(videos))
     
@@ -45,22 +45,32 @@ if __name__ == "__main__":
             videos_valid.append(video)
     videos = videos_valid
     print("Videos valid: ", len(videos))
-#     videos = videos[video_start : video_start+10000]
+    
+#     videos = videos[:10]
 
     # remove videos not saved in database
     db = scannerpy.Database()
     meta = db._load_db_metadata()
     tables_in_db= {t.name for t in meta.tables}
     videos_uncommitted = []
+    tables_committed = []
     for video in videos:
-        table_name = '{}_align_transcript2'.format(video.path)
+        table_name = '{}_align_transcript'.format(video.path)
         if table_name not in tables_in_db:
             videos_uncommitted.append(video)
-    print("Videos uncommitted:", len(videos_uncommitted))
+        else:
+            table = db.table(table_name)
+            if not table.committed():
+                videos_uncommitted.append(video)
+            else:
+                tables_committed.append(table)
     videos = videos_uncommitted
+    print("Videos uncommitted:", len(videos_uncommitted))
+    
     
     '''batch load'''
-#     db.batch_load(tables_committed, 'align_transcript', callback)
+    db.batch_load(tables_committed, 'align_transcript', callback)
+    exit()
     
     # load audios from videos
     audios = [audio.AudioSource(video.for_scannertools(), 
@@ -75,34 +85,34 @@ if __name__ == "__main__":
                 for video in videos]
     
     # set up run opts
-    run_opts = {'pipeline_instances_per_node': 32, 'checkpoint_frequency': 5, 'io_packet_size': 4, 'work_packet_size': 4}
+    run_opts = {'pipeline_instances_per_node': 32, 'checkpoint_frequency': 5, 'io_packet_size': 30, 'work_packet_size': 30}
     
     # set up align opts
     align_opts = {'win_size': 300,
                   'seg_length' : 60,
                   'max_misalign' : 10,
                   'num_thread' : 1,
-                  'estimate' : True,
+                  'estimate' : False,
                   'align_dir' : None,
                   'res_path' : None,
 #                   'align_dir' : '/app/result/aligned_transcript',
-#                   'res_path' : '/app/result/test_align_3y.pkl',
+#                   'res_path' : '/app/result/test_align.pkl',
     }
     
     '''local run'''
-#     db = scannerpy.Database()
-#     result = align_transcript_pipeline(db=db, audio=audios, captions=captions, cache=False, 
-#                                                    run_opts=run_opts, align_opts=align_opts)
+    db = scannerpy.Database()
+    result = align_transcript_pipeline(db=db, audio=audios, captions=captions, cache=False, 
+                                                   run_opts=run_opts, align_opts=align_opts)
     
     '''kubernete run'''
-    cfg = cluster_config(
-        num_workers=20,
-        worker=worker_config('n1-standard-32'))
+#     cfg = cluster_config(
+#         num_workers=100,
+#         worker=worker_config('n1-standard-32'))
     
-    with make_cluster(cfg, no_delete=True) as db_wrapper:
-        db = db_wrapper.db
-        align_transcript_pipeline(db=db, audio=audios, captions=captions, cache=False, 
-                                                       run_opts=run_opts, align_opts=align_opts)
+#     with make_cluster(cfg, no_delete=True) as db_wrapper:
+#         db = db_wrapper.db
+#         align_transcript_pipeline(db=db, audio=audios, captions=captions, cache=False, 
+#                                                        run_opts=run_opts, align_opts=align_opts)
     
     align_dir = align_opts['align_dir']
     res_path = align_opts['res_path']
