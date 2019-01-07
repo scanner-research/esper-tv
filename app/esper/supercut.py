@@ -33,9 +33,37 @@ import pysrt
 import re
 import cv2
 import shutil
+import multiprocessing as mp
 
 
 # ============== Help functions ==============    
+def par_for_process(function, param_list, num_workers=32):
+    num_jobs = len(param_list)
+    print("Total number of %d jobs" % num_jobs)
+    if num_jobs == 0:
+        return 
+    if num_jobs <= num_workers:
+        num_workers = num_jobs
+        num_jobs_p = 1
+    else:
+        num_jobs_p = math.ceil(1. * num_jobs / num_workers)
+    print("{} workers and {} jobs per worker".format(num_workers, num_jobs_p))
+    
+    process_list = []
+    for i in range(num_workers):
+        if i != num_workers - 1:
+            param_list_p = param_list[i*num_jobs_p : (i+1)*num_jobs_p]
+        else:
+            param_list_p = param_list[i*num_jobs_p : ]
+        p = mp.Process(target=function, args=(param_list_p,))
+        process_list.append(p)
+
+    for p in process_list:
+        p.start()
+#     for p in process_list:
+#         p.join()
+
+        
 def second2time(second, sep=','):
     h, m, s, ms = int(second) // 3600, int(second % 3600) // 60, int(second) % 60, int((second - int(second)) * 1000)
     return '{:02d}:{:02d}:{:02d}{:s}{:03d}'.format(h, m, s, sep, ms)
@@ -114,14 +142,18 @@ def stitch_video_temporal(intervals, out_path, out_duration=None, dilation=None,
         video = Video.objects.filter(id=video_id)[0]
         intervals.append((video_id, efid, efid + int(dilation*video.fps), dilation))
     
-    # make supercut video 
+    # download clips for each phrase 
     clip_paths = par_for(download_video_clip, [i for i in range(len(intervals))])
-    # concat phrase clips with speed change if need
-    if len(intervals) > 2:
-        tmp_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
+    
+    # concat phrase clips
+    tmp_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
+    if dilation is None and len(intervals) > 1:
+        concat_videos(clip_paths, tmp_path)
+    elif not dilation is None and len(intervals) > 2:
         concat_videos(clip_paths[:-1], tmp_path)
     else:
         tmp_path = clip_paths[0]
+    # global change sentence speed 
     if not out_duration is None:    
         speed = in_duration / out_duration
         print(in_duration, out_duration, speed)
@@ -132,7 +164,7 @@ def stitch_video_temporal(intervals, out_path, out_duration=None, dilation=None,
               .format(tmp_path, 1 / speed, speed, tmp_path2)
         os.system(cmd)
         tmp_path = tmp_path2
-    
+    # concat the dilation clip
     if not dilation is None:
         concat_videos([tmp_path, clip_paths[-1]], out_path)
     else:
@@ -429,8 +461,11 @@ def get_oneface_intrvlcol(relevant_shots):
     print("Get %d relevant one face intervals" % num_intrvl)
     return oneface_intrvlcol
 
-def get_person_alone_phrase_intervals(person_intrvlcol, phrase):
-    phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
+def get_person_alone_phrase_intervals(person_intrvlcol, phrase, filter_still=True):
+    if type(phrase) == str:
+        phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
+    else:
+        phrase_intrvlcol = phrase
     person_phrase_intrvlcol_raw = person_intrvlcol.overlaps(phrase_intrvlcol)
     # only keep intervals which is the same before overlap
     person_phrase_intrvlcol = person_phrase_intrvlcol_raw.filter_against(
@@ -443,6 +478,8 @@ def get_person_alone_phrase_intervals(person_intrvlcol, phrase):
     
     # run optical flow to filter out still images
     intervals = intrvlcol2list(person_alone_phrase_intrvlcol)
+    if not filter_still:
+        return intervals
     intervals_nostill = filter_still_image_parallel(intervals)
     intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
     
@@ -473,6 +510,38 @@ class SinglePersonSing:
         self.phrase2candidates, self.phrase2selection = cache['candidates'], cache['selection']
         self.cache_path = cache_path
     
+    def search_phrases(self, phrase_list):
+        for phrase in phrase_list:
+            print("searching for \"{}\" ...".format(phrase))
+            self.phrase2candidates_tmp[phrase] = get_person_alone_phrase_intervals(self.person_intrvlcol, 
+                                                                                   phrase, filter_still=False)
+    
+    def search_candidates_parallel(self, workers=16):
+        # collect all words
+        words_all = set()
+        for idx, (sentence, start, end) in enumerate(self.lyrics):
+            words = [word.upper() for word in sentence.replace(',', '').replace('.', '').replace('!', '').split(' ')]
+            for w in words:
+                # todo: add more phrase
+                words_all.add(w)
+        words_all = sorted(words_all)
+        print(words_all)
+        
+        # search all word intervals
+        self.phrase2intrvlcol = {}
+        for word in words_all:
+            self.phrase2intrvlcol[word] = get_caption_intrvlcol(word, self.person_intrvlcol.get_allintervals().keys())
+        
+        self.phrase2candidates_tmp = {}
+        par_for_process(self.search_phrases, words_all, num_workers=16)
+        
+        # filter still images
+        for word, intervals in enumerate(zip(words_all, pre_candidates)):
+            intervals_nostill = filter_still_image_parallel(intervals)
+            intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
+            print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), word))
+            self.phrase2candidates[word] = intervals_final
+        
     def search_candidates(self):
         segments_list = []
         candidates_list = []
