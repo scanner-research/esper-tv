@@ -28,6 +28,10 @@ except NameError:
     INDEX = CaptionIndex(INDEX_PATH, LEXICON, DOCUMENTS)
 
 
+def is_word_in_lexicon(word):
+    return word in LEXICON
+
+    
 def _get_video_name(p):
     """Only the filename without exts"""
     return Path(p).name.split('.')[0]
