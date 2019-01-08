@@ -36,7 +36,8 @@ import shutil
 import multiprocessing as mp
 
 
-# ============== Help functions ==============    
+# ============== Basic help functions ==============    
+
 def par_for_process(function, param_list, num_workers=32):
     num_jobs = len(param_list)
     print("Total number of %d jobs" % num_jobs)
@@ -106,23 +107,8 @@ def interval2result(intervals):
     return {'result': groups, 'count': count, 'type': 'Video'}
 
 
-def auto_select_candidates(intervals, num_sample=1, range=(0.5, 1.5), filter='random'):
-    durations = [i[-1] for i in intervals]
-    median = np.median(durations)
-    intervals_regular = [i for i in intervals if i[-1] > range[0] * median and i[-1] < range[1] * median]
-    if len(intervals_regular) == 0:
-        intervals_regular = [i for i in intervals if i[-1] > 0.5 * median and i[-1] < 1.5 * median]
-    # Todo: if regular intervals are not enough
-    if filter == 'random':
-        if num_sample == 1:
-            return random.choice(intervals_regular)
-        else:
-            return random.sample(intervals_regular, num_sample)
-    elif filter == 'longest':
-        durations_regular = [i[-1] for i in intervals_regular]
-        return intervals_regular[np.argmax(durations_regular)]
+# ============== Video audio operations ==============    
 
-    
 def stitch_video_temporal(intervals, out_path, out_duration=None, dilation=None, speed=None):
     intervals = intervals.copy()
     def download_video_clip(i):
@@ -131,7 +117,7 @@ def stitch_video_temporal(intervals, out_path, out_duration=None, dilation=None,
         start, end = 1. * sfid / video.fps, 1. * efid / video.fps
         video_path = video.download(segment=(start, end))
         if i == len(intervals) - 1 and not dilation is None: 
-            video_path = add_fade_out(video_path)
+            video_path = mute_video(video_path)
         return video_path
     
     in_duration = sum([i[-1] for i in intervals])
@@ -176,6 +162,14 @@ def make_montage_t(args):
     return make_montage(videos, frames, **kwargs)    
 
 def stitch_video_spatial(intervals, out_path, align=False, **kwargs):
+    '''
+    Stitch video into live montage
+    
+    @intervals: list of (video_id, start_frame_id, end_frame_id)
+    @out_path: output video path
+    @align: if true, adjust the speed of each video clip, so that each clip's duration equals to the median of them
+    @kwargs: params for calling make_montage() 
+    '''
     def gcd(a, b):
         return gcd(b, a % b) if b else a
 
@@ -263,55 +257,6 @@ def concat_video_audio(video_path, audio_path, out_path):
     os.system(cmd_avi2mp4)
 
     
-# def concat_videos_simple(paths, out_path):
-#     tmp_path = tempfile.NamedTemporaryFile(suffix='.txt').name
-#     file = open(tmp_path, 'w')
-#     for p in paths:
-#         file.write('file ' + "\'" + p + "\'" + '\n')
-#     file.close()
-#     cmd = 'ffmpeg -y -safe 0 -f concat -i {} -c copy {}'.format(tmp_path, out_path)
-#     os.system(cmd)
-    
-    
-# def filter_still_images(intrvlcol, limit=25):
-#     def fn(i):
-#         fid = (i.start + i.end) // 2
-#         frame_first = load_frame(video, fid, [])
-#         frame_second = load_frame(video, fid + 1, [])
-#         diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
-# #         print(video.id, fid, diff)
-#         return diff > 15
-    
-#     intrvlcol_nostill = {}
-#     for video_id, intrvllist in intrvlcol.get_allintervals().items():
-#         video = Video.objects.filter(id=video_id)[0]
-#         intrvllist_nostill = intrvllist.filter(fn) 
-#         if intrvllist_nostill != []:
-#             intrvlcol_nostill[video_id] = intrvllist_nostill
-#         if len(intrvlcol_nostill) > limit:
-#             break
-#     return VideoIntervalCollection(intrvlcol_nostill)
-
-
-def filter_still_image_t(interval):
-    video_id, sfid, efid = interval[:3]
-    video = Video.objects.filter(id=video_id)[0]
-    fid = (sfid + efid) // 2
-    frame_first = load_frame(video, fid, [])
-    frame_second = load_frame(video, fid + 1, [])
-    diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
-#     print(video.id, fid, diff)
-    return diff > 15
-
-def filter_still_image_parallel(intervals, limit=100):
-    durations = [i[-1] for i in intervals]
-    if limit < len(intervals):
-#         intervals = random.sample(intervals, limit)
-        intervals = [intervals[idx] for idx in np.argsort(durations)[-limit : ]]
-    filter_res = par_for(filter_still_image_t, intervals)
-    return [intrv for i, intrv in enumerate(intervals) if filter_res[i]]
-
-
 def replace_audio(video_path, audio_path, out_path):
     cmd = 'ffmpeg -y -i {} -i {} -c:v copy -map 0:v:0 -map 1:a:0 {}' \
           .format(video_path, audio_path, out_path)
@@ -327,7 +272,7 @@ def add_bgm(video_path, bgm_path, out_path, bgm_decrease=2):
     replace_audio(video_path, tmp_path, out_path)
     
     
-def add_fade_out(video_path):
+def mute_video(video_path):
     audio = AudioSegment.from_file(video_path, format='mp4')
     silence = AudioSegment.silent(duration=len(audio))
     silence_path = tempfile.NamedTemporaryFile(suffix='.wav').name
@@ -336,6 +281,22 @@ def add_fade_out(video_path):
     replace_audio(video_path, silence_path, out_path)
     return out_path
 
+
+def create_silent_clip(person_intrvlcol, out_path, out_duration):
+    intervals = []
+    for video_id, intrvllist in intrvlcol.get_allintervals().items():
+        video = Video.objects.filter(id=video_id)[0]
+        for i in intrvllist.get_intervals():
+            duration = (i.end - i.start) / video.fps
+            if duration > out_duration:
+                intervals.append((video, i.start / video.fps, i.end / video.fps))
+            if len(intervals) > 10:
+                break
+    video, start, end = random.choice(intervals)        
+    video_path = video.download(segment=(start, start + out_duration))
+    video_path = mute_video(video_path)
+    return video_path
+    
         
 # ============== Queries with rekall ==============    
 def get_person_intrvlcol(person_name, **kwargs):
@@ -461,11 +422,10 @@ def get_oneface_intrvlcol(relevant_shots):
     print("Get %d relevant one face intervals" % num_intrvl)
     return oneface_intrvlcol
 
+
 def get_person_alone_phrase_intervals(person_intrvlcol, phrase, filter_still=True):
-    if type(phrase) == str:
-        phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
-    else:
-        phrase_intrvlcol = phrase
+    phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
+    
     person_phrase_intrvlcol_raw = person_intrvlcol.overlaps(phrase_intrvlcol)
     # only keep intervals which is the same before overlap
     person_phrase_intrvlcol = person_phrase_intrvlcol_raw.filter_against(
@@ -488,7 +448,27 @@ def get_person_alone_phrase_intervals(person_intrvlcol, phrase, filter_still=Tru
     return intervals_final
     
     
+def filter_still_image_t(interval):
+    video_id, sfid, efid = interval[:3]
+    video = Video.objects.filter(id=video_id)[0]
+    fid = (sfid + efid) // 2
+    frame_first = load_frame(video, fid, [])
+    frame_second = load_frame(video, fid + 1, [])
+    diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
+#     print(video.id, fid, diff)
+    return diff > 15
+
+def filter_still_image_parallel(intervals, limit=100):
+    durations = [i[-1] for i in intervals]
+    if limit < len(intervals):
+#         intervals = random.sample(intervals, limit)
+        intervals = [intervals[idx] for idx in np.argsort(durations)[-limit : ]]
+    filter_res = par_for(filter_still_image_t, intervals)
+    return [intrv for i, intrv in enumerate(intervals) if filter_res[i]]    
+
+
 # ============== Applications ============== 
+
 class SinglePersonSing:
     def __init__(self, person_name, lyric_path, person_intrvlcol=None):
         if person_intrvlcol is None:
@@ -501,7 +481,19 @@ class SinglePersonSing:
         lyrics = []
         subs = pysrt.open(lyric_path)
         for sub in subs:
-            lyrics.append((sub.text, time2second(tuple(sub.start)[:4]), time2second(tuple(sub.end)[:4])))
+            text = re.sub('\[.*\]', ' ', sub.text)
+            text = re.sub('\(.*\)', ' ', text)
+            text = re.sub('[^\'0-9a-zA-Z]+', ' ', text)
+            words = []
+            for word in text.split(' '): 
+                if word != '':
+                    if not is_word_in_lexicon(word.upper()):
+                        print('Word \"{}\" not exist in Lexcion!'.format(word))
+                    else:
+                        words.append(word.upper())
+#             print("Extracted words from lyrics", words)
+            
+            lyrics.append((words, time2second(tuple(sub.start)[:4]), time2second(tuple(sub.end)[:4])))
         self.lyrics = lyrics
 
         # load cache
@@ -516,37 +508,37 @@ class SinglePersonSing:
             self.phrase2candidates_tmp[phrase] = get_person_alone_phrase_intervals(self.person_intrvlcol, 
                                                                                    phrase, filter_still=False)
     
-    def search_candidates_parallel(self, workers=16):
-        # collect all words
-        words_all = set()
-        for idx, (sentence, start, end) in enumerate(self.lyrics):
-            words = [word.upper() for word in sentence.replace(',', '').replace('.', '').replace('!', '').split(' ')]
-            for w in words:
-                # todo: add more phrase
-                words_all.add(w)
-        words_all = sorted(words_all)
-        print(words_all)
+#     def search_candidates_parallel(self, workers=16):
+#         # collect all words
+#         words_all = set()
+#         for idx, (sentence, start, end) in enumerate(self.lyrics):
+#             words = [word.upper() for word in sentence.replace(',', '').replace('.', '').replace('!', '').split(' ')]
+#             for w in words:
+#                 # todo: add more phrase
+#                 words_all.add(w)
+#         words_all = sorted(words_all)
+#         print(words_all)
         
-        # search all word intervals
-        self.phrase2intrvlcol = {}
-        for word in words_all:
-            self.phrase2intrvlcol[word] = get_caption_intrvlcol(word, self.person_intrvlcol.get_allintervals().keys())
+#         # search all word intervals
+#         self.phrase2intrvlcol = {}
+#         for word in words_all:
+#             self.phrase2intrvlcol[word] = get_caption_intrvlcol(word, self.person_intrvlcol.get_allintervals().keys())
         
-        self.phrase2candidates_tmp = {}
-        par_for_process(self.search_phrases, words_all, num_workers=16)
+#         self.phrase2candidates_tmp = {}
+#         par_for_process(self.search_phrases, words_all, num_workers=16)
         
-        # filter still images
-        for word, intervals in enumerate(zip(words_all, pre_candidates)):
-            intervals_nostill = filter_still_image_parallel(intervals)
-            intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
-            print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), word))
-            self.phrase2candidates[word] = intervals_final
+#         # filter still images
+#         for word, intervals in enumerate(zip(words_all, pre_candidates)):
+#             intervals_nostill = filter_still_image_parallel(intervals)
+#             intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
+#             print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), word))
+#             self.phrase2candidates[word] = intervals_final
         
     def search_candidates(self):
         segments_list = []
         candidates_list = []
-        for idx, (sentence, start, end) in enumerate(self.lyrics):
-            segments, candidates = single_person_one_sentence(self.person_intrvlcol, sentence, self.phrase2candidates)
+        for idx, (words, start, end) in enumerate(self.lyrics):
+            segments, candidates = single_person_one_sentence(self.person_intrvlcol, words, self.phrase2candidates)
             segments_list.append(segments)
             candidates_list.append(candidates)
             self.dump_cache()
@@ -564,11 +556,14 @@ class SinglePersonSing:
     
     def make_supercuts(self, out_path):
         cutting_paths = []
-        for idx, (sentence, start, end) in enumerate(self.lyrics):
+        for idx, (words, start, end) in enumerate(self.lyrics):
             selections = self.selections_list[idx]
             tmp_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, idx)
             dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 1
-            stitch_video_temporal(selections, tmp_path, out_duration=None, dilation=dilation)
+            if len(words) > 0:
+                stitch_video_temporal(selections, tmp_path, out_duration=None, dilation=dilation)
+            else:
+                create_silent_clip(tmp_path, out_duration=end - start + dilation)
             cutting_paths.append(tmp_path)
             print('Concat videos for sentence \"{}\"'.format(sentence))
             
@@ -635,10 +630,26 @@ class SinglePersonSing:
         idx_sentence, idx_phrase = 0, 0
         self.selections_list.append([])
         launch_widget(idx_sentence, idx_phrase)
+
+        
+def auto_select_candidates(intervals, num_sample=1, range=(0.5, 1.5), filter='random'):
+    durations = [i[-1] for i in intervals]
+    median = np.median(durations)
+    intervals_regular = [i for i in intervals if i[-1] > range[0] * median and i[-1] < range[1] * median]
+    if len(intervals_regular) == 0:
+        intervals_regular = [i for i in intervals if i[-1] > 0.5 * median and i[-1] < 1.5 * median]
+    # Todo: if regular intervals are not enough
+    if filter == 'random':
+        if num_sample == 1:
+            return random.choice(intervals_regular)
+        else:
+            return random.sample(intervals_regular, num_sample)
+    elif filter == 'longest':
+        durations_regular = [i[-1] for i in intervals_regular]
+        return intervals_regular[np.argmax(durations_regular)]
     
 
-def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None, concat_word=4):
-    words = [word.upper() for word in sentence.replace(',', '').replace('.', '').replace('!', '').split(' ')]
+def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, concat_word=4):
     
     # Magic numbers
     SHORT_WORD = 4
@@ -673,7 +684,10 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
             else:
                 LEAST_HIT = 3
                 
+            print('{} Searching for phrase \"{}\" {}'.format('=' * 10, phrase, '=' * 10))    
+                
             if phrase in phrase2interval:
+                print("Found in cache")
 #             if phrase in phrase2interval and not phrase2interval[phrase] is None:
                 if phrase2interval[phrase] is None:
                     num_concat = num_concat - 1 if num_concat != 0 else 0
@@ -696,25 +710,42 @@ def single_person_one_sentence(person_intrvlcol, sentence, phrase2interval=None,
         
         # make up for short word            
         if candidates is None and len(word) < SHORT_WORD:
+            print('{} Searching for phrase \"{}\" {}'.format('=' * 10, phrase, '=' * 10))    
             if word in phrase2interval:
+                print("Found in cache")
                 candidates = phrase2interval[word]
                 segment = word
             else:
-                person_alone_phrase_intervals = get_person_alone_phrase_intervals(person_intrvlcol, phrase)
+                person_alone_phrase_intervals = get_person_alone_phrase_intervals(person_intrvlcol, word)
                 num_intervals = len(person_alone_phrase_intervals)
                 if num_intervals > 0:
                     candidates = person_alone_phrase_intervals
                     phrase2interval[word] = candidates
                     segment = word
+        # if really cannot find the word, use clips from other person instead
+        if candidates is None:
+            phrase_intrvlcol = get_caption_intrvlcol(word)
+            candidates = intrvlcol2list(phrase_intrvlcol)
+            segment = word
         if not candidates is None:
             supercut_candidates.append(candidates)
             segments.append(segment)
             
-    print("Sentence segments: ", segments)
+    print("-------- Searched words: ", words)        
+    print("-------- Final segments: ", segments)
     return segments, supercut_candidates
 
 
 def multi_person_one_phrase(phrase, filters={}):
+    '''
+    Get all intervals which the phrase is being said
+    
+    @phrase: input phrase to be searched
+    @filters: 
+        'with_face': must contain exactly one face
+        'gender': filter by gender
+        'limit': number of output intervals
+    '''
     videos = Video.objects.filter(threeyears_dataset=True)
     video_ids = [video.id for video in videos]
     phrase_intrvlcol = get_caption_intrvlcol(phrase.upper(), video_ids)
@@ -742,3 +773,29 @@ def multi_person_one_phrase(phrase, filters={}):
         phrase_intrvlcol = VideoIntervalCollection(intrvlcol_withface)
 #         print(len(phrase_intrvlcol))
     return intrvlcol2list(phrase_intrvlcol)
+
+if __name__ == "__main__":
+    
+    # Supercut of "Make Amercia Great Again"
+    phrase = "make america great again"
+    filters={ 
+        'with_face': True,
+        'gender': 'M'
+    }
+    supercut_intervals_all = multi_person_one_phrase(phrase, filters)
+    
+    supercut_intervals = auto_select_candidates(supercut_intervals_all, num_sample=64, filter='random')
+    
+    # App1: temporal supercut 
+    stitch_video_temporal(supercut_intervals, out_path='/app/result/supercut/make_america_great_again.mp4')
+    
+    # App2: spatial supercut
+    video_path = '/app/result/montage/test_video.avi'
+    audio_path = '/app/result/montage/test_audio.wav'
+
+    stitch_video_spatial(supercut_intervals, out_path=video_path, align=False, 
+                     width=1080, num_cols=8, target_height = 1080 // 8 * 9 // 16)
+
+    mix_audio(supercut_intervals, out_path=audio_path, decrease_volume=5, align=False)
+    
+    merge_video_audio(video_path, audio_path, '/app/result/montage/make_america_great_again.mp4')
