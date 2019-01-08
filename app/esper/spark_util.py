@@ -10,6 +10,7 @@ from esper.prelude import *
 from esper.spark import *
 from esper.validation import *
 
+from query.models import Labeler
 
 spark = SparkWrapper()
 
@@ -239,6 +240,10 @@ def get_hair_colors():
     return spark.load('query_haircolor').alias('hair_colors')
 
 
+def get_hair_lengths():
+    return spark.load('query_hairlength').alias('hair_length')
+
+
 def interval_overlap_join(df1, df2):
     video_id_to_intervals = defaultdict(list)
     for c in df2.collect():
@@ -360,7 +365,8 @@ def get_faces(annotate_host_probability=True):
 
     videos = get_videos()
     frames = get_frames()
-    haircolors = get_haircolors()
+    haircolors = get_hair_colors()
+    hairlengths = get_hair_lengths()
     clothing = get_clothing()
     faces = faces.join(
         frames, faces.frame_id == frames.id
@@ -369,9 +375,14 @@ def get_faces(annotate_host_probability=True):
     ).where(
         (videos.corrupted == False) & (videos.duplicate == False)
     ).join(
-        haircolors, faces.id == haircolors.face_id, 'left_outer'
+        haircolors.where(haircolors.labeler_id == Labeler.objects.get(name='haotian-hairstyle').id), 
+        faces.id == haircolors.face_id, 'left_outer'
     ).join(
-        clothing, faces.id == clothing.face_id, 'left_outer'
+        hairlengths.where(hairlengths.labeler_id == Labeler.objects.get(name='haotian-hairstyle').id), 
+        faces.id == hairlengths.face_id, 'left_outer'
+    ).join(
+        clothing.where(clothing.labeler_id == Labeler.objects.get(name='haotian-clothing').id), 
+        faces.id == clothing.face_id, 'left_outer'
     ).select(
         'faces.*',
         videos.show_id,
@@ -384,7 +395,8 @@ def get_faces(annotate_host_probability=True):
         frames.video_id,
         frames.number,
         haircolors.color_id.alias('haircolor_id'),
-        clothing.clothing_id.alias('clothing_id')
+        clothing.clothing_id.alias('clothing_id'),
+        hairlengths.length_id.alias('hairlength_id')
     ).where(
         ((videos.threeyears_dataset == True) & (frames.number % func.floor(videos.fps * 3) == 0)) | \
         ((videos.threeyears_dataset == False) & (frames.number % func.ceil(videos.fps * 3) == 0))
@@ -494,6 +506,7 @@ def get_face_genders(include_bbox=False, annotate_host_probability=True):
         'faces.time',
         'faces.is_host',
         'faces.haircolor_id',
+        'faces.hairlength_id',
         'faces.clothing_id'
     ]
     if annotate_host_probability:
@@ -551,6 +564,7 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
         'faces.time',
         'faces.is_host',
         'faces.haircolor_id',
+        'faces.hairlength_id',
         'faces.clothing_id'
     ]
     if annotate_host_probability:
@@ -574,10 +588,6 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
         ).select(*cols)
 
     return face_identities
-
-
-def get_haircolors(include_bbox=False, annotate_host_probability=True):
-    return spark.load('query_haircolor').alias('haircolors')
 
 
 def annotate_interval_overlap(df, video_id_to_intervals, new_column_name='overlap_seconds'):
