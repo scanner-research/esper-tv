@@ -1,6 +1,38 @@
 from esper.prelude import *
 from .queries import query
 
+@query('Identity and gender')
+def identity_and_gender():
+    from query.models import FaceGender, FaceIdentity
+    name = 'Rachel Maddow'
+    max_ids = 10000
+    face_ids = [f['face__id'] for f in FaceIdentity.objects.filter(
+        identity__name=name.lower(), probability__gte=0.9
+    ).order_by('?').values('face__id')[:max_ids]]
+    return qs_to_result(FaceGender.objects.filter(face__id__in=face_ids))
+
+
+@query('Identity and clothing')
+def identity_and_clothing():
+    from query.models import Clothing, FaceIdentity
+    name = 'Rachel Maddow'
+    max_ids = 10000
+    face_ids = [f['face__id'] for f in FaceIdentity.objects.filter(
+        identity__name=name.lower(), probability__gte=0.9
+    ).order_by('?').values('face__id')[:max_ids]]
+    clothing_to_faces = {}
+    for c in Clothing.objects.filter(
+        face__id__in=face_ids
+    ).values('face__id', 'clothing__name'):
+        clothing_name, face_id = c['clothing__name'], c['face__id']
+        if clothing_name not in clothing_to_faces:
+            clothing_to_faces[clothing_name] = []
+        clothing_to_faces[clothing_name].append(face_id)
+    return group_results([
+        (c, qs_to_result(Face.objects.filter(id__in=v).order_by('?'))) 
+        for c, v in clothing_to_faces.items()
+    ])
+
 @query("Non-handlabeled random faces/genders")
 def not_handlabeled():
     from query.models import Labeler, Tag, FaceGender

@@ -194,3 +194,16 @@ class Clothing(Labeled, models.Model):
 
     class Meta:
         unique_together = ('labeler', 'face')
+
+
+
+class HairLengthName(models.Model):
+    name = base.CharField(unique=True)
+
+
+class HairLength(Labeled, models.Model):
+    face = models.ForeignKey(Face)
+    length = models.ForeignKey(HairLengthName)
+
+    class Meta:
+        unique_together = ('labeler', 'face')

@@ -176,6 +176,12 @@ class Options extends React.Component {
       key: 'spinner_dev_mode',
       type: 'radio'
     },
+    {
+      name: 'Disable caption box',
+      key: 'disable_captions',
+      type: 'radio'
+    },
+
   ]
 
   render() {
