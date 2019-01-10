@@ -118,7 +118,7 @@ def count_syllables(phrase):
 
 def stitch_video_temporal(intervals, out_path,
                           align_args={'align_mode': None},
-                          dilation=None, 
+                          dilation_args={'dilation': None}, 
                           speed=None):
     """
     stitch video clips sequentially
@@ -129,7 +129,9 @@ def stitch_video_temporal(intervals, out_path,
         @align_mode: 'phrase' for aligning based on syllable, 'sentence' for aligning the whole sentence
         @out_duration: desired sentence duration
         @segments: list of phrases in the sentence for extracting syllables
-    @dilation: length for adding a mute clip for break follling the sentence
+    @dilation_args: 
+        @dilation: length for adding a mute clip for break follling the sentence
+        @person_intrvlcol: source for creating silent clip 
     @speed: global speed change
     """
     # parse args
@@ -138,6 +140,9 @@ def stitch_video_temporal(intervals, out_path,
         out_duration = align_args['out_duration']
     if align_mode == 'phrase':
         segments = align_args['segments']
+    dilation = dilation_args['dilation']
+    if not dilation is None:
+        person_intrvlcol = dilation_args['person_intrvlcol']
         
     intervals = intervals.copy()
     def download_video_clip(interval):
@@ -164,11 +169,14 @@ def stitch_video_temporal(intervals, out_path,
     if not dilation is None and dilation < 0.1:
         dilation = None
     if not dilation is None:
-        video_id, sfid, efid = intervals[-1][:3]
-        video = Video.objects.filter(id=video_id)[0]
-        interval = (video_id, efid, efid + int(dilation*video.fps), 0)
-        break_path = download_video_clip(interval)
-        break_path = mute_video(break_path)
+        if dilation > 1:
+            break_path = create_silent_clip(person_intrvlcol, dilation)
+        else:    
+            video_id, sfid, efid = intervals[-1][:3]
+            video = Video.objects.filter(id=video_id)[0]
+            interval = (video_id, efid, efid + int(dilation*video.fps), 0)
+            break_path = download_video_clip(interval)
+            break_path = mute_video(break_path)
     
     # concat phrase clips
     if len(intervals) > 1:
@@ -337,21 +345,21 @@ def create_silent_clip(person_intrvlcol, out_duration, out_path=None):
         return video_path
     
     intervals = []
-    while out_duration > 0:
+    while out_duration > 0.1:
         video_id = random.choice(list(person_intrvlcol.get_allintervals().keys()))
         video = Video.objects.filter(id=video_id)[0]
         for i in person_intrvlcol.get_allintervals()[video_id].get_intervals():
-            if i.end < video.num_frames:
-                start, end = i.start / video.fps, i.end / video.fps
-                duration = end - start
+            start, end = i.start / video.fps, i.end / video.fps
+            duration = end - start
+            if i.end < video.num_frames and out_duration > 0.1 and duration > out_duration:
                 if out_duration > end - start:
                     duration = end - start
                 else:
                     duration = out_duration
                 intervals.append((video, start, start + duration))
-                print(video.id, start, duration)
-                out_duration -= duration                 
-    
+                out_duration -= duration
+#                 print(video.id, start, duration, out_duration)
+                
     tmp_paths = par_for(download_video_clip, intervals)
     tmp_path = concat_videos(tmp_paths)                             
     return mute_video(tmp_path, out_path)
@@ -529,7 +537,7 @@ def filter_still_image_parallel(intervals, limit=100):
 # ============== Applications ============== 
 
 class SinglePersonSing:
-    def __init__(self, person_name, lyric_path, person_intrvlcol=None):
+    def __init__(self, person_name, lyric_path, person_intrvlcol=None, num_sentence=None):
         if person_intrvlcol is None:
             person_intrvlcol = get_person_intrvlcol(person_name, large_face=True, labeler='old')
         self.person_name = person_name.lower().replace(' ', '_')
@@ -550,8 +558,9 @@ class SinglePersonSing:
                     if not is_word_in_lexicon(word.upper()) and word != '|':
                         print('Word \"{}\" not exist in Lexcion!'.format(word))
 #             print("Extracted words from lyrics", words)
-            
             lyrics.append((words, time2second(tuple(sub.start)[:4]), time2second(tuple(sub.end)[:4])))
+            if not num_sentence is None and len(lyrics) >= num_sentence:
+                break
         self.lyrics = lyrics
 
         # load cache
@@ -634,9 +643,15 @@ class SinglePersonSing:
     
     def make_supercuts(self, out_path, align_mode=None, add_break=True, cache=True):
         sentence_paths = []
+        
+        # add silent clip at the begining
+        break_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, 0)
+        create_silent_clip(self.person_intrvlcol, out_duration=self.lyrics[0][1], out_path=break_path)
+        sentence_paths.append(break_path)
+        
         for idx, (words, start, end) in enumerate(self.lyrics):
             selections = self.selections_list[idx]
-            sentence_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, idx)
+            sentence_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, idx + 1)
             print('Concat videos for sentence \"{}\"'.format(' '.join(words)))
             if cache and os.path.exists(tmp_path):
                 print('Found cache')
@@ -645,12 +660,14 @@ class SinglePersonSing:
                               'out_duration': end-start,
                               'segments': self.segments_list[idx]}
                 if add_break:
-                    dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 2
+                    dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 5
                 else:
                     dilation = None
+                dilation_args = {'dilation': dilation, 'person_intrvlcol': self.person_intrvlcol}
                     
                 if len(words) > 0:
-                    stitch_video_temporal(selections, align_args=align_args, dilation=dilation, out_path=sentence_path)
+                    stitch_video_temporal(selections, align_args=align_args, \
+                                          dilation_args=dilation_args, out_path=sentence_path)
                 else:
                     create_silent_clip(self.person_intrvlcol, out_duration=end - start + dilation, out_path=sentence_path)
             sentence_paths.append(sentence_path)
