@@ -34,7 +34,7 @@ import re
 import cv2
 import shutil
 import multiprocessing as mp
-
+import pyphen
 
 # ============== Basic help functions ==============    
 
@@ -87,6 +87,8 @@ def intrvlcol2list(intrvlcol, with_duration=True):
         if with_duration:
             video = Video.objects.filter(id=video_id)[0]
         for i in intrvllist.get_intervals():
+            if i.start > video.num_frames:
+                continue
             if with_duration:
                 interval_list.append((video_id, i.start, i.end, (i.end - i.start) / video.fps))
             else:
@@ -107,54 +109,85 @@ def interval2result(intervals):
     return {'result': groups, 'count': count, 'type': 'Video'}
 
 
+def count_syllables(phrase):
+    dic = pyphen.Pyphen(lang='en')
+    return len(dic.inserted(phrase).replace('-', ' ').split())
+
+
 # ============== Video audio operations ==============    
 
-def stitch_video_temporal(intervals, out_path, out_duration=None, dilation=None, speed=None):
+def stitch_video_temporal(intervals, out_path,
+                          align_args={'align_mode': None},
+                          dilation=None, 
+                          speed=None):
+    """
+    stitch video clips sequentially
+    
+    @intervals: list of (video_id, start_frame_id, end_frame_id, duration)
+    @out_path: output video path
+    @align_args: 
+        @align_mode: 'phrase' for aligning based on syllable, 'sentence' for aligning the whole sentence
+        @out_duration: desired sentence duration
+        @segments: list of phrases in the sentence for extracting syllables
+    @dilation: length for adding a mute clip for break follling the sentence
+    @speed: global speed change
+    """
+    # parse args
+    align_mode = align_args['align_mode']
+    if not align_mode is None:
+        out_duration = align_args['out_duration']
+    if align_mode == 'phrase':
+        segments = align_args['segments']
+        
     intervals = intervals.copy()
-    def download_video_clip(i):
-        video_id, sfid, efid = intervals[i][:3]
+    def download_video_clip(interval):
+        video_id, sfid, efid, duration = interval
         video = Video.objects.filter(id=video_id)[0]
         start, end = 1. * sfid / video.fps, 1. * efid / video.fps
         video_path = video.download(segment=(start, end))
-        if i == len(intervals) - 1 and not dilation is None: 
-            video_path = mute_video(video_path)
+        if align_mode == 'phrase' and duration != 0:
+            video_path = speed_change(video_path, speed=(end-start) / duration)
         return video_path
     
-    in_duration = sum([i[-1] for i in intervals])
-    if dilation < 0.1:
+    # deal with phrase duration
+    if not align_mode is None:
+        in_duration = sum([i[-1] for i in intervals])
+    if align_mode == 'phrase':
+        num_syllables = [count_syllables(phrase) for phrase in segments]
+        duration_per_syl = 1. * out_duration / sum(num_syllables)
+        for idx, i in enumerate(intervals):
+            intervals[idx] = (i[0], i[1], i[2], num_syllables[idx] * duration_per_syl)
+    # download clips for each phrase 
+    clip_paths = par_for(download_video_clip, intervals)
+    
+    # add silent clip for break            
+    if not dilation is None and dilation < 0.1:
         dilation = None
     if not dilation is None:
         video_id, sfid, efid = intervals[-1][:3]
         video = Video.objects.filter(id=video_id)[0]
-        intervals.append((video_id, efid, efid + int(dilation*video.fps), dilation))
-    
-    # download clips for each phrase 
-    clip_paths = par_for(download_video_clip, [i for i in range(len(intervals))])
+        interval = (video_id, efid, efid + int(dilation*video.fps), 0)
+        break_path = download_video_clip(interval)
+        break_path = mute_video(break_path)
     
     # concat phrase clips
-    tmp_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
-    if dilation is None and len(intervals) > 1:
-        concat_videos(clip_paths, tmp_path)
-    elif not dilation is None and len(intervals) > 2:
-        concat_videos(clip_paths[:-1], tmp_path)
+    if len(intervals) > 1:
+        lyric_path = concat_videos(clip_paths)
     else:
-        tmp_path = clip_paths[0]
-    # global change sentence speed 
-    if not out_duration is None:    
-        speed = in_duration / out_duration
-        print(in_duration, out_duration, speed)
-        speed = max(0.5, speed)
-        speed = min(2.0, speed)
-        tmp_path2 = tempfile.NamedTemporaryFile(suffix='.mp4').name
-        cmd = 'ffmpeg -y -i {} -filter_complex "[0:v]setpts={}*PTS[v];[0:a]atempo={}[a]" -map "[v]" -map "[a]" {}' \
-              .format(tmp_path, 1 / speed, speed, tmp_path2)
-        os.system(cmd)
-        tmp_path = tmp_path2
+        lyric_path = clip_paths[0]
+        
+    # global change lyric speed 
+    if align_mode == 'sentence' or not speed is None: 
+        if speed is None:
+            speed = in_duration / out_duration
+#         print(in_duration, out_duration, speed)
+        lyric_path = speed_change(lyric_path, speed)
+    
     # concat the dilation clip
     if not dilation is None:
-        concat_videos([tmp_path, clip_paths[-1]], out_path)
+        concat_videos([lyric_path, break_path], out_path)
     else:
-        shutil.move(tmp_path, out_path)
+        shutil.move(lyric_path, out_path)
 
     
 def make_montage_t(args):
@@ -257,45 +290,71 @@ def concat_video_audio(video_path, audio_path, out_path):
     os.system(cmd_avi2mp4)
 
     
-def replace_audio(video_path, audio_path, out_path):
+def replace_audio(video_path, audio_path, out_path=None):
+    if out_path is None:
+        out_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
     cmd = 'ffmpeg -y -i {} -i {} -c:v copy -map 0:v:0 -map 1:a:0 {}' \
           .format(video_path, audio_path, out_path)
     os.system(cmd)
-    
+    return out_path
 
-def add_bgm(video_path, bgm_path, out_path, bgm_decrease=2):
+    
+def speed_change(video_path, speed, out_path=None):
+    if speed == 1.0:
+        return video_path
+    speed = max(0.5, speed)
+    speed = min(2.0, speed)
+    if out_path is None:
+        out_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
+    cmd = 'ffmpeg -y -i {} -filter_complex "[0:v]setpts={}*PTS[v];[0:a]atempo={}[a]" -map "[v]" -map "[a]" {}' \
+          .format(video_path, 1 / speed, speed, out_path)
+    os.system(cmd)
+    return out_path
+
+    
+def add_bgm(video_path, bgm_path, out_path=None, bgm_decrease=2):
     audio_ori = AudioSegment.from_file(video_path, format='mp4')
     audio_bgm = AudioSegment.from_file(bgm_path, format=bgm_path[-3:])
-    audio_mix = audio_ori.overlay(audio_bgm - bgm_decrease)
+    audio_bgm = audio_bgm - bgm_decrease
+    audio_mix = audio_ori.overlay(audio_bgm)
     tmp_path = tempfile.NamedTemporaryFile(suffix='.wav').name
     audio_mix.export(tmp_path, format='wav')
-    replace_audio(video_path, tmp_path, out_path)
+    return replace_audio(video_path, tmp_path, out_path)
     
     
-def mute_video(video_path):
+def mute_video(video_path, out_path=None):
     audio = AudioSegment.from_file(video_path, format='mp4')
     silence = AudioSegment.silent(duration=len(audio))
     silence_path = tempfile.NamedTemporaryFile(suffix='.wav').name
     silence.export(silence_path, format='wav')
-    out_path = tempfile.NamedTemporaryFile(suffix='.mp4').name
-    replace_audio(video_path, silence_path, out_path)
-    return out_path
+    return replace_audio(video_path, silence_path, out_path)
 
 
-def create_silent_clip(person_intrvlcol, out_path, out_duration):
+def create_silent_clip(person_intrvlcol, out_duration, out_path=None):
+    def download_video_clip(interval):
+        video, start, end = interval
+        video_path = video.download(segment=(start, end))
+        return video_path
+    
     intervals = []
-    for video_id, intrvllist in intrvlcol.get_allintervals().items():
+    while out_duration > 0:
+        video_id = random.choice(list(person_intrvlcol.get_allintervals().keys()))
         video = Video.objects.filter(id=video_id)[0]
-        for i in intrvllist.get_intervals():
-            duration = (i.end - i.start) / video.fps
-            if duration > out_duration:
-                intervals.append((video, i.start / video.fps, i.end / video.fps))
-            if len(intervals) > 10:
-                break
-    video, start, end = random.choice(intervals)        
-    video_path = video.download(segment=(start, start + out_duration))
-    video_path = mute_video(video_path)
-    return video_path
+        for i in person_intrvlcol.get_allintervals()[video_id].get_intervals():
+            if i.end < video.num_frames:
+                start, end = i.start / video.fps, i.end / video.fps
+                duration = end - start
+                if out_duration > end - start:
+                    duration = end - start
+                else:
+                    duration = out_duration
+                intervals.append((video, start, start + duration))
+                print(video.id, start, duration)
+                out_duration -= duration                 
+    
+    tmp_paths = par_for(download_video_clip, intervals)
+    tmp_path = concat_videos(tmp_paths)                             
+    return mute_video(tmp_path, out_path)
     
         
 # ============== Queries with rekall ==============    
@@ -426,15 +485,16 @@ def get_oneface_intrvlcol(relevant_shots):
 def get_person_alone_phrase_intervals(person_intrvlcol, phrase, filter_still=True):
     phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
     
-    person_phrase_intrvlcol_raw = person_intrvlcol.overlaps(phrase_intrvlcol)
+    person_phrase_intrvlcol_raw = person_intrvlcol.overlaps(phrase_intrvlcol, working_window=0)
     # only keep intervals which is the same before overlap
     person_phrase_intrvlcol = person_phrase_intrvlcol_raw.filter_against(
         phrase_intrvlcol,
-        predicate = equal() )
+        predicate = equal(),
+        working_window=0)
     
     relevant_shots = get_relevant_shots(person_phrase_intrvlcol)
     oneface_intrvlcol = get_oneface_intrvlcol(relevant_shots)
-    person_alone_phrase_intrvlcol = person_phrase_intrvlcol.overlaps(oneface_intrvlcol)
+    person_alone_phrase_intrvlcol = person_phrase_intrvlcol.overlaps(oneface_intrvlcol, working_window=0)
     
     # run optical flow to filter out still images
     intervals = intrvlcol2list(person_alone_phrase_intrvlcol)
@@ -443,7 +503,6 @@ def get_person_alone_phrase_intervals(person_intrvlcol, phrase, filter_still=Tru
     intervals_nostill = filter_still_image_parallel(intervals)
     intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
     
-    # Todo: always give at least one output 
     print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), phrase))
     return intervals_final
     
@@ -473,7 +532,7 @@ class SinglePersonSing:
     def __init__(self, person_name, lyric_path, person_intrvlcol=None):
         if person_intrvlcol is None:
             person_intrvlcol = get_person_intrvlcol(person_name, large_face=True, labeler='old')
-        self.person_name = person_name.replace(' ', '_')
+        self.person_name = person_name.lower().replace(' ', '_')
         self.person_intrvlcol = person_intrvlcol
 
         # load lyrics
@@ -483,14 +542,13 @@ class SinglePersonSing:
         for sub in subs:
             text = re.sub('\[.*\]', ' ', sub.text)
             text = re.sub('\(.*\)', ' ', text)
-            text = re.sub('[^\'0-9a-zA-Z]+', ' ', text)
+            text = re.sub('[^|^\'0-9a-zA-Z]+', ' ', text)
             words = []
             for word in text.split(' '): 
                 if word != '':
-                    if not is_word_in_lexicon(word.upper()):
+                    words.append(word.upper())
+                    if not is_word_in_lexicon(word.upper()) and word != '|':
                         print('Word \"{}\" not exist in Lexcion!'.format(word))
-                    else:
-                        words.append(word.upper())
 #             print("Extracted words from lyrics", words)
             
             lyrics.append((words, time2second(tuple(sub.start)[:4]), time2second(tuple(sub.end)[:4])))
@@ -545,99 +603,109 @@ class SinglePersonSing:
         self.segments_list = segments_list
         self.candidates_list = candidates_list
     
-    def select_candidates(self, human_selection=False, duplicate_selection=True, redo_selection=False):
+    def select_candidates(self, manual=False, redo_selection=False, to_select=None):
         self.selections_list = []
-        if not human_selection:
-            for idx, (segments, candidates) in enumerate(zip(self.segments_list, self.candidates_list)):
-                selections = [auto_select_candidates(c, range=(0.99, 1.5), filter='random') for c in candidates]
-                self.selections_list.append(selections)
-        else:
-            self.human_select_candidates(duplicate_selection, redo_selection)
+        if not to_select is None:
+            to_select = [phrase.upper() for phrase in to_select]
+            for phrase in to_select:
+                if phrase in self.phrase2selection:
+                    del self.phrase2selection[phrase]
+            manual_select_candidates(0, to_select, self.phrase2candidates, self.phrase2selection, self.dump_cache)
+            return 
+        if manual:
+            phrase_list = []
+            for segments in self.segments_list:
+                for phrase in segments:
+                    phrase_list.append(phrase)
+                    if redo_selection and phrase in self.phrase2selection:
+                        del self.phrase2selection[phrase]
+            manual_select_candidates(0, phrase_list, self.phrase2candidates, self.phrase2selection, self.dump_cache)
+            return 
+        
+        for idx, segments in enumerate(self.segments_list):
+            selection_sentence = []
+            for phrase in segments:
+                if phrase in self.phrase2selection:
+                    selection = random.choice(self.phrase2selection[phrase])
+                else:    
+                    selection = auto_select_candidates(self.phrase2candidates[phrase], range=(0.5, 1.5), filter='longest')
+                selection_sentence.append(selection)
+            self.selections_list.append(selection_sentence)
     
-    def make_supercuts(self, out_path):
-        cutting_paths = []
+    def make_supercuts(self, out_path, align_mode=None, add_break=True, cache=True):
+        sentence_paths = []
         for idx, (words, start, end) in enumerate(self.lyrics):
             selections = self.selections_list[idx]
-            tmp_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, idx)
-            dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 1
-            if len(words) > 0:
-                stitch_video_temporal(selections, tmp_path, out_duration=None, dilation=dilation)
+            sentence_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, idx)
+            print('Concat videos for sentence \"{}\"'.format(' '.join(words)))
+            if cache and os.path.exists(tmp_path):
+                print('Found cache')
             else:
-                create_silent_clip(tmp_path, out_duration=end - start + dilation)
-            cutting_paths.append(tmp_path)
-            print('Concat videos for sentence \"{}\"'.format(sentence))
-            
-    #         if idx == 1:
-    #             break
-        concat_videos(cutting_paths, out_path)
+                align_args = {'align_mode': align_mode,
+                              'out_duration': end-start,
+                              'segments': self.segments_list[idx]}
+                if add_break:
+                    dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 2
+                else:
+                    dilation = None
+                    
+                if len(words) > 0:
+                    stitch_video_temporal(selections, align_args=align_args, dilation=dilation, out_path=sentence_path)
+                else:
+                    create_silent_clip(self.person_intrvlcol, out_duration=end - start + dilation, out_path=sentence_path)
+            sentence_paths.append(sentence_path)
+        concat_videos(sentence_paths, out_path)
         
     def dump_cache(self):
         pickle.dump({'candidates':self.phrase2candidates, 'selection':self.phrase2selection}, open(self.cache_path, 'wb'))
         
-    def human_select_candidates(self, duplicate_selection, redo_selection):
-        if redo_selection:
-            for segments in self.segments_list:
-                for phrase in segments:
-                    if phrase in self.phrase2selection:
-                        del self.phrase2selection[phrase]
         
-        def launch_widget(idx_sentence, idx_phrase):
-            if idx_phrase >= len(self.segments_list[idx_sentence]):
-                idx_phrase = 0
-                idx_sentence += 1
-                self.selections_list.append([])
-            if idx_sentence >= len(self.segments_list):
-                clear_output()
-                print("Finished all selections")
-                return
-            phrase, candidates = self.segments_list[idx_sentence][idx_phrase], self.candidates_list[idx_sentence][idx_phrase]
-            
-            if phrase in self.phrase2selection and duplicate_selection:
-                self.selections_list[idx_sentence].append(self.phrase2selection[phrase])
-                launch_widget(idx_sentence, idx_phrase + 1)
-                return 
-            else:
-                durations = [i[-1] for i in candidates]
-                candidates_sort = [candidates[idx] for idx in np.argsort(durations)[::-1]]
-                result = interval2result(candidates_sort) 
-            
-            print('Select phrase \"{}\" for sentence \"{}\"'.format(phrase, ' '.join(self.segments_list[idx_sentence])))
-            selection_widget = esper_widget(
-                result, 
-                disable_playback=False, jupyter_keybindings=True,
-                crop_bboxes=True)
+def manual_select_candidates(idx, phrase_list, phrase2candidates, phrase2selection, dump_cache):
+    if idx >= len(phrase_list):
+        clear_output()
+        print("Finished all manual selections, run this cell again with manual=False")
+        return
 
-            submit_button = widgets.Button(
-                layout=widgets.Layout(width='auto'),
-                description='Save to database',
-                disabled=False,
-                button_style='danger'
-            )
-            def on_submit(b):
-                selection = candidates_sort[selection_widget.selected[0]]
-#                 print(selection_widget.selected, selection)
-                self.selections_list[idx_sentence].append(selection)
-                if not phrase in self.phrase2selection:
-                    self.phrase2selection[phrase] = selection
-                self.dump_cache()
-                clear_output()
-                launch_widget(idx_sentence, idx_phrase + 1)
-            submit_button.on_click(on_submit)
+    phrase = phrase_list[idx] 
+    candidates = phrase2candidates[phrase]
+    
+    if phrase in phrase2selection:
+        return 
+    else:
+        durations = [i[-1] for i in candidates]
+        candidates_sort = [candidates[idx] for idx in np.argsort(durations)[::-1]]
+        result = interval2result(candidates_sort) 
 
-            display(widgets.HBox([submit_button]))
-            display(selection_widget)
+    print('Select phrase \"{}\" '.format(phrase))
+    selection_widget = esper_widget(
+        result, 
+        disable_playback=False, jupyter_keybindings=True,
+        crop_bboxes=True)
 
-        idx_sentence, idx_phrase = 0, 0
-        self.selections_list.append([])
-        launch_widget(idx_sentence, idx_phrase)
+    submit_button = widgets.Button(
+        layout=widgets.Layout(width='auto'),
+        description='Save selection',
+        disabled=False,
+        button_style='danger'
+    )
+    def on_submit(b):
+        selections = [ candidates_sort[s] for s in selection_widget.selected]
+        phrase2selection[phrase] = selections
+        dump_cache()
+        clear_output()
+        manual_select_candidates(idx + 1, phrase_list, phrase2candidates, phrase2selection, dump_cache)
+    submit_button.on_click(on_submit)
 
+    display(widgets.HBox([submit_button]))
+    display(selection_widget)
+     
         
 def auto_select_candidates(intervals, num_sample=1, range=(0.5, 1.5), filter='random'):
     durations = [i[-1] for i in intervals]
     median = np.median(durations)
     intervals_regular = [i for i in intervals if i[-1] > range[0] * median and i[-1] < range[1] * median]
     if len(intervals_regular) == 0:
-        intervals_regular = [i for i in intervals if i[-1] > 0.5 * median and i[-1] < 1.5 * median]
+        intervals_regular = intervals
     # Todo: if regular intervals are not enough
     if filter == 'random':
         if num_sample == 1:
@@ -665,7 +733,9 @@ def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, co
         if num_concat > 0:
             num_concat -= 1
             continue
-            
+        if word == '|':
+            continue
+        
         phrase = word
         candidates = None
         while idx + num_concat < len(words):
@@ -673,7 +743,11 @@ def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, co
                 num_concat -= 1
                 break
             if num_concat > 0:
-                phrase += ' ' + words[idx + num_concat]
+                if words[idx + num_concat] == '|':
+                    num_concat -= 1
+                    break
+                else:
+                    phrase += ' ' + words[idx + num_concat]
             # skip short word for long phrase
             if len(phrase) < SHORT_WORD:
                 num_concat += 1
@@ -710,7 +784,7 @@ def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, co
         
         # make up for short word            
         if candidates is None and len(word) < SHORT_WORD:
-            print('{} Searching for phrase \"{}\" {}'.format('=' * 10, phrase, '=' * 10))    
+            print('{} Searching for word \"{}\" {}'.format('=' * 10, word, '=' * 10))    
             if word in phrase2interval:
                 print("Found in cache")
                 candidates = phrase2interval[word]
@@ -722,10 +796,13 @@ def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, co
                     candidates = person_alone_phrase_intervals
                     phrase2interval[word] = candidates
                     segment = word
+                else:
+                    phrase2interval[word] = None
         # if really cannot find the word, use clips from other person instead
         if candidates is None:
             phrase_intrvlcol = get_caption_intrvlcol(word)
             candidates = intrvlcol2list(phrase_intrvlcol)
+            phrase2interval[word] = candidates
             segment = word
         if not candidates is None:
             supercut_candidates.append(candidates)
@@ -798,4 +875,4 @@ if __name__ == "__main__":
 
     mix_audio(supercut_intervals, out_path=audio_path, decrease_volume=5, align=False)
     
-    merge_video_audio(video_path, audio_path, '/app/result/montage/make_america_great_again.mp4')
+    concat_video_audio(video_path, audio_path, '/app/result/montage/make_america_great_again.mp4')
