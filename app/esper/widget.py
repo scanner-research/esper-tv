@@ -20,7 +20,7 @@ import django.db.models as models
 from query.base_models import Track
 from query.models import \
     Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Segment, Tag, Object, \
-    Topic, Identity
+    Topic, Identity, Clothing, HairColor, HairLength
 import django.apps
 import os
 
@@ -78,6 +78,11 @@ def gender_to_dict(f: Any) -> Dict:
 def identity_to_dict(f: Any) -> Dict:
     d = bbox_to_dict(f.face)
     d['identity_id'] = f.identity.id
+    return d
+
+
+def face_attr_to_dict(f: Any) -> Dict:
+    d = bbox_to_dict(f.face)
     return d
 
 
@@ -156,13 +161,16 @@ def qs_to_result(result: QuerySet,
                 'objects': []
             })
 
-    elif cls is Face or cls is FaceGender or cls is FaceIdentity or cls is Object:
-        if cls is FaceGender or cls is FaceIdentity:
+    elif cls is Face or cls is FaceGender or cls is FaceIdentity or cls is Object or \
+            (cls is HairColor or cls is HairLength or cls is Clothing):
+        if cls is FaceGender or cls is FaceIdentity or (cls is HairColor or cls is HairLength or cls is Clothing):
             frame_path = 'face__frame'
             if cls is FaceGender:
                 result = result.select_related('face', 'gender')
-            else:
+            elif cls is FaceIdentity:
                 result = result.select_related('face', 'identity')
+            else:
+                result = result.select_related('face')
         else:
             frame_path = 'frame'
         result = result.select_related(frame_path)
@@ -176,6 +184,8 @@ def qs_to_result(result: QuerySet,
             fn = gender_to_dict
         elif cls is FaceIdentity:
             fn = identity_to_dict
+        elif cls is HairColor or cls is HairLength or cls is Clothing:
+            fn = face_attr_to_dict
         elif cls is Pose:
             fn = pose_to_dict
 
