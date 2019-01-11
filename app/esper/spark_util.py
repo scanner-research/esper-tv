@@ -322,10 +322,12 @@ def _annotate_host_probability(faces, identity_threshold=0.5):
               channel_id, len(hosts)), file=sys.stderr)
 
     def is_host_helper(identity_id, canonical_show_id, channel_id):
-        if canonical_show_id not in canonical_show_id_to_host_ids:
-            return identity_id in channel_id_to_host_ids[channel_id]
-        else:
-            return identity_id in canonical_show_id_to_host_ids[canonical_show_id]
+        # Use a looser defintiion
+        return identity_id in channel_id_to_host_ids[channel_id]
+#         if canonical_show_id not in canonical_show_id_to_host_ids:
+#             return identity_id in channel_id_to_host_ids[channel_id]
+#         else:
+#             return identity_id in canonical_show_id_to_host_ids[canonical_show_id]
 
     host_filter_udf = func.udf(is_host_helper, BooleanType())
     host_identities = face_identities.filter(
