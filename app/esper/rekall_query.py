@@ -85,6 +85,37 @@ def intrvlcol_second2frame(intrvlcol):
     return VideoIntervalCollection(intrvllists_frame)
 
 
+def split_intrvlcol(intrvlcol, seg_length):
+    intrvllists_split = {}
+    for video_id, intrvllist in intrvlcol.get_allintervals().items():
+        intervals_split = []
+        for i in intrvllist.get_intervals():
+            duration = i.end - i.start
+            start = i.start
+            while duration > 0:
+                if duration > seg_length:
+                    intervals_split.append((start, start + seg_length, i.payload))
+                    duration -= seg_length
+                    start += seg_length
+                else:
+                    intervals_split.append((start, start + duration, i.payload))
+                    duration = 0
+        intrvllists_split[video_id] = IntervalList(intervals_split)
+    return VideoIntervalCollection(intrvllists_split)
+
+
+def remove_isolated_interval(intrvlcol, min_duration=10, max_isolation=60): 
+    intrvlcol_filtered = intrvlcol \
+        .filter_length(max_length = min_duration) \
+        .filter_against(intrvlcol,
+            predicate=or_pred(before(max_dist=max_isolation),
+            after(max_dist=max_isolation), arity=2),
+            working_window=max_isolation) \
+        .set_union(intrvlcol \
+            .filter_length(min_length = min_duration))
+    return intrvlcol_filtered
+
+
 # ============== Queries with rekall ==============   
 
 def get_commercial_intrvlcol(video_ids=None, granularity='frame'):
@@ -102,7 +133,10 @@ def get_commercial_intrvlcol(video_ids=None, granularity='frame'):
         
 
 def get_person_intrvlcol(person_name=None, video_ids=None, 
-                         probability=0.9, face_size=None, stride_face=False, exclude_person=False, granularity='frame'):
+                         probability=0.9, face_size=None, stride_face=False, labeler='new',
+                         exclude_person=False, granularity='frame'):
+    if stride_face:
+        labeler = 'new'
     
     faceIDs = FaceIdentity.objects \
               .filter(probability__gt=probability) \
@@ -113,13 +147,23 @@ def get_person_intrvlcol(person_name=None, video_ids=None,
         faceIDs = faceIDs.exclude(face__shot__isnull=True)
     else:
         faceIDs = faceIDs.filter(face__frame__shot_boundary=False)
+        
     if not person_name is None:
         if not exclude_person:
-            faceIDs = faceIDs.filter(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
-                                     Q(labeler__name='face-identity:'+person_name.lower()) )
+            if labeler == 'new':
+                print('include person')
+                faceIDs = faceIDs.filter(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
+                                         Q(labeler__name='face-identity:'+person_name.lower()) )
+            else:
+                faceIDs = faceIDs.filter(labeler__name='face-identity-old:'+person_name.lower()) 
         else:
-            faceIDs = faceIDs.exclude(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
-                                     Q(labeler__name='face-identity:'+person_name.lower()) )
+            if labeler == 'new':
+                print('exclude person')
+                faceIDs = faceIDs.exclude(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
+                                          Q(labeler__name='face-identity:'+person_name.lower()) )
+            else:
+                faceIDs = faceIDs.exclude(labeler__name='face-identity-old:'+person_name.lower()) 
+                
     if not face_size is None:
         faceIDs = faceIDs.filter(height__gte=face_size)
     if not video_ids is None:
@@ -136,6 +180,7 @@ def get_person_intrvlcol(person_name=None, video_ids=None,
                 'end': 'max_frame',
                 'payload': 'shot_id'
             })
+        person_intrvlcol = VideoIntervalCollection(person_intrvllists).coalesce()
     else: 
         person_intrvllists_raw = qs_to_intrvllists(
             faceIDs.annotate(video_id=F("face__frame__video_id"))
@@ -154,8 +199,8 @@ def get_person_intrvlcol(person_name=None, video_ids=None,
             video = Video.objects.filter(id=video_id)[0]
             dilation = int(video.fps * SAMPLE_RATE / 2)
             person_intrvllists[video_id] = intrvllist.dilate(dilation).coalesce().dilate(-dilation)
-    
-    person_intrvlcol = VideoIntervalCollection(person_intrvllists)
+        person_intrvlcol = VideoIntervalCollection(person_intrvllists)
+        
     if granularity == 'second':
         person_intrvlcol = intrvlcol_frame2second(person_intrvlcol)
     
