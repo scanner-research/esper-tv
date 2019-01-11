@@ -1,22 +1,7 @@
-# import rekall
-from esper.rekall import *
-from rekall.video_interval_collection import VideoIntervalCollection
-from rekall.interval_list import Interval, IntervalList
-from rekall.temporal_predicates import *
-from rekall.spatial_predicates import *
-from rekall.parsers import in_array, bbox_payload_parser
-from rekall.merge_ops import payload_plus
-from rekall.payload_predicates import payload_satisfies
-from rekall.list_predicates import length_exactly
-# import caption search
-from esper.captions import *
+# import basic rekall queries
+from esper.rekall_query import *
 
-# import query sets
-from query.models import Video, Face, FaceIdentity, FaceGender
-from django.db.models import F, Q
-
-# import esper utils and widgets for selection
-from esper.prelude import *
+# import esper widgets for selection
 from esper.widget import *
 from IPython.display import display, clear_output
 import ipywidgets as widgets
@@ -33,38 +18,10 @@ import pysrt
 import re
 import cv2
 import shutil
-import multiprocessing as mp
 import pyphen
 
 # ============== Basic help functions ==============    
 
-def par_for_process(function, param_list, num_workers=32):
-    num_jobs = len(param_list)
-    print("Total number of %d jobs" % num_jobs)
-    if num_jobs == 0:
-        return 
-    if num_jobs <= num_workers:
-        num_workers = num_jobs
-        num_jobs_p = 1
-    else:
-        num_jobs_p = math.ceil(1. * num_jobs / num_workers)
-    print("{} workers and {} jobs per worker".format(num_workers, num_jobs_p))
-    
-    process_list = []
-    for i in range(num_workers):
-        if i != num_workers - 1:
-            param_list_p = param_list[i*num_jobs_p : (i+1)*num_jobs_p]
-        else:
-            param_list_p = param_list[i*num_jobs_p : ]
-        p = mp.Process(target=function, args=(param_list_p,))
-        process_list.append(p)
-
-    for p in process_list:
-        p.start()
-#     for p in process_list:
-#         p.join()
-
-        
 def second2time(second, sep=','):
     h, m, s, ms = int(second) // 3600, int(second % 3600) // 60, int(second) % 60, int((second - int(second)) * 1000)
     return '{:02d}:{:02d}:{:02d}{:s}{:03d}'.format(h, m, s, sep, ms)
@@ -72,42 +29,7 @@ def second2time(second, sep=','):
 
 def time2second(time):
         return time[0]*3600 + time[1]*60 + time[2] + time[3] / 1000.0
-
     
-def count_intervals(intrvlcol):
-    num_intrvl = 0
-    for intrvllist in intrvlcol.get_allintervals().values():
-        num_intrvl += intrvllist.size()
-    return num_intrvl
-
-
-def intrvlcol2list(intrvlcol, with_duration=True):
-    interval_list = []
-    for video_id, intrvllist in intrvlcol.get_allintervals().items():
-        if with_duration:
-            video = Video.objects.filter(id=video_id)[0]
-        for i in intrvllist.get_intervals():
-            if i.start > video.num_frames:
-                continue
-            if with_duration:
-                interval_list.append((video_id, i.start, i.end, (i.end - i.start) / video.fps))
-            else:
-                interval_list.append((video_id, i.start, i.end))
-    print("Get {} intervals from interval collection".format(len(interval_list)))
-    return interval_list
-
-
-def interval2result(intervals):
-    materialized_result = [
-        {'video': video_id,
-#             'track': t.id,
-         'min_frame': sfid,
-         'max_frame': efid }
-        for video_id, sfid, efid, duration in intervals ]
-    count = len(intervals)
-    groups = [{'type': 'flat', 'label': '', 'elements': [r]} for r in materialized_result]
-    return {'result': groups, 'count': count, 'type': 'Video'}
-
 
 def count_syllables(phrase):
     dic = pyphen.Pyphen(lang='en')
@@ -365,175 +287,6 @@ def create_silent_clip(person_intrvlcol, out_duration, out_path=None):
     return mute_video(tmp_path, out_path)
     
         
-# ============== Queries with rekall ==============    
-def get_person_intrvlcol(person_name, **kwargs):
-#     if video_ids is None:
-#         videos = Video.objects.filter(threeyears_dataset=True)
-#         video_ids = [video.id for video in videos]
-    
-#     faceIDs = FaceIdentity.objects \
-#               .annotate(video_id=F("face__frame__video_id")) \
-#               .annotate(shot_boundary=F("face__frame__shot_boundary"))
-            
-#     if not video_ids is None:
-#         faceIDs = faceIDs.filter(video_id__in=video_ids, shot_boundary=True) \
-    
-    if kwargs['labeler'] == 'old': # old labeler model
-        faceIDs = FaceIdentity.objects \
-                  .exclude(face__shot__isnull=True) \
-                  .filter(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
-                          Q(labeler__name='face-identity:'+person_name.lower()) ) \
-                  .filter(probability__gt=0.9) \
-                  .annotate(height=F("face__bbox_y2") - F("face__bbox_y1"))   
-        if 'large_face' in kwargs:
-            faceIDs = faceIDs.filter(height__gte=0.3)
-    
-        person_intrvllists = qs_to_intrvllists(
-            faceIDs.annotate(video_id=F("face__shot__video_id"))
-                   .annotate(shot_id=F("face__shot_id"))
-                   .annotate(min_frame=F("face__shot__min_frame"))
-                   .annotate(max_frame=F("face__shot__max_frame")),\
-            schema={
-                'start': 'min_frame',
-                'end': 'max_frame',
-                'payload': 'shot_id'
-            })
-        person_intrvlcol = VideoIntervalCollection(person_intrvllists)
-    else: # new labeler model
-        faceIDs = FaceIdentity.objects \
-                  .filter(face__frame__shot_boundary=False) \
-                  .filter(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
-                          Q(labeler__name='face-identity:'+person_name.lower()) ) \
-                  .filter(probability__gt=0.9) \
-                  .annotate(height=F("face__bbox_y2") - F("face__bbox_y1"))   
-        if 'large_face' in kwargs:
-            faceIDs = faceIDs.filter(height__gte=0.3)
-    
-        person_intrvllists_raw = qs_to_intrvllists(
-            faceIDs.annotate(video_id=F("face__frame__video_id"))
-                   .annotate(frame_id=F("face__frame__number"))
-                   .annotate(min_frame=F("face__frame__number"))
-                   .annotate(max_frame=F("face__frame__number") + 1),\
-            schema={
-                'start': 'min_frame',
-                'end': 'max_frame',
-                'payload': 'frame_id'
-            })
-        # dilate and coalesce
-        person_intrvllists = {}
-        for video_id, intrvllist in person_intrvllists_raw.items():
-            video = Video.objects.filter(id=video_id)[0]
-            person_intrvllists[video_id] = intrvllist.dilate(int(video.fps*1.6)).coalesce()
-        person_intrvlcol = VideoIntervalCollection(person_intrvllists)
-        
-    print("Get {} intervals for person {}".format(count_intervals(person_intrvlcol), person_name))
-    return person_intrvlcol
-
-
-def get_caption_intrvlcol(phrase, video_ids=None):
-    results = phrase_search(phrase, video_ids)
-    
-    if video_ids == None:
-        videos = {v.id: v for v in Video.objects.all()}
-    else:
-        videos = {v.id: v for v in Video.objects.filter(id__in=video_ids).all()}
-    def convert_time(k, t):
-        return int(t * videos[k].fps)
-    
-    flattened = [
-        (doc.id, convert_time(doc.id, p.start), convert_time(doc.id, p.end)) 
-        for doc in results
-        for p in doc.postings
-    ]
-    phrase_intrvllists = {}
-    for video_id, t1, t2 in flattened:
-        if video_id in phrase_intrvllists:
-            phrase_intrvllists[video_id].append((t1, t2, 0))
-        else:
-            phrase_intrvllists[video_id] = [(t1, t2, 0)]
-    
-    for video_id, intrvllist in phrase_intrvllists.items():
-        phrase_intrvllists[video_id] = IntervalList(intrvllist)
-    phrase_intrvlcol = VideoIntervalCollection(phrase_intrvllists)
-    print('Get {} intervals for phrase \"{}\"'.format(count_intervals(phrase_intrvlcol), phrase))
-    return phrase_intrvlcol
-
-
-def get_relevant_shots(intrvlcol):
-    relevant_shots = set()
-    for intrvllist in list(intrvlcol.get_allintervals().values()):
-        for interval in intrvllist.get_intervals():
-            relevant_shots.add(interval.get_payload())
-    print("Get %d relevant shots" % len(relevant_shots))
-    return relevant_shots
-
-
-def get_oneface_intrvlcol(relevant_shots):
-    faces = Face.objects.filter(shot__in=list(relevant_shots)) \
-            .annotate(video_id=F('shot__video_id')) \
-            .annotate(min_frame=F('shot__min_frame')) \
-            .annotate(max_frame=F('shot__max_frame'))
-
-    # Materialize all the faces and load them into rekall with bounding box payloads
-    # Then coalesce them so that all faces in the same frame are in the same interval
-    # NOTE that this is slow right now since we're loading all faces!
-    oneface_intrvlcol = VideoIntervalCollection.from_django_qs(
-        faces,
-        with_payload=in_array(
-            bbox_payload_parser(VideoIntervalCollection.django_accessor))
-        ).coalesce(payload_merge_op=payload_plus).filter(payload_satisfies(length_exactly(1)))
-    
-    num_intrvl = 0
-    for _, intrvllist in oneface_intrvlcol.get_allintervals().items():
-        num_intrvl += intrvllist.size()
-    print("Get %d relevant one face intervals" % num_intrvl)
-    return oneface_intrvlcol
-
-
-def get_person_alone_phrase_intervals(person_intrvlcol, phrase, filter_still=True):
-    phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
-    
-    person_phrase_intrvlcol_raw = person_intrvlcol.overlaps(phrase_intrvlcol, working_window=0)
-    # only keep intervals which is the same before overlap
-    person_phrase_intrvlcol = person_phrase_intrvlcol_raw.filter_against(
-        phrase_intrvlcol,
-        predicate = equal(),
-        working_window=0)
-    
-    relevant_shots = get_relevant_shots(person_phrase_intrvlcol)
-    oneface_intrvlcol = get_oneface_intrvlcol(relevant_shots)
-    person_alone_phrase_intrvlcol = person_phrase_intrvlcol.overlaps(oneface_intrvlcol, working_window=0)
-    
-    # run optical flow to filter out still images
-    intervals = intrvlcol2list(person_alone_phrase_intrvlcol)
-    if not filter_still:
-        return intervals
-    intervals_nostill = filter_still_image_parallel(intervals)
-    intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
-    
-    print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), phrase))
-    return intervals_final
-    
-    
-def filter_still_image_t(interval):
-    video_id, sfid, efid = interval[:3]
-    video = Video.objects.filter(id=video_id)[0]
-    fid = (sfid + efid) // 2
-    frame_first = load_frame(video, fid, [])
-    frame_second = load_frame(video, fid + 1, [])
-    diff = 1. * np.sum(frame_first - frame_second) / frame_first.size
-#     print(video.id, fid, diff)
-    return diff > 15
-
-def filter_still_image_parallel(intervals, limit=100):
-    durations = [i[-1] for i in intervals]
-    if limit < len(intervals):
-#         intervals = random.sample(intervals, limit)
-        intervals = [intervals[idx] for idx in np.argsort(durations)[-limit : ]]
-    filter_res = par_for(filter_still_image_t, intervals)
-    return [intrv for i, intrv in enumerate(intervals) if filter_res[i]]    
-
-
 # ============== Applications ============== 
 
 class SinglePersonSing:
@@ -569,12 +322,11 @@ class SinglePersonSing:
         self.phrase2candidates, self.phrase2selection = cache['candidates'], cache['selection']
         self.cache_path = cache_path
     
-    def search_phrases(self, phrase_list):
-        for phrase in phrase_list:
-            print("searching for \"{}\" ...".format(phrase))
-            self.phrase2candidates_tmp[phrase] = get_person_alone_phrase_intervals(self.person_intrvlcol, 
-                                                                                   phrase, filter_still=False)
-    
+#     def search_phrases(self, phrase_list):
+#         for phrase in phrase_list:
+#             print("searching for \"{}\" ...".format(phrase))
+#             self.phrase2candidates_tmp[phrase] = get_person_alone_phrase_intervals(self.person_intrvlcol, 
+#                                                                                    phrase, filter_still=False)
 #     def search_candidates_parallel(self, workers=16):
 #         # collect all words
 #         words_all = set()
@@ -601,11 +353,14 @@ class SinglePersonSing:
 #             print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), word))
 #             self.phrase2candidates[word] = intervals_final
         
-    def search_candidates(self):
+    def search_candidates(self, concat_word=4, num_face=1):
         segments_list = []
         candidates_list = []
         for idx, (words, start, end) in enumerate(self.lyrics):
-            segments, candidates = single_person_one_sentence(self.person_intrvlcol, words, self.phrase2candidates)
+            segments, candidates = search_person_with_sentence(self.person_intrvlcol, words, \
+                                                               self.phrase2candidates, \
+                                                               concat_word=concat_word, \
+                                                               num_face=num_face)
             segments_list.append(segments)
             candidates_list.append(candidates)
             self.dump_cache()
@@ -734,7 +489,7 @@ def auto_select_candidates(intervals, num_sample=1, range=(0.5, 1.5), filter='ra
         return intervals_regular[np.argmax(durations_regular)]
     
 
-def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, concat_word=4):
+def search_person_with_sentence(person_intrvlcol, words, phrase2interval, concat_word=4, num_face=1):
     
     # Magic numbers
     SHORT_WORD = 4
@@ -787,7 +542,7 @@ def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, co
                 segment = phrase
                 num_concat += 1
             else:
-                person_alone_phrase_intervals = get_person_alone_phrase_intervals(person_intrvlcol, phrase)
+                person_alone_phrase_intervals = get_person_phrase_intervals(person_intrvlcol, phrase, num_face=num_face)
                 num_intervals = len(person_alone_phrase_intervals)
                 if num_intervals > LEAST_HIT:
                     candidates = person_alone_phrase_intervals
@@ -807,7 +562,7 @@ def single_person_one_sentence(person_intrvlcol, words, phrase2interval=None, co
                 candidates = phrase2interval[word]
                 segment = word
             else:
-                person_alone_phrase_intervals = get_person_alone_phrase_intervals(person_intrvlcol, word)
+                person_alone_phrase_intervals = get_person_phrase_intervals(person_intrvlcol, word, num_face=num_face)
                 num_intervals = len(person_alone_phrase_intervals)
                 if num_intervals > 0:
                     candidates = person_alone_phrase_intervals
