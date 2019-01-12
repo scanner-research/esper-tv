@@ -18,7 +18,7 @@ from rekall.payload_predicates import payload_satisfies
 from rekall.list_predicates import length_exactly
 
 # import caption search
-# from esper.captions import *
+from esper.captions import *
 
 
 # ============== Basic help functions ============== 
@@ -141,7 +141,7 @@ def get_commercial_intrvlcol(video_ids=None, granularity='frame'):
 
 def get_person_intrvlcol(person_list=None, video_ids=None, 
                          probability=0.9, face_size=None, stride_face=False, labeler='new',
-                         exclude_person=False, granularity='frame'):
+                         exclude_person=False, granularity='frame', payload_type='shot_id'):
     
     def identity_filter(person_list):
         filter_all = None
@@ -190,11 +190,12 @@ def get_person_intrvlcol(person_list=None, video_ids=None,
             faceIDs.annotate(video_id=F("face__shot__video_id"))
                    .annotate(shot_id=F("face__shot_id"))
                    .annotate(min_frame=F("face__shot__min_frame"))
-                   .annotate(max_frame=F("face__shot__max_frame")),\
+                   .annotate(max_frame=F("face__shot__max_frame"))
+                   .annotate(faceID_id=F("identity_id")),\
             schema={
                 'start': 'min_frame',
                 'end': 'max_frame',
-                'payload': 'shot_id'
+                'payload': payload_type
             })
         person_intrvlcol = VideoIntervalCollection(person_intrvllists).coalesce()
     else: 
@@ -202,11 +203,12 @@ def get_person_intrvlcol(person_list=None, video_ids=None,
             faceIDs.annotate(video_id=F("face__frame__video_id"))
                    .annotate(frame_id=F("face__frame__number"))
                    .annotate(min_frame=F("face__frame__number"))
-                   .annotate(max_frame=F("face__frame__number") + 1),\
+                   .annotate(max_frame=F("face__frame__number") + 1)
+                   .annotate(faceID_id=F("identity_id")),\
             schema={
                 'start': 'min_frame',
                 'end': 'max_frame',
-                'payload': 'frame_id'
+                'payload': payload_type
             })
         # dilate and coalesce
         SAMPLE_RATE = 3

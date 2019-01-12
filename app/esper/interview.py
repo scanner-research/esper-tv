@@ -36,11 +36,13 @@ def load_intervals(video_ids, person_name, host_list,
                     face_size=0.2, stride_face=False, probability=0.7):
 
     person_intrvlcol = get_person_intrvlcol(person_name, video_ids=video_ids, face_size=face_size, 
-                                            stride_face=stride_face, probability=probability, granularity='second')
+                                            stride_face=stride_face, probability=probability, 
+                                            granularity='second', payload_type='faceID_id')
     
     video_ids = list(person_intrvlcol.get_allintervals().keys())
     host_intrvlcol = get_person_intrvlcol(host_list, video_ids=video_ids, face_size=face_size, \
-                                          stride_face=stride_face, probability=probability, granularity='second')
+                                          stride_face=stride_face, probability=probability, 
+                                          granularity='second', payload_type='faceID_id')
             
     commercial = get_commercial_intrvlcol(video_ids, granularity='second')
     
@@ -78,10 +80,13 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial):
             or_pred(overlaps(), before(max_dist=60), arity=2),
             after(max_dist=60), arity=2)
 
+#     print(host_intrvlcol.get_allintervals())
     
     interview_candidates = host_intrvlcol \
             .merge(person_intrvlcol, predicate=overlaps_before_or_after_pred) \
             .coalesce() 
+    
+    print(interview_candidates.get_allintervals())
     
     # This code finds sequences of:
     #   guest with host overlaps/before/after host OR
@@ -99,9 +104,13 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial):
             .coalesce() \
             .dilate(-1 * 120) \
             .filter_length(min_length=240) \
-            .minus(commercial)
+            .minus(commercial) \
+            .filter_length(min_length=240)
     
     person_in_interviews = interviews.overlaps(person_intrvlcol)
+    
+    return interviews, person_in_interviews
+
     
     # remove interview segments which the total person time proportion is below threshold
     min_proportion = 0.4
@@ -119,6 +128,7 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial):
 
 
 def save_interview(person_name, interviews, person_in_interviews):
+    person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview.pkl'.format(person_name)
     
     if os.path.exists(pkl_path):
@@ -132,4 +142,20 @@ def save_interview(person_name, interviews, person_in_interviews):
         interview_dict[video_id] = {'all': all_list, 'person': person_list}
     
     pickle.dump(interview_dict, open(pkl_path, 'wb'))
+    
+    
+def load_interview(person_name):
+    person_name = person_name.lower()
+    pkl_path = '/app/result/interview/{}-interview.pkl'.format(person_name)
+    
+    if not os.path.exists(pkl_path):
+        print("Interview for {} not founded".format(person_name))
+        return None, None
+    else:
+        interview_dict = pickle.load(open(pkl_path, 'rb'))
+        interviews, person_in_interviews = {}, {}
+        for video_id, value in interview_dict.items():
+            interviews[video_id] = IntervalList(value['all'])
+            person_in_interviews[video_id] = IntervalList(value['person'])
+        return VideoIntervalCollection(interviews), VideoIntervalCollection(person_in_interviews)
     
