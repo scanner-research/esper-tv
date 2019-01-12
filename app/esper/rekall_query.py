@@ -85,6 +85,13 @@ def intrvlcol_second2frame(intrvlcol):
     return VideoIntervalCollection(intrvllists_frame)
 
 
+def intrvllist2list(intrvllist):
+    intervals = []
+    for i in intrvllist.get_intervals():
+        intervals.append((i.start, i.end, i.payload))
+    return intervals
+
+
 def split_intrvlcol(intrvlcol, seg_length):
     intrvllists_split = {}
     for video_id, intrvllist in intrvlcol.get_allintervals().items():
@@ -132,40 +139,49 @@ def get_commercial_intrvlcol(video_ids=None, granularity='frame'):
     return commercial
         
 
-def get_person_intrvlcol(person_name=None, video_ids=None, 
+def get_person_intrvlcol(person_list=None, video_ids=None, 
                          probability=0.9, face_size=None, stride_face=False, labeler='new',
                          exclude_person=False, granularity='frame'):
+    
+    def identity_filter(person_list):
+        filter_all = None
+        for p in person_list:
+            if labeler == 'new':
+                filter = Q(labeler__name='face-identity-converted:' +  p) | Q(labeler__name='face-identity:' + p)
+            else:
+                filter = Q(labeler__name='face-identity-old:' +  p)
+            if filter_all is None:
+                filter_all = filter
+            else:
+                filter_all = filter_all | filter
+        return filter_all
+    
     if stride_face:
         labeler = 'new'
+    if type(person_list) == str:
+        person_list = [person_list.lower()]
+    else:
+        person_list = [p.lower() for p in person_list]
     
     faceIDs = FaceIdentity.objects \
               .filter(probability__gt=probability) \
               .annotate(height=F("face__bbox_y2") - F("face__bbox_y1")) \
               .annotate(video_id=F("face__frame__video_id")) \
-              .annotate(is_host=F("face__is_host"))
+    
     if not stride_face:
         faceIDs = faceIDs.exclude(face__shot__isnull=True)
     else:
         faceIDs = faceIDs.filter(face__frame__shot_boundary=False)
         
-    if not person_name is None:
+    if not person_list is None:
         if not exclude_person:
-            if labeler == 'new':
-                print('include person')
-                faceIDs = faceIDs.filter(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
-                                         Q(labeler__name='face-identity:'+person_name.lower()) )
-            else:
-                faceIDs = faceIDs.filter(labeler__name='face-identity-old:'+person_name.lower()) 
+            faceIDs = faceIDs.filter(identity_filter(person_list)) 
         else:
-            if labeler == 'new':
-                print('exclude person')
-                faceIDs = faceIDs.exclude(Q(labeler__name='face-identity-converted:'+person_name.lower()) | 
-                                          Q(labeler__name='face-identity:'+person_name.lower()) )
-            else:
-                faceIDs = faceIDs.exclude(labeler__name='face-identity-old:'+person_name.lower()) 
+            faceIDs = faceIDs.exclude(identity_filter(person_list)) 
                 
     if not face_size is None:
         faceIDs = faceIDs.filter(height__gte=face_size)
+        
     if not video_ids is None:
         faceIDs = faceIDs.filter(video_id__in=video_ids)
     
@@ -204,7 +220,8 @@ def get_person_intrvlcol(person_name=None, video_ids=None,
     if granularity == 'second':
         person_intrvlcol = intrvlcol_frame2second(person_intrvlcol)
     
-    print("Get {} intervals for person {}".format(count_intervals(person_intrvlcol), person_name))
+    print("Get {} intervals for person {}".format(count_intervals(person_intrvlcol), 
+                                                  person_list[0]+' ...' if len(person_list) > 1 else person_list[0]))
     return person_intrvlcol
 
 
