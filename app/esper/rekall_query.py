@@ -1,5 +1,5 @@
 # import query sets
-from query.models import Video, Face, FaceIdentity, FaceGender, Commercial
+from query.models import Video, Face, FaceIdentity, Commercial
 from django.db.models import F, Q
 
 # import esper utils
@@ -28,6 +28,21 @@ def count_intervals(intrvlcol):
     for intrvllist in intrvlcol.get_allintervals().values():
         num_intrvl += intrvllist.size()
     return num_intrvl
+
+
+def count_duration(intrvlcol):
+    if type(intrvlcol) == IntervalList:
+        intrvllist = intrvlcol
+        if intrvllist.size() > 0:
+            duration = sum([i.end - i.start for i in intrvllist.get_intervals()])
+        else:
+            duration = 0
+    else:
+        if count_intervals(intrvlcol) > 0:
+            duration = sum([i.end - i.start for i in intrvllist.get_intervals for _, intrvllist in intrvlcol.items()])
+        else:
+            duration = 0
+    return duration
 
 
 def intrvlcol2list(intrvlcol, with_duration=True):
@@ -287,6 +302,17 @@ def get_numface_intrvlcol(relevant_shots, num_face=1):
     return numface_intrvlcol
 
 
+def count_face_in_shot(relevant_shots):
+    faces = Face.objects.filter(shot__in=list(relevant_shots), background=False) \
+            .annotate(shot_id=F('shot_id'))
+    face_cnt = {}
+    for face in faces:
+        if not face.shot_id in face_cnt:
+            face_cnt[face.shot_id] = 0
+        face_cnt[face.shot_id] += 1
+    return face_cnt
+    
+    
 def get_person_phrase_intervals(person_intrvlcol, phrase, num_face=1, filter_still=True):
     phrase_intrvlcol = get_caption_intrvlcol(phrase, person_intrvlcol.get_allintervals().keys())
     

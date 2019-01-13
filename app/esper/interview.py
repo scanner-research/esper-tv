@@ -1,23 +1,17 @@
 from esper.rekall_query import *
 
 # import query sets
-from query.models import LabeledInterview, CanonicalShow
+from query.models import LabeledInterview, CanonicalShow, Commercial
 
 # import esper utils and widgets for selection
 from esper.prelude import *
 from esper.widget import *
-from IPython.display import display, clear_output
-import ipywidgets as widgets
 
 import numpy as np
 import random
 import os
 import pickle
-import tempfile
 from tqdm import tqdm
-import multiprocessing
-import pysrt
-import re
 import cv2
 
 
@@ -37,12 +31,12 @@ def load_intervals(video_ids, person_name, host_list,
 
     person_intrvlcol = get_person_intrvlcol(person_name, video_ids=video_ids, face_size=face_size, 
                                             stride_face=stride_face, probability=probability, 
-                                            granularity='second', payload_type='faceID_id')
+                                            granularity='second', payload_type='height')
     
     video_ids = list(person_intrvlcol.get_allintervals().keys())
     host_intrvlcol = get_person_intrvlcol(host_list, video_ids=video_ids, face_size=face_size, \
                                           stride_face=stride_face, probability=probability, 
-                                          granularity='second', payload_type='faceID_id')
+                                          granularity='second', payload_type='shot_id')
             
     commercial = get_commercial_intrvlcol(video_ids, granularity='second')
     
@@ -50,10 +44,7 @@ def load_intervals(video_ids, person_name, host_list,
 
     
 def interview_query(person_intrvlcol, host_intrvlcol, commercial):
-    
-    # Get all shots where the guest and a host are on screen together
-#     person_with_X = person_intrvlcol.overlaps(host_intrvlcol)
-    
+      
     # Remove single frame intervals 
 #     person_intrvlcol = person_intrvlcol.filter_length(min_length=1)
 #     host_intrvlcol = host_intrvlcol.filter_length(min_length=1)
@@ -86,7 +77,7 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial):
             .merge(person_intrvlcol, predicate=overlaps_before_or_after_pred) \
             .coalesce() 
     
-    print(interview_candidates.get_allintervals())
+#     print(interview_candidates.get_allintervals())
     
     # This code finds sequences of:
     #   guest with host overlaps/before/after host OR
@@ -107,27 +98,61 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial):
             .minus(commercial) \
             .filter_length(min_length=240)
     
-    person_in_interviews = interviews.overlaps(person_intrvlcol)
-    
-    return interviews, person_in_interviews
-
-    
     # remove interview segments which the total person time proportion is below threshold
-    min_proportion = 0.4
     def filter_person_time(i):
-        return i.payload / (i.end - i.start) > min_proportion
+        person_time = 0
+        small_person_time = 0
+        for height, duration in i.payload:
+            person_time += duration
+            small_person_time += duration if height < 0.3 else 0 
+        seg_length = i.end - i.start
+        return person_time / seg_length > 0.4 and small_person_time / person_time < 0.5
     
-    interviews_persontime = interviews.join(person_in_interviews,
+    interviews_person_time = interviews.join(person_intrvlcol,
                              predicate=overlaps(),
-                             merge_op=lambda i1, i2: [(i1.start, i1.end, i2.end - i2.start)]) \
+                             merge_op=lambda i1, i2: [(i1.start, i1.end, [(i2.payload, i2.end - i2.start)])]) \
                              .coalesce(payload_plus)
-    interviews = interviews_persontime.filter(filter_person_time)
+    interviews = interviews_person_time.filter(filter_person_time)
+    
+    # remove interview segments which the total host time proportion is below threshold
+    # and there is only one host showing a lot
+#     def filter_host_time(i):
+#         host_time = {}
+#         for faceID_id, duration in i.payload:
+#             if not faceID_id in host_time:
+#                 host_time[faceID_id] = 0
+#             host_time[faceID_id] += duration
+#         host_time_sort = sorted(host_time.values())
+#         sum_host_time = sum(host_time_sort)
+#         if sum_host_time / (i.end - i.start) < 0.1:
+#             return False
+#         if len(host_time_sort) > 1 and host_time_sort[-2] > 0.2:
+#             return False
+#         return True
+    
+    # remove interview segments where many people showing a lot
+    def filter_face_in_shot(i):
+        shot_time = {}
+        for shot_id, duration in i.payload:
+            shot_time[shot_id] = duration
+        face_cnt = count_face_in_shot(shot_time.keys())
+        multi_person_duration = sum([shot_time[id] for id in shot_time if face_cnt[id] > 2])
+        return multi_person_duration / (i.end - i.start) < 0.3
+    
+    interviews_host_time = interviews.join(host_intrvlcol,
+                             predicate=overlaps(),
+                             merge_op=lambda i1, i2: [(i1.start, i1.end, [(i2.payload, i2.end - i2.start)])]) \
+                             .coalesce(payload_plus)
+    interviews = interviews_host_time.filter(filter_face_in_shot)
+    
     person_in_interviews = interviews.overlaps(person_intrvlcol)
     
-    return interviews, person_in_interviews
+    person_with_host = person_in_interviews.overlaps(host_intrvlcol)
+    
+    return interviews, person_in_interviews, person_with_host
 
 
-def save_interview(person_name, interviews, person_in_interviews):
+def save_interview(person_name, interviews, person_in_interviews, person_with_host):
     person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview.pkl'.format(person_name)
     
@@ -138,24 +163,53 @@ def save_interview(person_name, interviews, person_in_interviews):
     
     for video_id, intrvllist in interviews.get_allintervals().items():
         all_list = intrvllist2list(intrvllist)
-        person_list = intrvllist2list(person_in_interviews.get_allintervals()[video_id])
-        interview_dict[video_id] = {'all': all_list, 'person': person_list}
+        person_list = intrvllist2list(person_in_interviews.get_intervallist(video_id))
+        if video_id in person_with_host.get_allintervals():
+            person_with_host_list = intrvllist2list(person_with_host.get_intervallist(video_id))
+        else:
+            person_with_host_list = []
+        interview_dict[video_id] = {'all': all_list, 'person': person_list, 'person_with_host': person_with_host_list}
     
     pickle.dump(interview_dict, open(pkl_path, 'wb'))
     
     
 def load_interview(person_name):
     person_name = person_name.lower()
+    pkl_path = '/app/result/interview/{}-interview-clean.pkl'.format(person_name)
+    
+    if not os.path.exists(pkl_path):
+        print("Interview for {} not founded".format(person_name))
+        return None, None, None
+    else:
+        interview_dict = pickle.load(open(pkl_path, 'rb'))
+        interviews, person_in_interviews, person_with_host = {}, {}, {}
+        for video_id, value in interview_dict.items():
+            interviews[video_id] = IntervalList(value['all'])
+            person_in_interviews[video_id] = IntervalList(value['person'])
+            if 'person_with_host' in value:
+                person_with_host[video_id] = IntervalList(value['person_with_host'])
+            else:
+                person_with_host[video_id] = IntervalList([])
+        return VideoIntervalCollection(interviews), VideoIntervalCollection(person_in_interviews), VideoIntervalCollection(person_with_host)
+
+
+def montage_interview(person_name, **kwargs):
+    person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview.pkl'.format(person_name)
     
     if not os.path.exists(pkl_path):
         print("Interview for {} not founded".format(person_name))
-        return None, None
-    else:
-        interview_dict = pickle.load(open(pkl_path, 'rb'))
-        interviews, person_in_interviews = {}, {}
-        for video_id, value in interview_dict.items():
-            interviews[video_id] = IntervalList(value['all'])
-            person_in_interviews[video_id] = IntervalList(value['person'])
-        return VideoIntervalCollection(interviews), VideoIntervalCollection(person_in_interviews)
+        return None
     
+    interview_dict = pickle.load(open(pkl_path, 'rb'))
+    
+    videos, frames = [], []
+    for video_id, value in interview_dict.items():
+        if 'person_with_host' in value and len(value['person_with_host']) > 0:
+            interval = random.choice(value['person_with_host'])
+            video = Video.objects.filter(id=video_id)[0]
+            frame = (interval[0] + interval[1]) / 2 * video.fps
+            videos.append(video)
+            frames.append(int(frame))
+    return make_montage(videos, frames, **kwargs)        
+        
