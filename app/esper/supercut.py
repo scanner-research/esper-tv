@@ -1,6 +1,12 @@
 # import basic rekall queries
 from esper.rekall_query import *
 
+# import query sets
+from query.models import FaceGender, HairColor
+
+# import caption search
+from esper.captions import *
+
 # import esper widgets for selection
 from esper.widget import *
 from IPython.display import display, clear_output
@@ -176,7 +182,7 @@ def stitch_video_spatial(intervals, out_path, align=False, **kwargs):
     vid.release()
     
 
-def mix_audio(intervals, out_path, decrease_volume=3, align=False):
+def mix_audio(intervals, out_path, decrease_volume=3, align=False, dilation=None):
     def download_audio_clip(i):
         video_id, sfid, efid = intervals[i][:3]
         video = Video.objects.filter(id=video_id)[0]
@@ -202,6 +208,8 @@ def mix_audio(intervals, out_path, decrease_volume=3, align=False):
         durations.append(d)
     duration_mix = np.median(durations)
     print("Audio clip duration: min=%.3fs max=%.3fs" % (min(durations), max(durations)))
+    if not dilation is None:
+        duration_mix += dilation
     
     audios = par_for(download_audio_clip, [i for i in range(len(intervals))])
     audio_mix = AudioSegment.silent(duration=int(duration_mix*1000))
@@ -211,7 +219,8 @@ def mix_audio(intervals, out_path, decrease_volume=3, align=False):
     audio_mix.export(out_path, format="wav")
     
     
-def concat_video_audio(video_path, audio_path, out_path):
+def concat_video_audio(video_path, audio_path, out_path, keep_long=True):
+#     filter_length = '-longest' if keep_long else '-shortest'
     tmp_path = tempfile.NamedTemporaryFile(suffix='.avi').name
     cmd_merge = 'ffmpeg -y -i {} -i {} -c:v copy -c:a aac -strict experimental {}' \
             .format(video_path, audio_path, tmp_path)
@@ -374,7 +383,7 @@ class SinglePersonSing:
             for phrase in to_select:
                 if phrase in self.phrase2selection:
                     del self.phrase2selection[phrase]
-            manual_select_candidates(0, to_select, self.phrase2candidates, self.phrase2selection, self.dump_cache)
+            manual_select_candidates_for_song(0, to_select, self.phrase2candidates, self.phrase2selection, self.dump_cache)
             return 
         if manual:
             phrase_list = []
@@ -383,7 +392,7 @@ class SinglePersonSing:
                     phrase_list.append(phrase)
                     if redo_selection and phrase in self.phrase2selection:
                         del self.phrase2selection[phrase]
-            manual_select_candidates(0, phrase_list, self.phrase2candidates, self.phrase2selection, self.dump_cache)
+            manual_select_candidates_for_song(0, phrase_list, self.phrase2candidates, self.phrase2selection, self.dump_cache)
             return 
         
         for idx, segments in enumerate(self.segments_list):
@@ -400,9 +409,10 @@ class SinglePersonSing:
         sentence_paths = []
         
         # add silent clip at the begining
-        break_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, 0)
-        create_silent_clip(self.person_intrvlcol, out_duration=self.lyrics[0][1], out_path=break_path)
-        sentence_paths.append(break_path)
+        if self.lyrics[0][1] > 1.0:
+            break_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, 0)
+            create_silent_clip(self.person_intrvlcol, out_duration=self.lyrics[0][1], out_path=break_path)
+            sentence_paths.append(break_path)
         
         for idx, (words, start, end) in enumerate(self.lyrics):
             selections = self.selections_list[idx]
@@ -415,7 +425,7 @@ class SinglePersonSing:
                               'out_duration': end-start,
                               'segments': self.segments_list[idx]}
                 if add_break:
-                    dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 5
+                    dilation = self.lyrics[idx+1][1] - end if idx != len(self.lyrics) - 1 else 5.0
                 else:
                     dilation = None
                 dilation_args = {'dilation': dilation, 'person_intrvlcol': self.person_intrvlcol}
@@ -432,7 +442,7 @@ class SinglePersonSing:
         pickle.dump({'candidates':self.phrase2candidates, 'selection':self.phrase2selection}, open(self.cache_path, 'wb'))
         
         
-def manual_select_candidates(idx, phrase_list, phrase2candidates, phrase2selection, dump_cache):
+def manual_select_candidates_for_song(idx, phrase_list, phrase2candidates, phrase2selection, dump_cache):
     if idx >= len(phrase_list):
         clear_output()
         print("Finished all manual selections, run this cell again with manual=False")
@@ -487,9 +497,30 @@ def auto_select_candidates(intervals, num_sample=1, range=(0.5, 1.5), filter='ra
     elif filter == 'longest':
         durations_regular = [i[-1] for i in intervals_regular]
         return intervals_regular[np.argmax(durations_regular)]
+
+    
+def manual_select_candidates(result):
+    selection_widget = esper_widget(
+        result, 
+        disable_playback=False, jupyter_keybindings=True,
+        crop_bboxes=True)
+
+    submit_button = widgets.Button(
+        layout=widgets.Layout(width='auto'),
+        description='Save selection',
+        disabled=False,
+        button_style='danger'
+    )
+    def on_submit(b):
+        clear_output()
+        print(selection_widget.selected)
+    submit_button.on_click(on_submit)
+
+    display(widgets.HBox([submit_button]))
+    display(selection_widget)
     
 
-def search_person_with_sentence(person_intrvlcol, words, phrase2interval, concat_word=4, num_face=1):
+def search_person_with_sentence(person_intrvlcol, words, phrase2interval=None, concat_word=4, num_face=1):
     
     # Magic numbers
     SHORT_WORD = 4
@@ -585,66 +616,61 @@ def search_person_with_sentence(person_intrvlcol, words, phrase2interval, concat
     return segments, supercut_candidates
 
 
-def multi_person_one_phrase(phrase, filters={}):
+def multi_person_one_phrase(phrase, video_ids=None, with_face=True, filter_gender=None, filter_haircolor=None, limit=200):
     '''
     Get all intervals which the phrase is being said
     
     @phrase: input phrase to be searched
-    @filters: 
-        'with_face': must contain exactly one face
-        'gender': filter by gender
-        'limit': number of output intervals
+    @with_face': must contain exactly one face
+    @filter_gender': filter by gender
+    @filter_haircolor: filter by hair color
+    @limit': number of output intervals
     '''
-    videos = Video.objects.filter(threeyears_dataset=True)
-    video_ids = [video.id for video in videos]
+    if video_ids is None:
+        videos = Video.objects.filter(threeyears_dataset=True)
+        video_ids = [video.id for video in videos]
     phrase_intrvlcol = get_caption_intrvlcol(phrase.upper(), video_ids)
 
     def fn(i):
-        faces = Face.objects.filter(shot__video__id=video_id, shot__min_frame__lte=i.start, shot__max_frame__gte=i.end)
-#         faces = Face.objects.filter(frame__number__gte=i.start, frame__number__lte=i.end) 
+        faces = Face.objects.filter(shot__video__id=video_id, 
+                                    shot__min_frame__lte=i.start, 
+                                    shot__max_frame__gte=i.end) \
+                            .annotate(face_size=F("bbox_y2") - F("bbox_y1"))
         if len(faces) != 1:
             return False
-        if 'gender' in filters:
+        if faces[0].face_size < 0.4:
+            return False
+        
+#         faces = Face.objects.filter(frame__video_id=video_id, 
+#                                     frame__number__gte=i.start-100, 
+#                                     frame__number__lte=i.end+100)  \
+#                             .annotate(face_size=F("bbox_y2") - F("bbox_y1"))
+#         for face in faces:
+#             if face.face_size < 0.5:
+#                 return False
+        
+        if not filter_gender is None:
             faceGender = FaceGender.objects.filter(face__id=faces[0].id)[0]
-            if faceGender.gender.name != filters['gender']:
+            if faceGender.gender.name != filter_gender:
+                return False
+        if not filter_haircolor is None:
+            hairColor = HairColor.objects.filter(face__id=faces[0].id)
+            if len(hairColor) == 0:
+                return False
+            if hairColor[0].color.name != filter_haircolor:
                 return False
         return True
     
-    if 'with_face' in filters:
+    if not with_face is None:
         print('Filtering with face...')
-        intrvlcol_withface = {}
-        for video_id, intrvllist in phrase_intrvlcol.intervals.items():
-            intrvllist_withface = intrvllist.filter(fn)
-            if intrvllist_withface.size() > 0:
-                intrvlcol_withface[video_id] = intrvllist_withface
-            if 'limit' in filters and len(intrvlcol_withface) == filters['limit']:
+        intrvlcol_filter = {}
+        for video_id, intrvllist in phrase_intrvlcol.get_allintervals().items():
+            intrvllist_filter = intrvllist.filter(fn)
+            if intrvllist_filter.size() > 0:
+                intrvlcol_filter[video_id] = intrvllist_filter
+                print(len(intrvlcol_filter))
+            if not limit is None and len(intrvlcol_filter) > limit:
                 break
-        phrase_intrvlcol = VideoIntervalCollection(intrvlcol_withface)
+        phrase_intrvlcol = VideoIntervalCollection(intrvlcol_filter)
 #         print(len(phrase_intrvlcol))
     return intrvlcol2list(phrase_intrvlcol)
-
-if __name__ == "__main__":
-    
-    # Supercut of "Make Amercia Great Again"
-    phrase = "make america great again"
-    filters={ 
-        'with_face': True,
-        'gender': 'M'
-    }
-    supercut_intervals_all = multi_person_one_phrase(phrase, filters)
-    
-    supercut_intervals = auto_select_candidates(supercut_intervals_all, num_sample=64, filter='random')
-    
-    # App1: temporal supercut 
-    stitch_video_temporal(supercut_intervals, out_path='/app/result/supercut/make_america_great_again.mp4')
-    
-    # App2: spatial supercut
-    video_path = '/app/result/montage/test_video.avi'
-    audio_path = '/app/result/montage/test_audio.wav'
-
-    stitch_video_spatial(supercut_intervals, out_path=video_path, align=False, 
-                     width=1080, num_cols=8, target_height = 1080 // 8 * 9 // 16)
-
-    mix_audio(supercut_intervals, out_path=audio_path, decrease_volume=5, align=False)
-    
-    concat_video_audio(video_path, audio_path, '/app/result/montage/make_america_great_again.mp4')

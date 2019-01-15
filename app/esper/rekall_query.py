@@ -39,7 +39,8 @@ def count_duration(intrvlcol):
             duration = 0
     else:
         if count_intervals(intrvlcol) > 0:
-            duration = sum([i.end - i.start for i in intrvllist.get_intervals for _, intrvllist in intrvlcol.items()])
+            duration = sum([i.end - i.start for _, intrvllist in intrvlcol.get_allintervals().items() \
+                            for i in intrvllist.get_intervals() ])
         else:
             duration = 0
     return duration
@@ -95,7 +96,7 @@ def intrvlcol_second2frame(intrvlcol):
     for video_id, intrvllist in intrvlcol.get_allintervals().items():
         video = Video.objects.filter(id=video_id)[0]
         fps = video.fps
-        intrvllists_frame[video_id] = IntervalList([(i.start * fps, i.end * fps, i.payload) \
+        intrvllists_frame[video_id] = IntervalList([(int(i.start * fps), int(i.end * fps), i.payload) \
                                                   for i in intrvllist.get_intervals()] )
     return VideoIntervalCollection(intrvllists_frame)
 
@@ -126,7 +127,7 @@ def split_intrvlcol(intrvlcol, seg_length):
     return VideoIntervalCollection(intrvllists_split)
 
 
-def remove_isolated_interval(intrvlcol, min_duration=10, max_isolation=60): 
+def remove_isolated_interval(intrvlcol, min_duration=10, max_isolation=60):
     intrvlcol_filtered = intrvlcol \
         .filter_length(max_length = min_duration) \
         .filter_against(intrvlcol,
@@ -135,6 +136,7 @@ def remove_isolated_interval(intrvlcol, min_duration=10, max_isolation=60):
             working_window=max_isolation) \
         .set_union(intrvlcol \
             .filter_length(min_length = min_duration))
+            
     return intrvlcol_filtered
 
 
@@ -180,7 +182,7 @@ def get_person_intrvlcol(person_list=None, video_ids=None,
     
     faceIDs = FaceIdentity.objects \
               .filter(probability__gt=probability) \
-              .annotate(height=F("face__bbox_y2") - F("face__bbox_y1")) \
+              .annotate(face_size=F("face__bbox_y2") - F("face__bbox_y1")) \
               .annotate(video_id=F("face__frame__video_id")) \
     
     if not stride_face:
@@ -195,7 +197,7 @@ def get_person_intrvlcol(person_list=None, video_ids=None,
             faceIDs = faceIDs.exclude(identity_filter(person_list)) 
                 
     if not face_size is None:
-        faceIDs = faceIDs.filter(height__gte=face_size)
+        faceIDs = faceIDs.filter(face_size__gte=face_size)
         
     if not video_ids is None:
         faceIDs = faceIDs.filter(video_id__in=video_ids)
