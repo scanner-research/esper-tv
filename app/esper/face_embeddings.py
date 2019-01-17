@@ -117,20 +117,26 @@ def kmeans(ids, k=25):
     return _EMB_DATA.kmeans(ids, k)
 
 
-def logreg(ids, labels, min_thresh=0., max_thresh=1., num_epochs=10, 
-           learning_rate=1., l2_penalty=0., l1_penalty=0.):
+def logreg(ids, labels, num_epochs=10, learning_rate=1., 
+           l2_penalty=0., l1_penalty=0.):
     """
     Args:
         ids: List of face_ids
         labels: List of 0, 1 labels
     Returns:
-        (weights, List of (face_id, score) pairs by ascending score)
+        weights
     """
     return _EMB_DATA.logreg(
-        ids, labels, min_thresh, max_thresh, num_epochs,
-        learning_rate, l2_penalty, l1_penalty)
+        ids, labels, num_epochs, learning_rate, l2_penalty, l1_penalty)
 
 
-def logreg_predict(weights, min_thresh=-1, max_thresh=2):
-    """Returns: same as logreg"""
-    return _EMB_DATA.logreg_predict(weights, min_thresh, max_thresh)
+def logreg_predict(weights, min_thresh=-1, max_thresh=2, test_ids=[]):
+    """Returns: List of (face_id, score) pairs by ascending score)"""
+    return _EMB_DATA.logreg_predict(weights, min_thresh, max_thresh,
+                                    test_ids)
+
+
+def knn_predict(ids, labels, k, min_thresh=0., max_thresh=1., test_ids=[]):
+    """Returns: List of (face_id, score) pairs by ascending score)"""
+    return _EMB_DATA.knn_predict(ids, labels, k, min_thresh, max_thresh,
+                                 test_ids)
