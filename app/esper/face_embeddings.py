@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from rs_embed import EmbeddingData
 
 EMB_DIR = '/app/data/embs'

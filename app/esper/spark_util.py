@@ -509,7 +509,7 @@ def get_face_genders(include_bbox=False, annotate_host_probability=True):
         'faces.is_host',
         'faces.haircolor_id',
         'faces.hairlength_id',
-        'faces.clothing_id'
+        'faces.clothing_id',
     ]
     if annotate_host_probability:
         cols.append('faces.host_probability')
