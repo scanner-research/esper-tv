@@ -486,7 +486,7 @@ def _annotate_male_female_probability(face_genders):
 
 def get_face_genders(include_bbox=False, annotate_host_probability=True):
     face_genders = spark.load('query_facegender').alias('face_genders')
-
+    
     cols = [
         'face_genders.*',
         'faces.height',
@@ -543,7 +543,7 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
 
     face_identities = spark.load('query_faceidentity').alias('face_identities')
     face_identities = face_identities.join(
-        labelers, face_identities.labeler_id == labelers.id, 'left_outer')
+        labelers, face_identities.labeler_id == labelers.id)
 
     cols = [
         'face_identities.*',
