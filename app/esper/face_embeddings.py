@@ -11,6 +11,10 @@ EMB_DIM = 128
 _EMB_DATA = EmbeddingData(ID_PATH, EMB_PATH, EMB_DIM)
 
 
+def count():
+    return _EMB_DATA.count()
+
+
 def get(ids):
     """List of face ids -> List of pairs (id, embedding)"""
     return _EMB_DATA.get(ids)
