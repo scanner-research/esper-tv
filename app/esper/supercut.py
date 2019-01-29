@@ -299,6 +299,9 @@ def create_silent_clip(person_intrvlcol, out_duration, out_path=None):
 # ============== Applications ============== 
 
 class SinglePersonSing:
+    """
+    Class for wraping the functions for making a person singing a song
+    """
     def __init__(self, person_name, lyric_path, person_intrvlcol=None, num_sentence=None):
         if person_intrvlcol is None:
             person_intrvlcol = get_person_intrvlcol(person_name, large_face=True, labeler='old')
@@ -324,6 +327,10 @@ class SinglePersonSing:
             if not num_sentence is None and len(lyrics) >= num_sentence:
                 break
         self.lyrics = lyrics
+        
+        # build dirs
+        os.makedirs('/app/result/supercut/cache/', exist_ok=True)
+        os.makedirs('/app/result/supercut/tmp/', exist_ok=True)
 
         # load cache
         cache_path = '/app/result/supercut/cache/{}.pkl'.format(self.person_name)
@@ -331,42 +338,14 @@ class SinglePersonSing:
         self.phrase2candidates, self.phrase2selection = cache['candidates'], cache['selection']
         self.cache_path = cache_path
     
-#     def search_phrases(self, phrase_list):
-#         for phrase in phrase_list:
-#             print("searching for \"{}\" ...".format(phrase))
-#             self.phrase2candidates_tmp[phrase] = get_person_alone_phrase_intervals(self.person_intrvlcol, 
-#                                                                                    phrase, filter_still=False)
-#     def search_candidates_parallel(self, workers=16):
-#         # collect all words
-#         words_all = set()
-#         for idx, (sentence, start, end) in enumerate(self.lyrics):
-#             words = [word.upper() for word in sentence.replace(',', '').replace('.', '').replace('!', '').split(' ')]
-#             for w in words:
-#                 # todo: add more phrase
-#                 words_all.add(w)
-#         words_all = sorted(words_all)
-#         print(words_all)
-        
-#         # search all word intervals
-#         self.phrase2intrvlcol = {}
-#         for word in words_all:
-#             self.phrase2intrvlcol[word] = get_caption_intrvlcol(word, self.person_intrvlcol.get_allintervals().keys())
-        
-#         self.phrase2candidates_tmp = {}
-#         par_for_process(self.search_phrases, words_all, num_workers=16)
-        
-#         # filter still images
-#         for word, intervals in enumerate(zip(words_all, pre_candidates)):
-#             intervals_nostill = filter_still_image_parallel(intervals)
-#             intervals_final = intervals_nostill if len(intervals_nostill) > 0 else intervals
-#             print('Get {} person alone intervals for phrase \"{}\"'.format(len(intervals_final), word))
-#             self.phrase2candidates[word] = intervals_final
-        
     def search_candidates(self, concat_word=4, num_face=1):
+        """
+        First step: search all possible candidates for each word/phrase given the person
+        """
         segments_list = []
         candidates_list = []
         for idx, (words, start, end) in enumerate(self.lyrics):
-            segments, candidates = search_person_with_sentence(self.person_intrvlcol, words, \
+            segments, candidates = single_person_one_sentence(self.person_intrvlcol, words, \
                                                                self.phrase2candidates, \
                                                                concat_word=concat_word, \
                                                                num_face=num_face)
@@ -377,6 +356,9 @@ class SinglePersonSing:
         self.candidates_list = candidates_list
     
     def select_candidates(self, manual=False, redo_selection=False, to_select=None):
+        """
+        Second step: automatically/manually select best clip for making supercut
+        """
         self.selections_list = []
         if not to_select is None:
             to_select = [phrase.upper() for phrase in to_select]
@@ -406,6 +388,9 @@ class SinglePersonSing:
             self.selections_list.append(selection_sentence)
     
     def make_supercuts(self, out_path, align_mode=None, add_break=True, cache=True):
+        """
+        Third step: download video clips and make supercuts
+        """
         sentence_paths = []
         
         # add silent clip at the begining
@@ -418,7 +403,7 @@ class SinglePersonSing:
             selections = self.selections_list[idx]
             sentence_path = '/app/result/supercut/tmp/{}-{}-{}.mp4'.format(self.person_name, self.song_name, idx + 1)
             print('Concat videos for sentence \"{}\"'.format(' '.join(words)))
-            if cache and os.path.exists(tmp_path):
+            if cache and os.path.exists(sentence_path):
                 print('Found cache')
             else:
                 align_args = {'align_mode': align_mode,
@@ -520,7 +505,16 @@ def manual_select_candidates(result):
     display(selection_widget)
     
 
-def search_person_with_sentence(person_intrvlcol, words, phrase2interval=None, concat_word=4, num_face=1):
+def single_person_one_sentence(person_intrvlcol, words, phrase2interval={}, concat_word=4, num_face=1):
+    '''
+    Get all intervals which the phrase is being said with the person's face showing on the screen
+    
+    @person_intrvlcol: interval collection for the given person
+    @words: list of preprocessed words
+    @phrase2interval: cache dict for mapping phrase -> interval list
+    @concat_word: maximum number of words being concatenated for searching
+    @num_face: number of faces showing on the screen
+    '''
     
     # Magic numbers
     SHORT_WORD = 4
@@ -528,8 +522,6 @@ def search_person_with_sentence(person_intrvlcol, words, phrase2interval=None, c
     CONCAT_WORD = concat_word
     
     supercut_candidates = []
-    if phrase2interval is None:
-        phrase2interval = {}
     segments = []
     num_concat = 0
     for idx, word in tqdm(enumerate(words)):
@@ -616,15 +608,15 @@ def search_person_with_sentence(person_intrvlcol, words, phrase2interval=None, c
     return segments, supercut_candidates
 
 
-def multi_person_one_phrase(phrase, video_ids=None, with_face=True, filter_gender=None, filter_haircolor=None, limit=200):
+def multi_person_one_phrase(phrase, video_ids=None, with_face=True, filter_gender=None, face_size=0.4, filter_haircolor=None, limit=200):
     '''
     Get all intervals which the phrase is being said
     
     @phrase: input phrase to be searched
-    @with_face': must contain exactly one face
-    @filter_gender': filter by gender
+    @with_face: must contain exactly one face
+    @filter_gender: filter by gender
     @filter_haircolor: filter by hair color
-    @limit': number of output intervals
+    @limit: number of output intervals
     '''
     if video_ids is None:
         videos = Video.objects.filter(threeyears_dataset=True)
@@ -638,7 +630,7 @@ def multi_person_one_phrase(phrase, video_ids=None, with_face=True, filter_gende
                             .annotate(face_size=F("bbox_y2") - F("bbox_y1"))
         if len(faces) != 1:
             return False
-        if faces[0].face_size < 0.4:
+        if faces[0].face_size < face_size:
             return False
         
 #         faces = Face.objects.filter(frame__video_id=video_id, 
