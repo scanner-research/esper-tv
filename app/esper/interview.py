@@ -54,7 +54,15 @@ def load_intervals(video_ids, person_name, host_list,
 
     
 def interview_query(person_intrvlcol, host_intrvlcol, commercial, num_face_intrvlcol=None):
+    """
+    Give person X, and a list of hosts, find all the intervals which is a interview with person X
     
+    @person_intrvlcol: VideoIntervalCollection of person X
+    @host_intrvlcol: VideoIntervalCollection of all the hosts
+    @commercial: VideoIntervalCollection of all commercial
+    @num_face_intrvlcol: VideoIntervalCollection of all intervals storing the number of faces in payload
+    (This is precomputed using rust)
+    """
     # Only keep related host videos
     host_intrvlcol_related = {}
     for video_id in person_intrvlcol.get_allintervals():
@@ -114,12 +122,12 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial, num_face_intrv
     interviews = interviews_person_time.filter(filter_person_time)
     
     # Remove interview if the person is alone for too long
-    def filter_person_alone(i):
-        for duration in i.payload:
-            if duration / (i.end - i.start) > 0.5:
-                return False
-        return True
-    
+#     def filter_person_alone(i):
+#         for duration in i.payload:
+#             if duration / (i.end - i.start) > 0.5:
+#                 return False
+#         return True
+
 #     interviews_person_alone = interviews.join(interviews.minus(host_intrvlcol),
 #                              predicate=overlaps(),
 #                              merge_op=lambda i1, i2: [(i1.start, i1.end, [i2.end - i2.start])] ) \
@@ -181,6 +189,9 @@ def interview_query(person_intrvlcol, host_intrvlcol, commercial, num_face_intrv
 
 
 def save_interview(person_name, suffix, interviews, person_only, host_only, person_with_host):
+    """
+    Save computed interviews of person X using pickel
+    """
     person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview-{}.pkl'.format(person_name, suffix)
     
@@ -213,6 +224,9 @@ def save_interview(person_name, suffix, interviews, person_only, host_only, pers
     
     
 def load_interview(person_name, suffix):
+    """
+    load computed interviews of person X using pickel
+    """
     person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview-{}.pkl'.format(person_name, suffix)
     
@@ -232,6 +246,9 @@ def load_interview(person_name, suffix):
 
 
 def montage_interview(person_name, suffix, **kwargs):
+    """
+    From computed interviews of person X, create a montage
+    """
     person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview-{}.pkl'.format(person_name, suffix)
     
@@ -253,6 +270,9 @@ def montage_interview(person_name, suffix, **kwargs):
         
 
 def shotcut_interview(person_name):
+    """
+    Save some sampled frames from computed interviews of person X
+    """
     person_name = person_name.lower()
     pkl_path = '/app/result/interview/{}-interview-final.pkl'.format(person_name)
     
