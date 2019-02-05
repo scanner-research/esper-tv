@@ -460,7 +460,7 @@ def manual_select_candidates_for_song(idx, phrase_list, phrase2candidates, phras
         phrase2selection[phrase] = selections
         dump_cache()
         clear_output()
-        manual_select_candidates(idx + 1, phrase_list, phrase2candidates, phrase2selection, dump_cache)
+        manual_select_candidates_for_song(idx + 1, phrase_list, phrase2candidates, phrase2selection, dump_cache)
     submit_button.on_click(on_submit)
 
     display(widgets.HBox([submit_button]))

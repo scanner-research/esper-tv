@@ -215,7 +215,9 @@ def get_person_intrvlcol(person_list=None, video_ids=None,
                 'payload': payload_type
             })
         person_intrvlcol = VideoIntervalCollection(person_intrvllists).coalesce()
-    else: 
+    else:
+        if payload_type == 'shot_id':
+            payload_type = 'frame_id'
         person_intrvllists_raw = qs_to_intrvllists(
             faceIDs.annotate(video_id=F("face__frame__video_id"))
                    .annotate(frame_id=F("face__frame__number"))
