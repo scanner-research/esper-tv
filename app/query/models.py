@@ -6,8 +6,13 @@ import tempfile
 import subprocess as sp
 
 
+class IdentityTag(models.Model):
+    name = base.CharField(unique=True)
+
+
 class Identity(models.Model):
     name = base.CharField(unique=True)
+    tags = models.ManyToManyField(IdentityTag, blank=True)
 
 
 class CanonicalShow(models.Model):
