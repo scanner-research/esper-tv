@@ -11,7 +11,7 @@ import captions.util as caption_util
 from captions import Documents, Lexicon, CaptionIndex, MetadataIndex
 
 
-INDEX_DIR = '/app/data/index10a_align_only'
+INDEX_DIR = '/app/data/index10'
 DOCUMENTS_PATH = os.path.join(INDEX_DIR, 'docs.list')
 LEXICON_PATH = os.path.join(INDEX_DIR, 'words.lex')
 INDEX_PATH = os.path.join(INDEX_DIR, 'index.bin')
@@ -27,7 +27,7 @@ except NameError:
     LEXICON = Lexicon.load(LEXICON_PATH)
     INDEX = CaptionIndex(INDEX_PATH, LEXICON, DOCUMENTS)
 
-
+    
 def is_word_in_lexicon(word):
     return word in LEXICON
 
@@ -59,7 +59,12 @@ DOCUMENT_ID_TO_VIDEO_ID = _init_doc_id_to_vid_id()
 VIDEO_ID_TO_DOCUMENT_ID = {v: k for k, v in DOCUMENT_ID_TO_VIDEO_ID.items()}
 
 
-def _doc_ids_to_video_ids(results):
+def get_document(video_id: int):
+    doc_id = VIDEO_ID_TO_DOCUMENT_ID[video_id]
+    return DOCUMENTS[doc_id]
+
+
+def convert_doc_ids_to_video_ids(results):
     def wrapper(document_results):
         for d in document_results:
             video_id = DOCUMENT_ID_TO_VIDEO_ID.get(d.id, None)
@@ -68,7 +73,7 @@ def _doc_ids_to_video_ids(results):
     return wrapper(results)
 
 
-def _video_ids_to_doc_ids(vid_ids):
+def convert_video_ids_to_doc_ids(vid_ids, verbose=False):
     if vid_ids is None:
         return None
     else:
@@ -77,8 +82,8 @@ def _video_ids_to_doc_ids(vid_ids):
             d = VIDEO_ID_TO_DOCUMENT_ID.get(v, None)
             if d is not None:
                 doc_ids.append(d)
-#             else:
-#                 print('Document not found for video id={}'.format(v))
+            elif verbose:
+                print('Document not found for video id={}'.format(v))
         assert len(doc_ids) > 0
         return doc_ids
 
@@ -86,15 +91,15 @@ def _video_ids_to_doc_ids(vid_ids):
 def topic_search(phrases, window_size=60, video_ids=None):
     if not isinstance(phrases, list):
         raise TypeError('phrases should be a list of phrases/n-grams')
-    documents = _video_ids_to_doc_ids(video_ids)
-    return _doc_ids_to_video_ids(
+    documents = convert_video_ids_to_doc_ids(video_ids)
+    return convert_doc_ids_to_video_ids(
         caption_util.topic_search(
             phrases, INDEX, window_size, documents))
 
 
 def phrase_search(query, video_ids=None):
-    documents = _video_ids_to_doc_ids(video_ids)
-    return _doc_ids_to_video_ids(
+    documents = convert_video_ids_to_doc_ids(video_ids)
+    return convert_doc_ids_to_video_ids(
         INDEX.search(query, documents=documents))
 
 
@@ -155,62 +160,3 @@ def get_lowercase_segments(video_ids=None):
     with Pool(os.cpu_count()) as pool:
         results = pool.map(_get_lowercase_segments, video_ids)
     return zip(video_ids, results)
-
-
-# NGRAM_LEXICON_IDS = None
-
-
-# TODO: this code should no longer be needed?
-#
-# def _scan_for_ngrams_in_parallel(video_id, verbose=None):
-#     ngram_intervals = [[] for _ in NGRAM_LEXICON_IDS]
-#     doc_id = VIDEO_ID_TO_DOCUMENT_ID.get(video_id, None)
-#     if doc_id is None:
-#         if verbose:
-#             print('No document for video id: {}'.format(video_id), file=sys.stderr)
-#         return ngram_intervals
-#     for interval in DOCUMENT_DATA.token_intervals(doc_id, 0, DOCUMENTS[doc_id].duration):
-#         cur_token_index = [0 for ids in NGRAM_LEXICON_IDS]
-#         for token in interval.tokens:
-#             for i, ngram_index in enumerate(cur_token_index):
-#                 if ngram_index >= len(NGRAM_LEXICON_IDS[i]):
-#                     continue
-#                 elif token == NGRAM_LEXICON_IDS[i][ngram_index]:
-#                     cur_token_index[i] = ngram_index + 1
-#                 else:
-#                     cur_token_index[i] = 0
-#         for i, token_index in enumerate(cur_token_index):
-#             if token_index >= len(NGRAM_LEXICON_IDS[i]):
-#                 ngram_intervals[i].append((interval.start, interval.end))
-
-#     return ngram_intervals
-
-
-# def scan_for_ngrams_in_parallel(ngram_list, video_ids=None):
-#     """
-#     Scans through video transcripts for the terms in the ngrams.
-
-#     ngramlist is a list of ngrams to search for, for example
-#     ["JOINING US NOW", "VERMONT SENATOR", "THIS IS CNN"].
-
-#     This function scans through the transcripts of the videos in video_ids and
-#     returns a list of tuples where the first tuple is the video id, and the
-#     second tuple is a list of lists of intervals, one list for every ngram.
-
-#     Will return all intervals where all words in the ngram appear.
-#     """
-#     if video_ids is None:
-#         video_ids = [v.id for v in Video.objects.filter(threeyears_dataset=True)]
-#     elif not isinstance(video_ids, list):
-#         video_ids = list(video_ids)
-
-#     ngram_lexicon_ids = [
-#         [LEXICON[ngram].id for ngram in ngrams.split(" ")]
-#         for ngrams in ngram_list
-#     ]
-#     global NGRAM_LEXICON_IDS
-#     NGRAM_LEXICON_IDS = ngram_lexicon_ids
-
-#     with Pool(os.cpu_count()) as pool:
-#         results = pool.map(_scan_for_ngrams_in_parallel, video_ids)
-#     return zip(video_ids, results)

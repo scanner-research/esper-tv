@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseNotFound
 from timeit import default_timer as now
 import django.db.models as models
 from concurrent.futures import ThreadPoolExecutor
@@ -118,8 +118,13 @@ def subtitles(request):
     video_id = request.GET.get('video')
     video = Video.objects.get(id=video_id)
 
-    srt = video.srt_extension
-    sub_path = '/app/data/subs/orig/{}.{}.srt'.format(video.item_name(), srt)
+    srt_dir = '/app/data/subs/orig'
+    for f in os.listdir(srt_dir):
+        if video.item_name() in f:
+            sub_path = os.path.join(srt_dir, f)
+            break
+    else:
+        return HttpResponseNotFound()
 
     s = open(sub_path, 'rb').read().decode('utf-8')
     vtt = srt_to_vtt(s, 0)

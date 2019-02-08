@@ -538,7 +538,8 @@ def get_face_identities(include_bbox=False, include_name=False, annotate_host_pr
     labelers = get_labelers()
     labelers = labelers.where(
         labelers.name.contains('face-identity:') |
-        labelers.name.contains('face-identity-converted:')
+        labelers.name.contains('face-identity-converted:') |
+        labelers.name.contains('face-identity-uncommon:')
     )
 
     face_identities = spark.load('query_faceidentity').alias('face_identities')
