@@ -89,15 +89,6 @@ def convert_video_ids_to_doc_ids(vid_ids, verbose=False):
         return doc_ids
 
 
-# def topic_search(phrases, window_size=60, video_ids=None):
-#     if not isinstance(phrases, list):
-#         raise TypeError('phrases should be a list of phrases/n-grams')
-#     documents = convert_video_ids_to_doc_ids(video_ids)
-#     return convert_doc_ids_to_video_ids(
-#         caption_util.topic_search(
-#             phrases, INDEX, window_size, documents))
-
-
 def text_search(text, video_ids=None):
     documents = convert_video_ids_to_doc_ids(video_ids)
     return convert_doc_ids_to_video_ids(

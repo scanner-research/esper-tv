@@ -245,22 +245,22 @@ def nonhandlabeled_random_audio():
 
 @query("Caption search")
 def caption_search():
-    from esper.captions import topic_search
+    from esper.captions import query_search
     from query.models import Video
 
-    results = topic_search(['TACO BELL'])
+    results = query_search('SEAN SPICER & [RESIGN]')
     videos = {v.id: v for v in Video.objects.all()}
 
     def convert_time(k, t):
         return int((t - 7) * videos[k].fps)
 
-    flattened = [(v.id, l.start, l.end) for v in results.documents for l in v.locations]
+    flattened = [(d.id, p.start, p.end) for d in results for p in d.postings]
     random.shuffle(flattened)
     return simple_result([{
         'video': k,
         'min_frame': convert_time(k, t1),
         'max_frame': convert_time(k, t2)
-    } for k, t1, t2 in flattened[:100]], '_')
+    } for k, t1, t2 in flattened[:100]])
 
 
 @query('Face search')
