@@ -8,6 +8,7 @@ from esper.prelude import par_for
 from query.models import Video
 
 import captions.util as caption_util
+import captions.query as caption_query
 from captions import Documents, Lexicon, CaptionIndex, MetadataIndex
 
 
@@ -88,19 +89,26 @@ def convert_video_ids_to_doc_ids(vid_ids, verbose=False):
         return doc_ids
 
 
-def topic_search(phrases, window_size=60, video_ids=None):
-    if not isinstance(phrases, list):
-        raise TypeError('phrases should be a list of phrases/n-grams')
-    documents = convert_video_ids_to_doc_ids(video_ids)
-    return convert_doc_ids_to_video_ids(
-        caption_util.topic_search(
-            phrases, INDEX, window_size, documents))
+# def topic_search(phrases, window_size=60, video_ids=None):
+#     if not isinstance(phrases, list):
+#         raise TypeError('phrases should be a list of phrases/n-grams')
+#     documents = convert_video_ids_to_doc_ids(video_ids)
+#     return convert_doc_ids_to_video_ids(
+#         caption_util.topic_search(
+#             phrases, INDEX, window_size, documents))
 
 
-def phrase_search(query, video_ids=None):
+def text_search(text, video_ids=None):
     documents = convert_video_ids_to_doc_ids(video_ids)
     return convert_doc_ids_to_video_ids(
-        INDEX.search(query, documents=documents))
+        INDEX.search(text, documents=documents))
+
+
+def query_search(query_str, video_ids=None):
+    documents = convert_video_ids_to_doc_ids(video_ids)
+    query = caption_query.Query(query_str)
+    return convert_doc_ids_to_video_ids(
+        query.execute(LEXICON, INDEX, documents=documents))
 
 
 # Set before forking, this is a hack
