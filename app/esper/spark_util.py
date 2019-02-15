@@ -272,7 +272,7 @@ def interval_overlap_join(df1, df2):
 NULL_IDENTITY_ID = -1
 
 
-def _annotate_host_probability(faces, identity_threshold=0.5):
+def get_host_probs(identity_threshold=0.25):
     labelers = get_labelers()
     labelers = labelers.where(
         labelers.name.contains('face-identity:') |
@@ -286,7 +286,10 @@ def _annotate_host_probability(faces, identity_threshold=0.5):
         labelers, face_identities.labeler_id == labelers.id,
         'left_outer')
 
-    faces2 = get_faces(annotate_host_probability=False).alias('faces2')
+    faces2 = get_faces(
+        annotate_host_probability=False,
+        annotate_in_commerical=False
+    ).alias('faces2')
 
     face_identities = face_identities.join(
         faces2, face_identities.face_id == faces2.id
@@ -332,36 +335,33 @@ def _annotate_host_probability(faces, identity_threshold=0.5):
     host_filter_udf = func.udf(is_host_helper, BooleanType())
     host_identities = face_identities.filter(
         host_filter_udf('identity_id', 'canonical_show_id', 'channel_id'))
+    host_identities = host_identities.groupBy('face_id').agg(func.max('probability').alias('host_probability'))
+    
+#     face_id_to_host_prob = defaultdict(float)
+#     for host in host_identities.collect():
+#         # If the face has multiple labels that indicate a host, take the highest probability one
+#         # This might happen if we mannually labeled a number of Wolf Blitzers while using the
+#         # partially-supervised approach to label the others
+#         if face_id_to_host_prob[host.face_id] < host.probability:
+#             face_id_to_host_prob[host.face_id] = host.probability
+#     def host_probability_helper(face_id):
+#         return face_id_to_host_prob.get(face_id, 0.)
 
-    face_id_to_host_prob = defaultdict(float)
-    for host in host_identities.collect():
-        # If the face has multiple labels that indicate a host, take the highest probability one
-        # This might happen if we mannually labeled a number of Wolf Blitzers while using the
-        # partially-supervised approach to label the others
-        if face_id_to_host_prob[host.face_id] < host.probability:
-            face_id_to_host_prob[host.face_id] = host.probability
+#     host_prob_udf = func.udf(host_probability_helper, DoubleType())
+#     faces = faces.withColumn('host_probability', host_prob_udf('id'))
 
-    def host_probability_helper(face_id):
-        return face_id_to_host_prob.get(face_id, 0.)
-
-    host_prob_udf = func.udf(host_probability_helper, DoubleType())
-    faces = faces.withColumn('host_probability', host_prob_udf('id'))
-    return faces
+    return host_identities
 
 
 # Lazily Cached
-_faces_wo_hosts = None
-_faces_w_hosts = None
+_faces_cached = None
 
 
-def get_faces(annotate_host_probability=True):
-    global _faces_w_hosts, _faces_wo_hosts
-    if annotate_host_probability:
-        if _faces_w_hosts is not None:
-            return _faces_w_hosts
-    else:
-        if _faces_wo_hosts is not None:
-            return _faces_wo_hosts
+def get_faces(annotate_host_probability=True, annotate_in_commerical=True):
+    global _faces_cached
+    if annotate_host_probability and annotate_in_commerical:
+        if _faces_cached is not None:
+            return _faces_cached
 
     faces = spark.load('query_face').alias('faces')
 
@@ -412,13 +412,20 @@ def get_faces(annotate_host_probability=True):
     faces = faces.withColumn('max_frame', faces.number + func.floor(faces.fps * 3) - 1)
 
     faces = _annotate_hour(faces)
-    faces = _annotate_in_commercial(faces)
+    
+    if annotate_in_commerical:
+        faces = _annotate_in_commercial(faces)
 
     if annotate_host_probability:
-        faces = _annotate_host_probability(faces)
-        _faces_w_hosts = faces
-    else:
-        _faces_wo_hosts = faces
+        host_probs = get_host_probs()
+        faces = faces.join(
+            host_probs, faces.id == host_probs.face_id, 'left_outer'
+        ).select(*faces.columns, host_probs.host_probability)
+        faces = faces.na.fill({'host_probability': 0.})
+       
+    if annotate_host_probability and annotate_in_commerical:
+        _faces_cached = faces
+    
     return faces
 
 
