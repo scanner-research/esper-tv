@@ -260,8 +260,11 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
     if args.hostname is not None:
         hostname = args.hostname
     else:
-        is_google = b'Metadata-Flavor: Google' in sp.check_output(
-            'curl metadata.google.internal -i -s', shell=True)
+        try:
+            is_google = b'Metadata-Flavor: Google' in sp.check_output(
+                'curl metadata.google.internal -i -s', shell=True)
+        except sp.CalledProcessError:
+            is_google = False
         if is_google:
             hostname = sp.check_output(
                 """
