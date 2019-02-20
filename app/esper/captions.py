@@ -9,6 +9,7 @@ from query.models import Video
 
 import captions.util as caption_util
 import captions.query as caption_query
+import captions.vtt as caption_vtt
 from captions import Documents, Lexicon, CaptionIndex, MetadataIndex
 
 
@@ -100,6 +101,11 @@ def query_search(query_str, video_ids=None):
     query = caption_query.Query(query_str)
     return convert_doc_ids_to_video_ids(
         query.execute(LEXICON, INDEX, documents=documents))
+
+
+def get_vtt(video_id):
+    doc_id = VIDEO_ID_TO_DOCUMENT_ID[video_id]
+    return caption_vtt.get_vtt(LEXICON, INDEX, doc_id)
 
 
 # Set before forking, this is a hack
