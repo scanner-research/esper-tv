@@ -39,9 +39,7 @@ command: bash -c "cd /gentle && python serve.py --ntranscriptionthreads 8"
 """))
 }
 
-extra_processes = {
-    'npm': 'npm run watch --color'
-}
+extra_processes = {'npm': 'npm run watch --color'}
 
 tsize = shutil.get_terminal_size()
 config = DotMap(
@@ -93,22 +91,20 @@ services:
     ports: ['6379:6379']
     environment: []
 """.format(
-    home=os.path.expanduser('~'),
-    nginx_port=NGINX_PORT,
-    ipython_port=IPYTHON_PORT,
-    cores=cores,
-    workers=cores * 2,
-    columns=tsize.columns,
-    lines=tsize.lines,
-    term=os.environ.get('TERM'))))
+        home=os.path.expanduser('~'),
+        nginx_port=NGINX_PORT,
+        ipython_port=IPYTHON_PORT,
+        cores=cores,
+        workers=cores * 2,
+        columns=tsize.columns,
+        lines=tsize.lines,
+        term=os.environ.get('TERM'))))
 
 db_local = DotMap(
     yaml.load("""
 build:
     context: ./db
 environment:
-  - POSTGRES_USER=will
-  - POSTGRES_PASSWORD=foobar
   - POSTGRES_DB=esper
 volumes: ["./db/data:/var/lib/postgresql/data", "./app:/app"]
 ports: ["5432"]
@@ -125,25 +121,45 @@ ports: ["5432"]
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', required=True,
-                        help='Path to Esper configuration TOML, e.g. config/default.toml')
-    parser.add_argument('--extra-processes', nargs='*', default=[], choices=extra_processes.keys(),
-                        help='Optional processes to run by default in application container')
-    parser.add_argument('--extra-services', nargs='*', default=[], choices=extra_services.keys(),
-                        help='Optional Docker containers to run')
+    parser.add_argument(
+        '--config',
+        '-c',
+        required=True,
+        help='Path to Esper configuration TOML, e.g. config/default.toml')
+    parser.add_argument(
+        '--extra-processes',
+        nargs='*',
+        default=[],
+        choices=extra_processes.keys(),
+        help='Optional processes to run by default in application container')
+    parser.add_argument(
+        '--extra-services',
+        nargs='*',
+        default=[],
+        choices=extra_services.keys(),
+        help='Optional Docker containers to run')
     parser.add_argument('--no-build', action='store_true', help='Don\'t build any Docker images')
     parser.add_argument('--build-tf', action='store_true', help='Build TensorFlow from scratch')
-    parser.add_argument('--build-device', choices=['cpu', 'gpu'],
-                        help='Override to build Docker image for particular device')
-    parser.add_argument('--base-only', action='store_true',
-                        help='Only build base image, not application image')
-    parser.add_argument('--no-pull', action='store_true',
-                        help='Don\'t automatically pull latest scannertools image')
-    parser.add_argument('--push-remote', action='store_true',
-                        help='Push base image to Google Cloud Container Registry')
-    parser.add_argument('--scannertools-dir', help='Path to Scannertools directory (for development)')
-    parser.add_argument('--dotfiles-dir', default=os.path.expanduser('~/.esper'),
-                        help='Path to directory for persistent dotfiles in Docker container')
+    parser.add_argument(
+        '--build-device',
+        choices=['cpu', 'gpu'],
+        help='Override to build Docker image for particular device')
+    parser.add_argument(
+        '--base-only', action='store_true', help='Only build base image, not application image')
+    parser.add_argument(
+        '--no-pull',
+        action='store_true',
+        help='Don\'t automatically pull latest scannertools image')
+    parser.add_argument(
+        '--push-remote',
+        action='store_true',
+        help='Push base image to Google Cloud Container Registry')
+    parser.add_argument(
+        '--scannertools-dir', help='Path to Scannertools directory (for development)')
+    parser.add_argument(
+        '--dotfiles-dir',
+        default=os.path.expanduser('~/.esper'),
+        help='Path to directory for persistent dotfiles in Docker container')
     parser.add_argument('--hostname', help='Internal use only')
     args = parser.parse_args()
 
@@ -156,8 +172,8 @@ def main():
             raise Exception("Missing required service key file service-key.json")
 
         config.services.app.environment.extend([
-            'GOOGLE_PROJECT={}'.format(base_config.google.project), 'GOOGLE_ZONE={}'.format(
-                base_config.google.zone)
+            'GOOGLE_PROJECT={}'.format(base_config.google.project),
+            'GOOGLE_ZONE={}'.format(base_config.google.zone)
         ])
         config.services.app.ports.append('8001:8001')  # for kubectl proxy
 
@@ -180,8 +196,8 @@ def main():
     config.services.app.image = 'scannerresearch/esper:{}'.format(device)
 
     if args.scannertools_dir is not None:
-        config.services.app.volumes.append(
-            '{}:/opt/scannertools'.format(os.path.abspath(args.scannertools_dir)))
+        config.services.app.volumes.append('{}:/opt/scannertools'.format(
+            os.path.abspath(args.scannertools_dir)))
 
     # Dotfiles directory
     dotfiles = ['.bash_history']
@@ -190,7 +206,7 @@ def main():
     # Instantiate dotfiles directory
     os.makedirs(args.dotfiles_dir, exist_ok=True)
 
-    # Create any dotfiles like .bash_history as files since otherwise missing mounts 
+    # Create any dotfiles like .bash_history as files since otherwise missing mounts
     # will be turned into directories and then not be properly created by the shell
     for f in dotfiles:
         pathlib.Path('{}/{}'.format(args.dotfiles_dir, f)).touch()
@@ -205,7 +221,7 @@ def main():
         config.services[svc] = extra_services[svc]
         config.services.app.depends_on.append(svc)
 
-        if svc == 'spark': 
+        if svc == 'spark':
             config.services.spark.build.args.base_name = base_config.storage.base_image_name
 
     # Additional supervisord proceseses
@@ -231,14 +247,16 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                 project=base_config.google.project, zone=base_config.google.zone, name=base_config.database.name)
     else:
         config.services.db = db_local
+        config.services.db.environment.POSTGRES_USER = base_config.database.user
+        config.services.db.environment.POSTGRES_PASSWORD = base_config.database.password
 
     config.services.app.environment.append('DJANGO_DB_USER={}'.format(
         base_config.database.user if 'user' in base_config.database else 'root'))
 
     if 'password' in base_config.database:
         config.services.app.environment.extend([
-            'DJANGO_DB_PASSWORD={}'.format(base_config.database.password), 'PGPASSWORD={}'.format(
-                base_config.database.password)
+            'DJANGO_DB_PASSWORD={}'.format(base_config.database.password),
+            'PGPASSWORD={}'.format(base_config.database.password)
         ])
 
     # Scanner config
@@ -280,8 +298,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
     for service in list(config.services.values()):
         env_vars = [
             'ESPER_ENV={}'.format(base_config.storage.type),
-            'DATA_PATH={}'.format(base_config.storage.path),
-            'HOSTNAME={}'.format(hostname),
+            'DATA_PATH={}'.format(base_config.storage.path), 'HOSTNAME={}'.format(hostname),
             'BASE_IMAGE_NAME={}'.format(base_config.storage.base_image_name)
         ]
 
@@ -344,9 +361,7 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
             sp.check_call(
                 'docker tag {base_name}:{device} {base_url}/{base_name}:{device} && \
                 gcloud docker -- push {base_url}/{base_name}:{device}'.format(
-                    device=build_device,
-                    base_name=base_name,
-                    base_url=base_url),
+                    device=build_device, base_name=base_name, base_url=base_url),
                 shell=True)
 
         if not args.base_only:
