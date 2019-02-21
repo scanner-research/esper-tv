@@ -247,8 +247,9 @@ stderr_logfile_maxbytes=0""".format(process, extra_processes[process])
                 project=base_config.google.project, zone=base_config.google.zone, name=base_config.database.name)
     else:
         config.services.db = db_local
-        config.services.db.environment.POSTGRES_USER = base_config.database.user
-        config.services.db.environment.POSTGRES_PASSWORD = base_config.database.password
+        config.services.db.environment.append('POSTGRES_USER={}'.format(base_config.database.user))
+        config.services.db.environment.append('POSTGRES_PASSWORD={}'.format(
+            base_config.database.password))
 
     config.services.app.environment.append('DJANGO_DB_USER={}'.format(
         base_config.database.user if 'user' in base_config.database else 'root'))
