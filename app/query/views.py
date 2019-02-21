@@ -118,24 +118,29 @@ def srt_to_vtt(s, shift):
 # Get subtitles for video
 def subtitles(request):
     video_id = request.GET.get('video')
+    use_json = request.GET.get('json')
 
-    if VTT_FROM_CAPTION_INDEX:
+    if use_json:
         import esper.captions as captions
-        vtt = captions.get_vtt(int(video_id))
+        return JsonResponse({'captions': captions.get_json(int(video_id))})
     else:
-        video = Video.objects.get(id=video_id)
-        srt_dir = '/app/data/subs/orig'
-        for f in os.listdir(srt_dir):
-            if video.item_name() in f:
-                sub_path = os.path.join(srt_dir, f)
-                break
+        if VTT_FROM_CAPTION_INDEX:
+            import esper.captions as captions
+            vtt = captions.get_vtt(int(video_id))
         else:
-            return HttpResponseNotFound()
+            video = Video.objects.get(id=video_id)
+            srt_dir = '/app/data/subs/orig'
+            for f in os.listdir(srt_dir):
+                if video.item_name() in f:
+                    sub_path = os.path.join(srt_dir, f)
+                    break
+            else:
+                return HttpResponseNotFound()
 
-        s = open(sub_path, 'rb').read().decode('utf-8')
-        vtt = srt_to_vtt(s, 0)
+            s = open(sub_path, 'rb').read().decode('utf-8')
+            vtt = srt_to_vtt(s, 0)
 
-    return HttpResponse(vtt, content_type="text/vtt")
+        return HttpResponse(vtt, content_type="text/vtt")
 
 
 def save_frame_labels(groups):

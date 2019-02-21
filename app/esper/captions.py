@@ -29,11 +29,11 @@ except NameError:
     LEXICON = Lexicon.load(LEXICON_PATH)
     INDEX = CaptionIndex(INDEX_PATH, LEXICON, DOCUMENTS)
 
-    
+
 def is_word_in_lexicon(word):
     return word in LEXICON
 
-    
+
 def _get_video_name(p):
     """Only the filename without exts"""
     return Path(p).name.split('.')[0]
@@ -108,6 +108,16 @@ def get_vtt(video_id):
     return caption_vtt.get_vtt(LEXICON, INDEX, doc_id)
 
 
+def get_json(video_id):
+    doc_id = VIDEO_ID_TO_DOCUMENT_ID[video_id]
+    return [
+        {'startTime': p.start,
+         'endTime': p.end,
+         'text': ' '.join([LEXICON.decode(t, 'UNKNOWN') for t in INDEX.tokens(doc_id, p.idx, p.len)])}
+        for p in INDEX.intervals(doc_id)
+    ]
+
+
 # Set before forking, this is a hack
 LOWER_CASE_ALPHA_IDS = None
 
@@ -136,7 +146,7 @@ def _get_lowercase_segments(video_id, dilate=1, verbose=False):
                 curr_start, curr_end = curr_interval
                 if min(interval.end + dilate, curr_end) - max(interval.start - dilate, curr_start) > 0:
                     curr_interval = (
-                        min(interval.start - dilate, curr_start), 
+                        min(interval.start - dilate, curr_start),
                         max(interval.end + dilate, curr_end)
                     )
                 else:
