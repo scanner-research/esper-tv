@@ -32,8 +32,7 @@ else:
 storage = StorageBackend.make_from_config(storage_config)
 
 VTT_FROM_CAPTION_INDEX = True
-if VTT_FROM_CAPTION_INDEX:
-    import esper.captions as captions
+
 
 # Prints and flushes (necessary for gunicorn logs)
 def _print(*args):
@@ -121,6 +120,7 @@ def subtitles(request):
     video_id = request.GET.get('video')
 
     if VTT_FROM_CAPTION_INDEX:
+        import esper.captions as captions
         vtt = captions.get_vtt(int(video_id))
     else:
         video = Video.objects.get(id=video_id)
@@ -325,13 +325,18 @@ def newthings(request):
                 raise Exception('Missing type annotation on label `{}`'.format(t))
             if parts[-1].strip() not in thing_types:
                 raise Exception('Invalid type annotation on label `{}`'.format(t))
-            things.append(Thing(name=' : '.join(parts[:-1]).strip(), type=thing_types[parts[-1].strip()]))
+            things.append(
+                Thing(name=' : '.join(parts[:-1]).strip(), type=thing_types[parts[-1].strip()]))
         Thing.objects.bulk_create(things)
-        return JsonResponse({'success': True, 'newthings': [{
-            'id': t.id,
-            'name': t.name,
-            'type': t.type.name
-        } for t in things]})
+        return JsonResponse({
+            'success':
+            True,
+            'newthings': [{
+                'id': t.id,
+                'name': t.name,
+                'type': t.type.name
+            } for t in things]
+        })
     except Exception:
         return JsonResponse({'success': False, 'error': traceback.format_exc()})
 
@@ -339,12 +344,7 @@ def newthings(request):
 def graph(request):
     try:
         params = json.loads(request.body.decode('utf-8'))
-        return JsonResponse({
-            'success': True,
-            'data': [
-                {'a': 'A', 'b': 1}, {'a': 'B', 'b': 3}
-            ]
-        })
+        return JsonResponse({'success': True, 'data': [{'a': 'A', 'b': 1}, {'a': 'B', 'b': 3}]})
     except Exception:
         return JsonResponse({'success': False, 'error': traceback.format_exc()})
 
