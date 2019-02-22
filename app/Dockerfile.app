@@ -25,6 +25,9 @@ RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python get-pip.py
 
 # IPython config
 COPY .deps/ipython_config.py /root/.ipython/profile_default/ipython_config.py
+RUN mkdir -p /root/.ipython/profile_local/startup
+COPY .deps/ipython_config.py /root/.ipython/profile_local/ipython_config.py
+COPY .deps/00-load-django.py /root/.ipython/profile_local/startup/00-load-django.py
 
 # Fix npm hanging on OS X
 # https://github.com/npm/npm/issues/7862#issuecomment-220798263
