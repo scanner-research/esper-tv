@@ -14,6 +14,11 @@ _EMB_DATA = EmbeddingData(ID_PATH, EMB_PATH, EMB_DIM)
 def count():
     return _EMB_DATA.count()
 
+  
+def ids(i, n):
+    """Get n face ids starting at index i"""
+    return _EMB_DATA.ids(i, n)
+
 
 def get(ids):
     """List of face ids -> List of pairs (id, embedding)"""
