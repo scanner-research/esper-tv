@@ -126,6 +126,6 @@ def logreg_predict(weights, **kwargs):
     return _EMB_DATA.logreg_predict(weights, **kwargs)
 
 
-def knn_predict(ids, labels, k, **kwargs):
+def knn_predict(train_ids, train_labels, k, **kwargs):
     """Returns: List of (face_id, score) pairs by ascending score)"""
-    return _EMB_DATA.knn_predict(ids, labels, k, **kwargs)
+    return _EMB_DATA.knn_predict(train_ids, train_labels, k, **kwargs)
