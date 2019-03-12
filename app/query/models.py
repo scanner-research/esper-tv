@@ -115,6 +115,16 @@ class Face(Labeled, base.BoundingBox, models.Model):
 
     class Meta:
         unique_together = ('labeler', 'frame', 'bbox_x1', 'bbox_x2', 'bbox_y1', 'bbox_y2')
+        
+
+class FaceTag(models.Model):
+    face = models.ForeignKey(Face)
+    score = models.FloatField(default=1.)
+    tag = models.ForeignKey(Tag)
+    labeler = models.ForeignKey(Labeler)
+    
+    class Meta:
+        unique_together = ('labeler', 'face')
 
 
 class FaceGender(Labeled, models.Model):
@@ -199,7 +209,6 @@ class Clothing(Labeled, models.Model):
 
     class Meta:
         unique_together = ('labeler', 'face')
-
 
 
 class HairLengthName(models.Model):
