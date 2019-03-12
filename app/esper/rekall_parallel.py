@@ -2,9 +2,12 @@ import django
 import cloudpickle
 import multiprocessing as mp
 import os
+import ipyparallel
+import traceback
 
 from rekall.runtime import (
         AbstractWorkerPool,
+        TaskException,
         Runtime,
         SpawnedProcessPool,
         get_forked_process_pool_factory,
@@ -96,8 +99,12 @@ def _annotate_future(future, vids, done):
             self._f = chunked_future
 
         def get(self):
-            for result in self._f.get():
-                return result
+            try:
+                for result in self._f.get():
+                    return result
+            except ipyparallel.RemoteError as e:
+                print("Remote Error Traceback {0}".format(e.traceback))
+                raise TaskException() from e
 
     def cb(f):
         e = f.exception()
