@@ -91,6 +91,9 @@ def _annotate_future(future, vids, done):
             except ipyparallel.RemoteError as e:
                 raise TaskException() from e
 
+        def done(self):
+            return self._f.ready()
+
     def cb(f):
         e = f.exception()
         done(vids, e)
