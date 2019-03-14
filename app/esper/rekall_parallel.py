@@ -30,6 +30,7 @@ import traceback
 
 from rekall.runtime import (
         AbstractWorkerPool,
+        AbstractAsyncTaskResult,
         TaskException,
         Runtime,
         SpawnedProcessPool,
@@ -79,7 +80,7 @@ def get_runtime_for_script(num_workers=mp.cpu_count()):
 def _annotate_future(future, vids, done):
     # Ipyparallel futures return chunked results. Since we set the chunksize
     # to 1, future.get() returns a tuple of size 1.
-    class ChunkedFutureWrapper():
+    class ChunkedFutureWrapper(AbstractAsyncTaskResult):
         def __init__(self, chunked_future):
             self._f = chunked_future
 
@@ -88,7 +89,6 @@ def _annotate_future(future, vids, done):
                 for result in self._f.get():
                     return result
             except ipyparallel.RemoteError as e:
-                print("Remote Error Traceback {0}".format(e.traceback))
                 raise TaskException() from e
 
     def cb(f):
@@ -97,7 +97,7 @@ def _annotate_future(future, vids, done):
     future.add_done_callback(cb)
     return ChunkedFutureWrapper(future)
 
-class IPythonClusterPool():
+class IPythonClusterPool(AbstractWorkerPool):
     """WorkerPool Implementation using an ipython cluster."""
     def __init__(self, client, fn):
         """Initializes with an ipython cluster client and the function to run.
