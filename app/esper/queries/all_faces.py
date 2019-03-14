@@ -43,3 +43,12 @@ def white_hair_not_bald():
         ).values('face__id')
     }
     return qs_to_result(Face.objects.filter(id__in=white_hair_ids - bald_ids))
+
+
+@query("Face tags")
+def face_tags():
+    from query.models import FaceTag
+    from esper.widget import qs_to_result
+    return qs_to_result(FaceTag.objects.filter(
+        labeler__name='race:black:labeler=james',
+        score__gt=0.5))
