@@ -19,8 +19,9 @@ from django.db.models.functions import Cast
 import django.db.models as models
 from query.base_models import Track
 from query.models import \
-    Face, FaceGender, FaceIdentity, Labeler, Video, Frame, Gender, Segment, Tag, Object, \
-    Topic, Identity, Clothing, HairColor, HairLength
+    Face, FaceGender, FaceIdentity, Labeler, Video, Frame, \
+    Gender, Segment, Tag, Object, Topic, Identity, Clothing, \
+    HairColor, HairLength, FaceTag
 import django.apps
 import os
 
@@ -161,9 +162,13 @@ def qs_to_result(result: QuerySet,
                 'objects': []
             })
 
-    elif cls is Face or cls is FaceGender or cls is FaceIdentity or cls is Object or \
-            (cls is HairColor or cls is HairLength or cls is Clothing):
-        if cls is FaceGender or cls is FaceIdentity or (cls is HairColor or cls is HairLength or cls is Clothing):
+    elif (cls is Face or cls is FaceGender or cls is FaceIdentity or
+          cls is Object or
+          cls is HairColor or cls is HairLength or cls is Clothing or
+          cls is FaceTag):
+        if (cls is FaceGender or cls is FaceIdentity or
+            cls is HairColor or cls is HairLength or
+            cls is Clothing or cls is FaceTag):
             frame_path = 'face__frame'
             if cls is FaceGender:
                 result = result.select_related('face', 'gender')
@@ -184,7 +189,8 @@ def qs_to_result(result: QuerySet,
             fn = gender_to_dict
         elif cls is FaceIdentity:
             fn = identity_to_dict
-        elif cls is HairColor or cls is HairLength or cls is Clothing:
+        elif (cls is HairColor or cls is HairLength or
+              cls is Clothing or cls is FaceTag):
             fn = face_attr_to_dict
         elif cls is Pose:
             fn = pose_to_dict
