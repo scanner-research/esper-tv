@@ -34,6 +34,8 @@ COPY .deps/00-load-django.py /root/.ipython/profile_local/startup/00-load-django
 RUN npm config set registry http://registry.npmjs.org && \
     npm config set strict-ssl false
 
+RUN npm i -g npm n && n stable
+
 # Install npm packages in ~/.local by default so they persist across container restarts
 RUN npm config set prefix /root/.local
 

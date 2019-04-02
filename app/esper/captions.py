@@ -118,6 +118,28 @@ def get_json(video_id):
     ]
 
 
+def get_rekall(video_ids):
+    from rekall.video_interval_collection_3d import VideoIntervalCollection3D
+    from rekall.interval_set_3d import IntervalSet3D, Interval3D
+
+    interval_sets = {}
+    for video_id in video_ids:
+        if video_id not in VIDEO_ID_TO_DOCUMENT_ID:
+            continue
+
+        doc_id = VIDEO_ID_TO_DOCUMENT_ID[video_id]
+        interval_sets[video_id] = IntervalSet3D([
+            Interval3D(
+                (p.start, p.end),
+                payload={
+                    'draw_type': ' '.join([LEXICON.decode(t, 'UNKNOWN') for t in INDEX.tokens(doc_id, p.idx, p.len)])
+                })
+            for p in INDEX.intervals(doc_id)
+        ])
+
+    return VideoIntervalCollection3D(interval_sets)
+
+
 # Set before forking, this is a hack
 LOWER_CASE_ALPHA_IDS = None
 
