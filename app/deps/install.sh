@@ -17,6 +17,9 @@ pip3 install --upgrade --force-reinstall --user -e .
 if [ $RUN_TESTS == 1 ]; then
         python3 setup.py test
 fi
+cd $DEPS_DIR
+cd rekall/rekalljs
+npm i && npm run build && npm link
 
 # Model server
 cd $DEPS_DIR
@@ -55,14 +58,15 @@ cd $DEPS_DIR
 echo "Installing vgrid"
 cd vgrid
 npm install
-npm link
+npm link rekall
 npm run build
+npm link
 
 cd $DEPS_DIR
 echo "Installing vgrid_jupyter"
 cd vgrid_jupyter/js
-npm link vgrid
 npm install
+npm link vgrid
 npm run build
 cd ..
 pip3 install --upgrade --force-reinstall --user -e .
