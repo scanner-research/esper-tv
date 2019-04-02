@@ -12,7 +12,7 @@ pushd .
 # Rekall
 cd $DEPS_DIR
 echo "Installing Rekall"
-cd rekall
+cd rekall/rekallpy
 pip3 install --upgrade --force-reinstall --user -e .
 if [ $RUN_TESTS == 1 ]; then
         python3 setup.py test
