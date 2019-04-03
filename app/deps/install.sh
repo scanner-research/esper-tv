@@ -19,7 +19,9 @@ if [ $RUN_TESTS == 1 ]; then
 fi
 cd $DEPS_DIR
 cd rekall/rekalljs
-npm i && npm run build && npm link
+npm install
+npm run build
+npm link
 
 # Model server
 cd $DEPS_DIR
@@ -58,15 +60,15 @@ cd $DEPS_DIR
 echo "Installing vgrid"
 cd vgrid
 npm install
-npm link rekall
+npm link @wcrichto/rekall
 npm run build
 npm link
 
 cd $DEPS_DIR
 echo "Installing vgrid_jupyter"
-cd vgrid_jupyter/js
+cd vgrid_jupyter
 npm install
-npm link vgrid
+npm link @wcrichto/vgrid
 npm run build
 cd ..
 pip3 install --upgrade --force-reinstall --user -e .
