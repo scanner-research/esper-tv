@@ -70,7 +70,6 @@ cd vgrid_jupyter
 npm install
 npm link @wcrichto/vgrid
 npm run build
-cd ..
 pip3 install --upgrade --force-reinstall --user -e .
 
 jupyter nbextension enable --py --user widgetsnbextension
