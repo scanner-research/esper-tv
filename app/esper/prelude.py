@@ -1,4 +1,4 @@
-from scannerpy import ProtobufGenerator, Config
+from scannerpy import Config, protobufs
 from storehouse import StorageConfig, StorageBackend
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func, FloatField, ExpressionWrapper
 from django.db.models.functions import Cast, Extract
@@ -36,7 +36,6 @@ from iterextras import unzip, par_for, par_filter, flatten, collect, batch
 
 # Access to Scanner protobufs
 cfg = Config()
-proto = ProtobufGenerator(cfg)
 
 # Logging config
 log = logging.getLogger('esper')
