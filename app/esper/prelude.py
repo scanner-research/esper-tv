@@ -80,10 +80,8 @@ DATA_PATH = os.environ.get('DATA_PATH')
 
 if ESPER_ENV == 'google':
     storage_config = StorageConfig.make_gcs_config(BUCKET)
-    scannertools.init_storage(BUCKET)
 else:
     storage_config = StorageConfig.make_posix_config()
-    scannertools.init_storage()
 storage = StorageBackend.make_from_config(storage_config)
 
 
