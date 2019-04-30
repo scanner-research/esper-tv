@@ -304,7 +304,7 @@ class PrecisionModel(object):
 
 def faces_to_tiled_img(faces, cols=12):
     def face_img(face):
-        return crop(load_frame(face.person.frame.video, face.person.frame.number, []), face)
+        return crop(load_frame(face.frame.video, face.frame.number, []), face)
 
     face_imgs = par_for(face_img, faces, progress=False)
     im = tile_images([cv2.resize(img, (200, 200)) for img in face_imgs], cols=cols)

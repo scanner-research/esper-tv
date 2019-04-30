@@ -2,6 +2,7 @@ from esper.prelude import *
 from esper.widget import *
 from esper.plot_util import plot_time_series, plot_heatmap_with_images
 from esper.identity import faces_to_tiled_img
+import esper.face_embeddings as face_embeddings
 from query.models import *
 
 import random
@@ -40,7 +41,7 @@ def _recluster_clusters(clusters, merge_cluster_threshold):
         cluster_samples.extend(random.sample(v, cluster_nsamples[k]))
         cluster_clusters.extend([k] * cluster_nsamples[k])
     est_centroids = {}
-    for cluster_id, features in zip(cluster_clusters, face_features(cluster_samples)):
+    for cluster_id, features in zip(cluster_clusters, face_embeddings.features(cluster_samples)):
         if cluster_id not in est_centroids:
             est_centroids[cluster_id] = features / cluster_nsamples[cluster_id]
         else:
@@ -139,10 +140,10 @@ def _manual_recluster(clusters, examples_per_cluster):
 
 def identity_clustering_workflow(
     name, examples_per_cluster=10,
-    face_probability_threshold=0.9,
+    face_probability_threshold=0.5,
     merge_cluster_threshold=0.2,
     init_clusters=10,
-    exclude_commercials=True,
+    exclude_commercials=False,
     duration_label_unit='m',
     show_titles=True,
     save_paths=None,
@@ -164,26 +165,22 @@ def identity_clustering_workflow(
         extra_kwargs['face__shot__in_commercial'] = False
     face_id_to_info = {
         x['face__id'] : {
-            'channel' : x['face__shot__video__channel__name'],
-            'screentime' : x['screentime'],
-            'time': x['face__shot__video__time']
+            'channel' : x['face__frame__video__channel__name'],
+            'screentime' : 3.,
+            'time': x['face__frame__video__time']
         } for x in FaceIdentity.objects.filter(
             identity__name=name.lower(),
             probability__gt=face_probability_threshold,
+            face__shot=None,
             **extra_kwargs
-        ).annotate(
-            screentime=ExpressionWrapper(
-                (F('face__shot__max_frame') - F('face__shot__min_frame')) / F('face__shot__video__fps'),
-                output_field=FloatField()
-            )
         ).values(
-            'face__id', 'face__shot__video__channel__name',
-            'screentime', 'face__shot__video__time'
+            'face__id', 'face__frame__video__channel__name', 
+            'face__frame__video__time'
         )
     }
 
     clusters = defaultdict(list)
-    for face_id, cluster_id in face_kmeans(list(face_id_to_info.keys()), k=init_clusters):
+    for face_id, cluster_id in face_embeddings.kmeans(list(face_id_to_info.keys()), k=init_clusters):
         clusters[cluster_id].append(face_id)
     clusters = _recluster_clusters(clusters, merge_cluster_threshold)
     clusters = _manual_recluster(clusters, examples_per_cluster)
