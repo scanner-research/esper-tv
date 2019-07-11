@@ -53,10 +53,10 @@ fi
 
 cd $DEPS_DIR
 echo "Installing vgrid"
-cd vgrid
-npm install
-npm link
-npm run build
+#cd vgrid
+#npm install
+#npm link vgrid
+#npm run build
 
 cd $DEPS_DIR
 echo "Installing vgrid_jupyter"

@@ -1,7 +1,6 @@
 from django.db import models
 from . import base_models as base
 import math
-import numpy as np
 import tempfile
 import subprocess as sp
 
@@ -63,9 +62,14 @@ class VideoTag(models.Model):
     tag = models.ForeignKey(Tag)
 
 
+class FrameSampler(models.Model):
+    name = base.CharField()
+    
+
 class Frame(base.Frame):
     tags = models.ManyToManyField(Tag)
     shot_boundary = models.BooleanField()
+    sampler = models.ForeignKey(FrameSampler, blank=True, null=True)
 
 
 class Labeler(base.Labeler):

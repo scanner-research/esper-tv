@@ -1,11 +1,15 @@
-from scannerpy import Config, protobufs
-from storehouse import StorageConfig, StorageBackend
+# from scannerpy import Config, protobufs
+# from storehouse import StorageConfig, StorageBackend
 from django.db.models import Min, Max, Count, F, Q, OuterRef, Subquery, Sum, Avg, Func, FloatField, ExpressionWrapper
 from django.db.models.functions import Cast, Extract
-from IPython.core.getipython import get_ipython
+
+try:
+    from IPython.core.getipython import get_ipython
+except:
+    get_ipython = None
+
 from timeit import default_timer as now
 from functools import reduce
-from typing import Dict
 from pprint import pprint
 import datetime
 import _strptime  # https://stackoverflow.com/a/46401422/356915
@@ -31,11 +35,11 @@ from pathlib import Path
 from collections import defaultdict
 from pickle_cache import PickleCache
 from esper.widget import esper_widget
-import scannertools
+# import scannertools
 from iterextras import unzip, par_for, par_filter, flatten, collect, batch
 
-# Access to Scanner protobufs
-cfg = Config()
+# # Access to Scanner protobufs
+# cfg = Config()
 
 # Logging config
 log = logging.getLogger('esper')
@@ -78,11 +82,11 @@ ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
 DATA_PATH = os.environ.get('DATA_PATH')
 
-if ESPER_ENV == 'google':
-    storage_config = StorageConfig.make_gcs_config(BUCKET)
-else:
-    storage_config = StorageConfig.make_posix_config()
-storage = StorageBackend.make_from_config(storage_config)
+# if ESPER_ENV == 'google':
+#     storage_config = StorageConfig.make_gcs_config(BUCKET)
+# else:
+#     storage_config = StorageConfig.make_posix_config()
+# storage = StorageBackend.make_from_config(storage_config)
 
 
 class Timer:

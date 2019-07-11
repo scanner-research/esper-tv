@@ -1,4 +1,4 @@
-from sklearn.neighbors import NearestNeighbors
+# from sklearn.neighbors import NearestNeighbors
 from django.db import models, connection, connections
 from django.db.models import F, ExpressionWrapper, Max
 from django.db.models.base import ModelBase
@@ -6,13 +6,11 @@ from django.db.models.functions import Cast
 from django.db.models.query import QuerySet
 from django_bulk_update.manager import BulkUpdateManager
 import sys
-import numpy as np
 import json
 import warnings
 import os
 import subprocess as sp
 import sqlparse
-import subprocess as sp
 import csv
 import tempfile
 from tqdm import tqdm
@@ -232,6 +230,7 @@ class BoundingBox(models.Model):
         return ExpressionWrapper(F('bbox_y2') - F('bbox_y1'), models.FloatField())
 
     def bbox_to_numpy(self):
+        import numpy as np
         return np.array([self.bbox_x1, self.bbox_x2, self.bbox_y1, self.bbox_y2, self.bbox_score])
 
     class Meta:
@@ -247,37 +246,38 @@ class Features(models.Model):
     distto = models.FloatField(null=True)
 
     def load_features(self):
+        import numpy as np
         return np.array(json.loads(str(self.features)))
 
-    @classmethod
-    def compute_distances(cls, inst_id):
-        global feat_nn
-        global feat_ids
+#     @classmethod
+#     def compute_distances(cls, inst_id):
+#         global feat_nn
+#         global feat_ids
 
-        it = cls.objects.annotate(height=F('face__bbox_y2') - F('face__bbox_y1')).filter(
-            height__gte=0.1).order_by('id')
-        if feat_nn is None:
-            _print('Loading features...')
-            feats = list(it[::5])
-            feat_ids = np.array([f.id for f in feats])
-            feat_vectors = [f.load_features() for f in feats]
-            X = np.vstack(feat_vectors)
-            _print('Constructing KNN tree...')
-            feat_nn = NearestNeighbors().fit(X)
-            _print('Done!')
+#         it = cls.objects.annotate(height=F('face__bbox_y2') - F('face__bbox_y1')).filter(
+#             height__gte=0.1).order_by('id')
+#         if feat_nn is None:
+#             _print('Loading features...')
+#             feats = list(it[::5])
+#             feat_ids = np.array([f.id for f in feats])
+#             feat_vectors = [f.load_features() for f in feats]
+#             X = np.vstack(feat_vectors)
+#             _print('Constructing KNN tree...')
+#             feat_nn = NearestNeighbors().fit(X)
+#             _print('Done!')
 
-        # Erase distances from previous computation
-        prev = list(cls.objects.filter(distto__isnull=False))
-        for feat in prev:
-            feat.distto = None
-        cls.objects.bulk_update(prev)
+#         # Erase distances from previous computation
+#         prev = list(cls.objects.filter(distto__isnull=False))
+#         for feat in prev:
+#             feat.distto = None
+#         cls.objects.bulk_update(prev)
 
-        dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()], 1000)
+#         dists, indices = feat_nn.kneighbors([cls.objects.get(face=inst_id).load_features()], 1000)
 
-        for dist, feat_id in zip(dists[0], feat_ids[indices[0]]):
-            feat = cls.objects.get(id=feat_id)
-            feat.distto = dist
-            feat.save()
+#         for dist, feat_id in zip(dists[0], feat_ids[indices[0]]):
+#             feat = cls.objects.get(id=feat_id)
+#             feat.distto = dist
+#             feat.save()
 
     class Meta:
         abstract = True
@@ -287,6 +287,7 @@ class Pose(models.Model):
     keypoints = models.BinaryField()
 
     def _format_keypoints(self):
+        import numpy as np
         kp = np.frombuffer(self.keypoints, dtype=np.float32)
         return kp.reshape((kp.shape[0] / 3, 3))
 

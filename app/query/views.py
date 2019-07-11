@@ -14,7 +14,7 @@ import math
 import pysrt
 import requests
 import enum
-from storehouse import StorageConfig, StorageBackend
+# from storehouse import StorageConfig, StorageBackend
 import traceback
 from pprint import pprint
 from esper.widget import *
@@ -25,18 +25,18 @@ ESPER_ENV = os.environ.get('ESPER_ENV')
 BUCKET = os.environ.get('BUCKET')
 DATA_PATH = os.environ.get('DATA_PATH')
 
-if ESPER_ENV == 'google':
-    storage_config = StorageConfig.make_gcs_config(BUCKET)
-else:
-    storage_config = StorageConfig.make_posix_config()
-storage = StorageBackend.make_from_config(storage_config)
+# if ESPER_ENV == 'google':
+#     storage_config = StorageConfig.make_gcs_config(BUCKET)
+# else:
+#     storage_config = StorageConfig.make_posix_config()
+# storage = StorageBackend.make_from_config(storage_config)
 
 VTT_FROM_CAPTION_INDEX = True
 
 
 # Prints and flushes (necessary for gunicorn logs)
 def _print(*args):
-    pprint((*args))
+    pprint(*args)
     sys.stdout.flush()
 
 
