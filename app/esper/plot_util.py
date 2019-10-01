@@ -4,12 +4,13 @@ General ploting library that shhould not include esper concepts or touch the ORM
 
 import math
 import matplotlib.pyplot as plt
+import matplotlib.colors
 import numpy as np
-
+import pandas as pd
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-# TODO(james): move other ploting code here
+# TODO(james): move other plotting code here
 
 
 DEFAULT_COLORS = ['LightCoral', 'SkyBlue', 'SandyBrown', 'GreenYellow', 'Goldenrod', 'Violet']
@@ -439,7 +440,8 @@ def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
     )
     
     ax.set_position([yimage_width_proportion, 0, 1 - yimage_width_proportion, 1])
-    cax = ax.imshow(heatmap, origin='lower')
+    color_map = matplotlib.colors.LinearSegmentedColormap.from_list("", ["white","red"])
+    cax = ax.imshow(heatmap, origin='lower', cmap=color_map)
     ax.set_xticks(range(len(xcategories)))
     ax.set_xticklabels(xcategories)
     ax.set_yticks([])
@@ -450,7 +452,7 @@ def plot_heatmap_with_images(heatmap, xcategories, yimages, title,
             text = ax.text(
                 j, i, heatmap_label_fn(heatmap[i, j]), 
                 ha='center', va='center', 
-                color='white' if (heatmap[i, j] - min_val) / (max_val - min_val) < 0.6 else 'black'
+                color='black'  #if (heatmap[i, j] - min_val) / (max_val - min_val) < 0.6 else 'black'
             )
 
     def _swap_channels(im):
@@ -549,4 +551,25 @@ def plot_bar_chart(series_names, values_by_category, title, xlabel, ylabel,
         plt.savefig(save_path)
     else:
         plt.show()
+
+def plot_stacked_bar_chart(raw_input_bar_chart, chan):
+    #Color key
+    color = {'CNN':'blue', 'MSNBC':'green', 'FOXNEWS':'red'}
+#     for chan in channels:
+    values = []
+    for show in sorted(list(raw_input_bar_chart.keys())):
+        if raw_input_bar_chart[show] > 1000:
+           values.append(raw_input_bar_chart[show])
+        else:
+            del raw_input_bar_chart[show]
+    df=pd.DataFrame({'Shows': sorted(list(raw_input_bar_chart.keys())), chan: values})
+
+    # multiple line plot
+    plt.plot('Shows', chan, data=df, marker='o', markerfacecolor=color[chan], markersize=15, color='skyblue', linewidth=3)
+    plt.xticks(rotation=45)
+    plt.xlabel('Shows')
+    plt.ylabel('# of frames the person shows up in a show')
+    plt.legend()
+
+    
     

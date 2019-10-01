@@ -19,7 +19,7 @@ import random
 import string
 from datetime import timedelta
 from pandas import DataFrame
-
+import PIL
 from subprocess import check_call
 from esper import embed_google_images
 from collections import defaultdict, Counter
@@ -300,17 +300,26 @@ class PrecisionModel(object):
         for k in expected_count_by_bucket:
             result[k] = correct_count_by_bucket[k] / expected_count_by_bucket[k]
         return result
-
-
-def faces_to_tiled_img(faces, cols=12):
+    
+def faces_to_tiled_img(faces, no_crop, cols=12):
     def face_img(face):
-        return crop(load_frame(face.frame.video, face.frame.number, []), face)
-
+        if no_crop:
+            return load_frame(face.frame.video, face.frame.number, [])
+        else:
+            return crop(load_frame(face.frame.video, face.frame.number, []), face)
+    
     face_imgs = par_for(face_img, faces, progress=False)
     im = tile_images([cv2.resize(img, (200, 200)) for img in face_imgs], cols=cols)
     return im
 
-
+def export_face_img(face):
+    face_img = crop(load_frame(face.frame.video, face.frame.number, []), face)
+    im = cv2.resize(face_img, (200, 200))
+#     im = tile_images([cv2.resize(face_img, (200, 200))], cols=1)
+    im_updated = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+    np_image = PIL.Image.fromarray(im_updated.astype('uint8'), 'RGB')
+    return np_image
+        
 def load_and_select_faces_from_images(img_dir):
 
     def yn_prompt(msg):

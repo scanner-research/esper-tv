@@ -1,0 +1,45 @@
+Accounted for people (more clusters per person, focus on controversial names):
+
+Shooters:
+
+Chris Harper-Mercer (Okay)
+Devin Patrick Kelley (Okay)
+Dylann Roof (Good)
+Esteban Santiago-Ruiz (Okay)
+Gavin Eugene-Long (Bad-not significant enough data)
+Micah Xavier Johnson (Good)
+Omar Mateen (Good)
+Robert Lewis Dear Jr (Good)
+Stephen Paddock (Good)
+Syed Rizwan Farook (Good)
+Tashfeen Malik (Good)
+Willie Corey Godbolt (Bad-not significant enough data)
+
+Victims:
+Eric Garner (Not in database)
+Laquan McDonald (Not in database)
+Michael Brown (Not in database)
+Philando Castille (Not in database)
+Tamir Rice (Not in database)
+Trayvon Martin (Redo)
+Walter Scott (IDK)
+
+Police Officers:
+
+Daniel Pantaleo (Eric Garner, Not in DB)
+Darren Wilson (Michaela Brown, Not in DB)
+Jason Van Dyke (Laquan McDonald, Not in DB)
+??? (Tamir Rice, Unknown)
+Michael Slager (Walter Scott, Not in DB)
+Blane Salamoni (Alton Sterling, Not in DB)
+Howie Lake II (Alton Sterling, Not in DB)
+Jeronimo Yanez (Philando Castille, Not in DB)
+
+Celebrity:
+
+Robert Ailes (TBD)
+Miley Cyrus (TBD)
+Kanye West (Not in database)
+George Bush (Not in database)
+Michael Jackson (Not in database)
+Barack Obama (Not in database)
