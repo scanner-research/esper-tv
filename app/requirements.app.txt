@@ -16,7 +16,7 @@ autopep8
 pysrt==1.1.1
 sqlparse==0.2.4
 internetarchive
-pyspark==2.4.0
+pyspark==3.2.2
 pyopenssl
 statsmodels
 scikit-learn
